@@ -75,6 +75,8 @@ func (w *worker) Receive(c *actor.Context) {
 		out, err = w.usage(ctx, msg)
 	case SetQuota:
 		out, err = w.setQuota(ctx, msg)
+	case Discard:
+		out, err = w.discard(ctx, msg)
 	default:
 		return
 	}
@@ -247,6 +249,47 @@ func (w *worker) setQuota(ctx context.Context, msg SetQuota) (Done, error) {
 }
 
 var errNoFile = ierrors.NotFound("file not found")
+
+// discard deletes the caller's unposted uploads among msg's. Others, and
+// uploads a message carries, are left alone; the row goes before the
+// object, as in the janitor, so a post racing it keeps its file or fails.
+func (w *worker) discard(ctx context.Context, msg Discard) (Done, error) {
+	if len(msg.AttachmentIDs) > maxDiscard {
+		return Done{}, ierrors.InvalidArgument("too many uploads")
+	}
+	for _, raw := range msg.AttachmentIDs {
+		id, ok := ids.Parse(raw)
+		if !ok {
+			return Done{}, ierrors.InvalidArgument("invalid attachment id")
+		}
+		att, err := w.Repo.GetAttachment(ctx, id)
+		if ierrors.Is(err, ierrors.CodeNotFound) {
+			continue
+		}
+		if err != nil {
+			return Done{}, err
+		}
+		if att.UploaderID != msg.P.UserID || !ids.IsZero(att.MessageID) {
+			continue
+		}
+		orphan, err := w.Repo.DeleteOrphan(ctx, id)
+		if err != nil {
+			return Done{}, err
+		}
+		if !orphan {
+			continue
+		}
+		if err := w.Storage.Delete(ctx, att.ObjectKey); err != nil {
+			// The janitor finds it on the pending list.
+			w.Logger.Warn("failed to delete a discarded upload", zap.String("attachment", id.String()), zap.Error(err))
+			continue
+		}
+		if err := w.Repo.ForgetPending(ctx, &scylla.PendingUpload{ID: att.ID, ObjectKey: att.ObjectKey, CreatedAt: att.CreatedAt}); err != nil {
+			w.Logger.Warn("failed to update the pending list", zap.Error(err))
+		}
+	}
+	return Done{}, nil
+}
 
 func (w *worker) open(ctx context.Context, msg OpenDownload) (*models.Attachment, error) {
 	id, ok := ids.Parse(msg.AttachmentID)

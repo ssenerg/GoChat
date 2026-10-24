@@ -66,6 +66,7 @@ func (h *Handler) upload(w http.ResponseWriter, r *http.Request) {
 			break
 		}
 		if err != nil {
+			h.discard(r, atts)
 			h.fail(w, r, ierrors.InvalidArgument("the upload was cut short"))
 			return
 		}
@@ -74,6 +75,7 @@ func (h *Handler) upload(w http.ResponseWriter, r *http.Request) {
 			continue
 		}
 		if len(atts) == maxFilesPerUpload || (voice && len(atts) == 1) {
+			h.discard(r, atts)
 			h.fail(w, r, ierrors.InvalidArgument("attach at most 10 files at once, or one voice message"))
 			return
 		}
@@ -84,6 +86,7 @@ func (h *Handler) upload(w http.ResponseWriter, r *http.Request) {
 		att, err := h.sendFile(ctx, header, part, buf)
 		_ = part.Close()
 		if err != nil {
+			h.discard(r, atts)
 			h.fail(w, r, err)
 			return
 		}
@@ -101,6 +104,24 @@ func (h *Handler) upload(w http.ResponseWriter, r *http.Request) {
 	}
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	_, _ = io.WriteString(w, out.String())
+}
+
+// discard deletes what a batch that failed partway stored, which no chip
+// shows and would hold its uploader's quota until the janitor came.
+func (h *Handler) discard(r *http.Request, atts []*pb.Attachment) {
+	if len(atts) == 0 {
+		return
+	}
+	ids := make([]string, len(atts))
+	for i, att := range atts {
+		ids[i] = att.Id
+	}
+	// The browser may have gone; the upload's leftovers still go.
+	ctx, cancel := h.client.Context(context.WithoutCancel(r.Context()), h.call(r))
+	defer cancel()
+	if _, err := h.client.Files.DiscardUploads(ctx, &pb.DiscardUploadsRequest{AttachmentIds: ids}); err != nil {
+		h.logger.Warn("failed to discard a failed batch's uploads", zap.Error(err))
+	}
 }
 
 func (h *Handler) sendFile(ctx context.Context, header *pb.UploadHeader, body io.Reader, buf []byte) (*pb.Attachment, error) {
@@ -136,6 +157,33 @@ func (h *Handler) sendFile(ctx context.Context, header *pb.UploadHeader, body io
 		return nil, err
 	}
 	return res.Attachment, nil
+}
+
+// parseRange reads a Range header of one range from a known offset,
+// bytes=start-end or bytes=start-, end -1 for the open one. Anything else,
+// several ranges or the last n bytes, is not taken, and the whole file is
+// sent, as a server may.
+func parseRange(h string) (start, end int64, ok bool) {
+	spec, found := strings.CutPrefix(h, "bytes=")
+	if !found || strings.Contains(spec, ",") {
+		return 0, 0, false
+	}
+	from, to, found := strings.Cut(strings.TrimSpace(spec), "-")
+	if !found || from == "" {
+		return 0, 0, false
+	}
+	start, err := strconv.ParseInt(from, 10, 64)
+	if err != nil || start < 0 {
+		return 0, 0, false
+	}
+	if to == "" {
+		return start, -1, true
+	}
+	end, err = strconv.ParseInt(to, 10, 64)
+	if err != nil || end < start {
+		return 0, 0, false
+	}
+	return start, end, true
 }
 
 // idleBody fails an upload that stalls, so a slow sender cannot hold an
@@ -181,7 +229,15 @@ func (h *Handler) download(w http.ResponseWriter, r *http.Request) {
 	_ = rc.SetWriteDeadline(time.Now().Add(h.cfg.HTTP.TransferTimeout))
 	ctx, cancel := context.WithTimeout(r.Context(), h.cfg.HTTP.TransferTimeout)
 	defer cancel()
-	stream, err := h.client.Files.Download(h.client.Stream(ctx, h.call(r)), &pb.DownloadRequest{AttachmentId: id})
+	start, end, ranged := parseRange(r.Header.Get("Range"))
+	req := &pb.DownloadRequest{AttachmentId: id}
+	if ranged {
+		req.Offset = start
+		if end >= 0 {
+			req.Length = end - start + 1
+		}
+	}
+	stream, err := h.client.Files.Download(h.client.Stream(ctx, h.call(r)), req)
 	if err != nil {
 		h.fail(w, r, err)
 		return
@@ -216,7 +272,6 @@ func (h *Handler) download(w http.ResponseWriter, r *http.Request) {
 		cd = disposition
 	}
 	hd.Set("Content-Disposition", cd)
-	hd.Set("Content-Length", strconv.FormatInt(att.Size, 10))
 	hd.Set("Content-Security-Policy", "default-src 'none'; sandbox")
 	// A download is kept out of the browser's cache, where it would outlive
 	// the access to it; a preview in a channel is kept briefly.
@@ -225,7 +280,26 @@ func (h *Handler) download(w http.ResponseWriter, r *http.Request) {
 	} else {
 		hd.Set("Cache-Control", "private, no-store")
 	}
-	w.WriteHeader(http.StatusOK)
+	// Browsers play media by ranges, and Safari plays nothing without them.
+	hd.Set("Accept-Ranges", "bytes")
+	size := strconv.FormatInt(att.Size, 10)
+	if !ranged {
+		hd.Set("Content-Length", size)
+		w.WriteHeader(http.StatusOK)
+	} else {
+		if start >= att.Size {
+			hd.Set("Content-Range", "bytes */"+size)
+			w.WriteHeader(http.StatusRequestedRangeNotSatisfiable)
+			return
+		}
+		last := att.Size - 1
+		if end >= 0 && end < last {
+			last = end
+		}
+		hd.Set("Content-Range", "bytes "+strconv.FormatInt(start, 10)+"-"+strconv.FormatInt(last, 10)+"/"+size)
+		hd.Set("Content-Length", strconv.FormatInt(last-start+1, 10))
+		w.WriteHeader(http.StatusPartialContent)
+	}
 	for {
 		msg, err := stream.Recv()
 		if errors.Is(err, io.EOF) {

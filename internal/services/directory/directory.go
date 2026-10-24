@@ -10,6 +10,7 @@ import (
 	"regexp"
 	"slices"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/anthdm/hollywood/actor"
@@ -43,6 +44,7 @@ type Repo interface {
 	SetCustomStatus(ctx context.Context, id gocql.UUID, emoji, text string, until time.Time) error
 
 	CreateTeam(ctx context.Context, t *models.Team) error
+	AbandonTeam(ctx context.Context, t *models.Team, creator gocql.UUID, chans []*models.Channel) error
 	GetTeam(ctx context.Context, id gocql.UUID) (*models.Team, error)
 	GetTeamIDByName(ctx context.Context, name string) (gocql.UUID, error)
 	GetTeams(ctx context.Context, ids []gocql.UUID) ([]*models.Team, error)
@@ -88,6 +90,16 @@ type Deps struct {
 	Channels *actor.PID
 	Voice    *actor.PID
 	invited  *window.Counter
+	// teamLocks serialize the changes to a team's admins, so two of them
+	// cannot each take the other's role and leave the team with none.
+	teamLocks [32]sync.Mutex
+}
+
+// lockTeam holds teamID's admin changes until the returned func is called.
+func (d *Deps) lockTeam(teamID gocql.UUID) func() {
+	mu := &d.teamLocks[int(teamID[15])%len(d.teamLocks)]
+	mu.Lock()
+	return mu.Unlock
 }
 
 // The channels every team starts with and every member joins.
@@ -239,8 +251,18 @@ func (w *worker) createTeam(ctx context.Context, msg CreateTeam) (*pb.Team, erro
 		return nil, err
 	}
 	member := &models.TeamMember{TeamID: team.ID, UserID: creator.ID, Role: models.TeamRoleAdmin, JoinedAt: now}
+	var made []*models.Channel
+	// A team left half made would hold its name with nobody able to use it.
+	abandon := func(err error) error {
+		c, cancel := context.WithTimeout(context.Background(), w.Cfg.OpTimeout)
+		defer cancel()
+		if aerr := w.Repo.AbandonTeam(c, team, creator.ID, made); aerr != nil {
+			w.Logger.Warn("failed to remove a team made halfway", zap.String("team", team.ID.String()), zap.Error(aerr))
+		}
+		return err
+	}
 	if err := w.Repo.AddTeamMember(ctx, member, creator.Username, creator.DisplayName); err != nil {
-		return nil, err
+		return nil, abandon(err)
 	}
 	for _, dc := range defaultChannels {
 		ch := &models.Channel{
@@ -248,8 +270,10 @@ func (w *worker) createTeam(ctx context.Context, msg CreateTeam) (*pb.Team, erro
 			Kind: models.ChannelPublic, CreatedBy: creator.ID, CreatedAt: now,
 		}
 		cm := &models.ChannelMember{ChannelID: ch.ID, UserID: creator.ID, TeamID: team.ID, Role: models.ChannelRoleAdmin, JoinedAt: now}
+		// Counted before the write: one that failed may still have landed.
+		made = append(made, ch)
 		if err := w.Repo.CreateChannel(ctx, ch, cm); err != nil {
-			return nil, err
+			return nil, abandon(err)
 		}
 	}
 	out := convert.Team(team, models.TeamRoleAdmin)
@@ -398,8 +422,15 @@ func (w *worker) removeTeamMember(ctx context.Context, msg RemoveTeamMember) (Do
 	if err := w.manage(ctx, msg.P, teamID, authz.ActRemove); err != nil {
 		return Done{}, err
 	}
-	if _, err := w.membership(ctx, teamID, target); err != nil {
+	defer w.lockTeam(teamID)()
+	current, err := w.membership(ctx, teamID, target)
+	if err != nil {
 		return Done{}, ierrors.NotFound("not a member")
+	}
+	if current.Role == models.TeamRoleAdmin {
+		if err := w.keepAnAdmin(ctx, teamID); err != nil {
+			return Done{}, err
+		}
 	}
 	memberships, err := w.Repo.ListUserChannels(ctx, target, teamID)
 	if err != nil {
@@ -431,6 +462,7 @@ func (w *worker) updateTeamMemberRole(ctx context.Context, msg UpdateTeamMemberR
 	if err := w.manage(ctx, msg.P, teamID, authz.ActUpdateRole); err != nil {
 		return Done{}, err
 	}
+	defer w.lockTeam(teamID)()
 	current, err := w.membership(ctx, teamID, target)
 	if err != nil {
 		return Done{}, ierrors.NotFound("not a member")
@@ -439,21 +471,30 @@ func (w *worker) updateTeamMemberRole(ctx context.Context, msg UpdateTeamMemberR
 		return Done{}, nil
 	}
 	if current.Role == models.TeamRoleAdmin {
-		entries, err := w.Repo.ListTeamMembers(ctx, teamID)
-		if err != nil {
+		if err := w.keepAnAdmin(ctx, teamID); err != nil {
 			return Done{}, err
-		}
-		admins := 0
-		for _, e := range entries {
-			if e.Role == models.TeamRoleAdmin {
-				admins++
-			}
-		}
-		if admins <= 1 {
-			return Done{}, ierrors.FailedPrecondition("a team needs at least one admin")
 		}
 	}
 	return Done{}, w.Repo.UpdateTeamMemberRole(ctx, teamID, target, msg.Role)
+}
+
+// keepAnAdmin refuses to take an admin from teamID when it has only one.
+// Its caller holds the team's lock.
+func (w *worker) keepAnAdmin(ctx context.Context, teamID gocql.UUID) error {
+	entries, err := w.Repo.ListTeamMembers(ctx, teamID)
+	if err != nil {
+		return err
+	}
+	admins := 0
+	for _, e := range entries {
+		if e.Role == models.TeamRoleAdmin {
+			admins++
+		}
+	}
+	if admins <= 1 {
+		return ierrors.FailedPrecondition("a team needs at least one admin")
+	}
+	return nil
 }
 
 // inviter returns the team of rawID when p may manage its invites.
@@ -1046,12 +1087,78 @@ func (w *worker) presence(ctx context.Context, msg Presence) (map[string]pb.Stat
 	if len(msg.UserIDs) > 200 {
 		return nil, ierrors.InvalidArgument("too many users")
 	}
-	for _, id := range msg.UserIDs {
-		if _, ok := ids.Parse(id); !ok {
+	want := make([]gocql.UUID, 0, len(msg.UserIDs))
+	for _, raw := range msg.UserIDs {
+		id, ok := ids.Parse(raw)
+		if !ok {
 			return nil, ierrors.InvalidArgument("invalid user id")
 		}
+		want = append(want, id)
 	}
-	return actors.Ask[map[string]pb.Status](ctx, w.Engine, w.Hub, hub.Statuses{UserIDs: msg.UserIDs})
+	known, err := w.known(ctx, msg.P, want)
+	if err != nil {
+		return nil, err
+	}
+	return actors.Ask[map[string]pb.Status](ctx, w.Engine, w.Hub, hub.Statuses{UserIDs: known})
+}
+
+// known keeps of userIDs those p may see the presence of: themself, the
+// people of p's conversations and those who share a team with p. Anyone
+// else is answered as offline.
+func (w *worker) known(ctx context.Context, p *models.Principal, userIDs []gocql.UUID) ([]string, error) {
+	out := make([]string, 0, len(userIDs))
+	if p.Role == models.SystemRoleAdmin {
+		for _, id := range userIDs {
+			out = append(out, id.String())
+		}
+		return out, nil
+	}
+	ok := map[gocql.UUID]bool{p.UserID: true}
+	direct, err := w.Repo.ListUserChannels(ctx, p.UserID, scylla.NoTeam)
+	if err != nil {
+		return nil, err
+	}
+	if len(direct) > 0 {
+		chIDs := make([]gocql.UUID, len(direct))
+		for i, m := range direct {
+			chIDs[i] = m.ChannelID
+		}
+		for start := 0; start < len(chIDs); start += 100 {
+			found, err := w.Repo.GetChannels(ctx, chIDs[start:min(start+100, len(chIDs))])
+			if err != nil {
+				return nil, err
+			}
+			for _, ch := range found {
+				for _, id := range convert.PeerIDs(ch, p.UserID) {
+					ok[id] = true
+				}
+			}
+		}
+	}
+	var mine map[gocql.UUID]bool
+	for _, id := range userIDs {
+		if !ok[id] {
+			if mine == nil {
+				if mine, err = w.teamsOf(ctx, p.UserID); err != nil {
+					return nil, err
+				}
+			}
+			theirs, err := w.teamsOf(ctx, id)
+			if err != nil {
+				return nil, err
+			}
+			for t := range theirs {
+				if mine[t] {
+					ok[id] = true
+					break
+				}
+			}
+		}
+		if ok[id] {
+			out = append(out, id.String())
+		}
+	}
+	return out, nil
 }
 
 func (w *worker) listMuted(ctx context.Context, p *models.Principal) ([]string, error) {

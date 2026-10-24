@@ -82,14 +82,66 @@ func (f *fakeRepo) SetStorageQuota(_ context.Context, id gocql.UUID, quota int64
 	return nil
 }
 
-func (f *fakeRepo) GetAttachment(context.Context, gocql.UUID) (*models.Attachment, error) {
+func (f *fakeRepo) GetAttachment(_ context.Context, id gocql.UUID) (*models.Attachment, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	for _, a := range f.inserted {
+		if a.ID == id {
+			cp := *a
+			return &cp, nil
+		}
+	}
 	return nil, ierrors.NotFound("not found")
+}
+
+// post marks an upload as carried by a message.
+func (f *fakeRepo) post(id gocql.UUID) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	for _, a := range f.inserted {
+		if a.ID == id {
+			a.MessageID = ids.NewTime()
+		}
+	}
 }
 func (f *fakeRepo) DeleteAttachment(context.Context, *models.Attachment) error { return nil }
 func (f *fakeRepo) ListPendingUploads(context.Context, int32) ([]*scylla.PendingUpload, error) {
 	return nil, nil
 }
-func (f *fakeRepo) DeleteOrphan(context.Context, gocql.UUID) (bool, error)     { return false, nil }
+
+// DeleteOrphan deletes an unposted upload, giving its space back, as the
+// store does.
+func (f *fakeRepo) DeleteOrphan(_ context.Context, id gocql.UUID) (bool, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	for i, a := range f.inserted {
+		if a.ID != id {
+			continue
+		}
+		if !ids.IsZero(a.MessageID) {
+			return false, nil
+		}
+		f.inserted = append(f.inserted[:i], f.inserted[i+1:]...)
+		if a.Counted {
+			f.used[a.UploaderID] = max(0, f.used[a.UploaderID]-a.Size)
+		}
+		return true, nil
+	}
+	return true, nil
+}
+
+// fakeStorage records the objects deleted.
+type fakeStorage struct {
+	mu      sync.Mutex
+	deleted []string
+}
+
+func (s *fakeStorage) Delete(_ context.Context, key string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.deleted = append(s.deleted, key)
+	return nil
+}
 func (f *fakeRepo) ForgetPending(context.Context, *scylla.PendingUpload) error { return nil }
 
 // member answers every access check as a channel member.
@@ -102,10 +154,11 @@ func (member) Receive(c *actor.Context) {
 }
 
 type fixture struct {
-	t      *testing.T
-	repo   *fakeRepo
-	engine *actor.Engine
-	pid    *actor.PID
+	t       *testing.T
+	repo    *fakeRepo
+	storage *fakeStorage
+	engine  *actor.Engine
+	pid     *actor.PID
 }
 
 func newFixture(t *testing.T, quota int64) *fixture {
@@ -116,12 +169,13 @@ func newFixture(t *testing.T, quota int64) *fixture {
 	}
 	repo := &fakeRepo{users: map[gocql.UUID]bool{}, used: map[gocql.UUID]int64{}, quotas: map[gocql.UUID]int64{}}
 	cfg := &Config{Workers: 2, OpTimeout: 5 * time.Second, MaxSize: 1 << 20, Quota: quota, MaxUploads: 4, MaxUserUploads: 2, OrphanAfter: time.Hour, JanitorInterval: time.Minute}
+	storage := &fakeStorage{}
 	pid := engine.Spawn(Pool(&Deps{
-		Logger: zap.NewNop(), Cfg: cfg, Repo: repo, Authz: authztest.New(t), Engine: engine,
+		Logger: zap.NewNop(), Cfg: cfg, Repo: repo, Storage: storage, Authz: authztest.New(t), Engine: engine,
 		Channels: engine.Spawn(func() actor.Receiver { return member{} }, "channels"),
 	}), "files")
 	t.Cleanup(func() { <-engine.Poison(pid).Done() })
-	return &fixture{t: t, repo: repo, engine: engine, pid: pid}
+	return &fixture{t: t, repo: repo, storage: storage, engine: engine, pid: pid}
 }
 
 func ask[T any](f *fixture, msg any) (T, error) {
@@ -236,5 +290,48 @@ func TestConfigRefusesNegativeQuota(t *testing.T) {
 	cfg.Quota = -1
 	if err := cfg.Validate(); err == nil {
 		t.Fatal("a negative quota was accepted")
+	}
+}
+
+// A batch that failed partway discards what it stored: the caller's
+// unposted uploads go and give their space back, while posted ones and
+// others' stay.
+func TestDiscardFreesOnlyOwnUnpostedUploads(t *testing.T) {
+	f := newFixture(t, 1000)
+	p, other := principal(models.SystemRoleUser), principal(models.SystemRoleUser)
+	mine, err := f.upload(p, 300)
+	if err != nil {
+		t.Fatal(err)
+	}
+	posted, err := f.upload(p, 200)
+	if err != nil {
+		t.Fatal(err)
+	}
+	theirs, err := f.upload(other, 100)
+	if err != nil {
+		t.Fatal(err)
+	}
+	f.repo.post(posted.ID)
+	if _, err := ask[Done](f, Discard{P: p, AttachmentIDs: []string{mine.ID.String(), posted.ID.String(), theirs.ID.String(), ids.New().String()}}); err != nil {
+		t.Fatal(err)
+	}
+	if u, _ := ask[*StorageUsage](f, Usage{P: p}); u.Used != 200 {
+		t.Errorf("used %d after discarding, want 200", u.Used)
+	}
+	if u, _ := ask[*StorageUsage](f, Usage{P: other}); u.Used != 100 {
+		t.Errorf("someone else's upload was discarded: used %d", u.Used)
+	}
+	if got := f.storage.deleted; len(got) != 1 || got[0] != mine.ObjectKey {
+		t.Errorf("objects deleted: %v, want only %s", got, mine.ObjectKey)
+	}
+	if _, err := ask[Done](f, Discard{P: p, AttachmentIDs: []string{"nope"}}); !ierrors.Is(err, ierrors.CodeInvalidArgument) {
+		t.Errorf("a bad id: %v", err)
+	}
+	many := make([]string, maxDiscard+1)
+	for i := range many {
+		many[i] = ids.New().String()
+	}
+	if _, err := ask[Done](f, Discard{P: p, AttachmentIDs: many}); !ierrors.Is(err, ierrors.CodeInvalidArgument) {
+		t.Errorf("too many: %v", err)
 	}
 }

@@ -13,7 +13,16 @@ service FileService {
   // GetStorageUsage tells how much the caller's attachments take, or a
   // user's for a system admin.
   rpc GetStorageUsage(GetStorageUsageRequest) returns (GetStorageUsageResponse);
+  // DiscardUploads deletes uploads of the caller's that no message carries,
+  // giving their space back.
+  rpc DiscardUploads(DiscardUploadsRequest) returns (DiscardUploadsResponse);
 }
+
+message DiscardUploadsRequest {
+  repeated string attachment_ids = 1;
+}
+
+message DiscardUploadsResponse {}
 
 message UploadHeader {
   string channel_id = 1;
@@ -37,6 +46,11 @@ message UploadResponse {
 
 message DownloadRequest {
   string attachment_id = 1;
+  // The bytes to send from offset on, length of them or with 0 the rest.
+  // The header still gives the whole file's size; an offset past it sends
+  // no chunks.
+  int64 offset = 2;
+  int64 length = 3;
 }
 
 message DownloadResponse {

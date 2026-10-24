@@ -44,6 +44,9 @@ func (a *channel) pin(msg Pin) (*pb.Message, error) {
 	if a.archived() {
 		return nil, errArchived
 	}
+	if !a.poster(msg.P.UserID).Allow() {
+		return nil, ierrors.ResourceExhausted("you are pinning too fast")
+	}
 	ctx, cancel := a.ctx()
 	defer cancel()
 	m, err := a.messageOf(ctx, msg.MessageID, msg.RootID)

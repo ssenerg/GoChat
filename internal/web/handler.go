@@ -6,6 +6,7 @@ import (
 	"net"
 	"net/http"
 	"net/url"
+	"slices"
 	"strings"
 	"sync/atomic"
 	"time"
@@ -79,13 +80,27 @@ func NewHandler(logger *zap.Logger, cfg *Config, client *drpc.Client, r *render.
 		"style-src 'self'",
 		"img-src 'self' data:",
 		"media-src 'self'",
-		"connect-src " + strings.Join(append([]string{"'self'", h.wsOrig}, cfg.VoiceOrigins...), " "),
+		"connect-src " + strings.Join(connectSources(h.wsOrig, cfg.VoiceOrigins), " "),
 		"form-action 'self'",
 		"frame-ancestors 'none'",
 		"base-uri 'none'",
 		"manifest-src 'self'",
 	}, "; ")
 	return h
+}
+
+// connectSources lists where pages may connect: this site, its websocket
+// and the voice servers', each once (a voice server on this host shares
+// the websocket's origin).
+func connectSources(wsOrig string, voice []string) []string {
+	out := []string{"'self'", wsOrig}
+	for _, o := range voice {
+		o = strings.TrimSuffix(o, "/")
+		if !slices.Contains(out, o) {
+			out = append(out, o)
+		}
+	}
+	return out
 }
 
 // Routes returns the gateway's whole HTTP surface.

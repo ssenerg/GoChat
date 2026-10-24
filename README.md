@@ -295,8 +295,10 @@ doing so.
 ### Voice in production
 
 Voice needs the server to have a public IP address and a `VOICE_SERVER_KEY` in
-`.env` (`openssl rand -hex 32`, not the gateway key). Two things must reach the
-voice server:
+`.env` (`openssl rand -hex 32`, not the gateway key). Without the key,
+`deploy.sh` leaves the voice server off; with it, a voice server that does not
+come up healthy is reported in the deploy's output but rolls nothing back, as
+chat does not depend on it. Two things must reach the voice server:
 
 1. **The signaling websocket** (`VOICE_BIND:VOICE_PORT`, 127.0.0.1:8090),
    through the same TLS proxy or tunnel as the web gateway. The simplest

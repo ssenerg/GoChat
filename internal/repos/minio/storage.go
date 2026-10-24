@@ -56,6 +56,22 @@ func (s *Storage) Get(ctx context.Context, key string) (io.ReadCloser, error) {
 	return s.client.GetObject(ctx, s.cfg.Bucket, key, minio.GetObjectOptions{})
 }
 
+// GetRange reads length bytes of key from offset on, or with length 0 the
+// rest of it.
+func (s *Storage) GetRange(ctx context.Context, key string, offset, length int64) (io.ReadCloser, error) {
+	var opts minio.GetObjectOptions
+	if offset > 0 || length > 0 {
+		end := int64(0)
+		if length > 0 {
+			end = offset + length - 1
+		}
+		if err := opts.SetRange(offset, end); err != nil {
+			return nil, err
+		}
+	}
+	return s.client.GetObject(ctx, s.cfg.Bucket, key, opts)
+}
+
 func (s *Storage) Delete(ctx context.Context, key string) error {
 	return s.client.RemoveObject(ctx, s.cfg.Bucket, key, minio.RemoveObjectOptions{})
 }

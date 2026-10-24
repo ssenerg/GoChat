@@ -257,3 +257,31 @@ func (r *Repository) ReleaseInvite(ctx context.Context, inv *models.Invite, user
 	listTeamInvite(b, inv, now)
 	return r.execBatch(b)
 }
+
+// AbandonTeam removes a team whose creation failed partway: the channels
+// made for it so far, creator's memberships of them and of the team, and
+// the team, its name last, so the name can be taken again.
+func (r *Repository) AbandonTeam(ctx context.Context, t *models.Team, creator gocql.UUID, chans []*models.Channel) error {
+	for _, ch := range chans {
+		if err := r.RemoveChannelMember(ctx, &models.ChannelMember{ChannelID: ch.ID, UserID: creator, TeamID: t.ID}); err != nil {
+			return err
+		}
+		if err := r.query(ctx, "DELETE FROM channels WHERE id = ?", ch.ID).ExecRelease(); err != nil {
+			return wrap(err)
+		}
+		if _, err := r.query(ctx, "DELETE FROM channel_names WHERE team_id = ? AND name = ? IF channel_id = ?", t.ID, ch.Name, ch.ID).ExecCASRelease(); err != nil {
+			return wrap(err)
+		}
+	}
+	if err := r.RemoveTeamMember(ctx, t.ID, creator); err != nil {
+		return err
+	}
+	if err := r.query(ctx, "DELETE FROM team_channels WHERE team_id = ?", t.ID).ExecRelease(); err != nil {
+		return wrap(err)
+	}
+	if err := r.query(ctx, "DELETE FROM teams WHERE id = ?", t.ID).ExecRelease(); err != nil {
+		return wrap(err)
+	}
+	_, err := r.query(ctx, "DELETE FROM team_names WHERE name = ? IF team_id = ?", t.Name, t.ID).ExecCASRelease()
+	return wrap(err)
+}

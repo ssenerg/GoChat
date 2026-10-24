@@ -63,6 +63,16 @@ type SetQuota struct {
 	Quota  int64
 }
 
+// Discard deletes uploads of the caller's that no message carries, as when
+// the rest of their batch failed. It replies with Done.
+type Discard struct {
+	P             *models.Principal
+	AttachmentIDs []string
+}
+
+// maxDiscard bounds the uploads one Discard deletes: a batch's worth.
+const maxDiscard = 16
+
 type Done struct{}
 
 var (

@@ -712,6 +712,10 @@ func (a *channel) edit(msg Edit) (*pb.Message, error) {
 	if a.archived() {
 		return nil, errArchived
 	}
+	// Every edit reaches every member, as a post does.
+	if !a.poster(msg.P.UserID).Allow() {
+		return nil, ierrors.ResourceExhausted("you are editing too fast")
+	}
 	content, err := validate.Text("message", msg.Content, a.Cfg.MaxMessageLength)
 	if err != nil {
 		return nil, err
@@ -758,6 +762,9 @@ func (a *channel) delete(msg Delete) (Done, error) {
 	role, err := a.member(msg.P)
 	if err != nil {
 		return Done{}, err
+	}
+	if !a.poster(msg.P.UserID).Allow() {
+		return Done{}, ierrors.ResourceExhausted("you are deleting too fast")
 	}
 	ctx, cancel := a.ctx()
 	defer cancel()
@@ -979,12 +986,14 @@ func (a *channel) dropAttachments(attIDs []gocql.UUID) {
 			if att.ChannelID != a.id {
 				continue
 			}
-			if err := a.Storage.Delete(ctx, att.ObjectKey); err != nil {
-				a.Logger.Warn("failed to delete attachment object", zap.String("attachment", att.ID.String()), zap.Error(err))
-				continue
-			}
+			// The row goes first: a row left over would point at a file
+			// gone, where a file left over is only unused space.
 			if err := a.Repo.DeleteAttachment(ctx, att); err != nil {
 				a.Logger.Warn("failed to delete attachment", zap.String("attachment", att.ID.String()), zap.Error(err))
+				continue
+			}
+			if err := a.Storage.Delete(ctx, att.ObjectKey); err != nil {
+				a.Logger.Warn("failed to delete attachment object", zap.String("attachment", att.ID.String()), zap.String("object", att.ObjectKey), zap.Error(err))
 			}
 		}
 	}()

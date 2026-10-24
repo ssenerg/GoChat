@@ -224,12 +224,21 @@ func (s *fileService) Download(req *pb.DownloadRequest, stream pb.DRPCFileServic
 	if err != nil {
 		return err
 	}
-	body, err := s.storage.Get(ctx, att.ObjectKey)
+	offset, length, some, err := byteRange(req.Offset, req.Length, att.Size)
+	if err != nil {
+		return err
+	}
+	header := &pb.DownloadResponse{Part: &pb.DownloadResponse_Header{Header: convert.Attachment(att)}}
+	if !some {
+		// Past the end: the caller answers from the size in the header.
+		return stream.Send(header)
+	}
+	body, err := s.storage.GetRange(ctx, att.ObjectKey, offset, length)
 	if err != nil {
 		return ierrors.Internal(err)
 	}
 	defer func() { _ = body.Close() }()
-	if err := stream.Send(&pb.DownloadResponse{Part: &pb.DownloadResponse_Header{Header: convert.Attachment(att)}}); err != nil {
+	if err := stream.Send(header); err != nil {
 		return err
 	}
 	buf := make([]byte, chunkSize)
@@ -247,6 +256,36 @@ func (s *fileService) Download(req *pb.DownloadRequest, stream pb.DRPCFileServic
 			return ierrors.Internal(err)
 		}
 	}
+}
+
+// byteRange bounds a download's requested bytes to a file of size: the
+// offset and length to read, with length 0 the rest, and whether there is
+// anything to read at all.
+func byteRange(offset, length, size int64) (int64, int64, bool, error) {
+	if offset < 0 || length < 0 {
+		return 0, 0, false, ierrors.InvalidArgument("invalid range")
+	}
+	if offset >= size {
+		return 0, 0, false, nil
+	}
+	if length == 0 || length > size-offset {
+		length = size - offset
+	}
+	if offset == 0 && length == size {
+		length = 0
+	}
+	return offset, length, true, nil
+}
+
+func (s *fileService) DiscardUploads(ctx context.Context, req *pb.DiscardUploadsRequest) (*pb.DiscardUploadsResponse, error) {
+	p, err := Principal(ctx)
+	if err != nil {
+		return nil, err
+	}
+	if _, err := actors.Ask[files.Done](ctx, s.sys.Engine, s.sys.Files, files.Discard{P: p, AttachmentIDs: req.AttachmentIds}); err != nil {
+		return nil, err
+	}
+	return &pb.DiscardUploadsResponse{}, nil
 }
 
 var gatewayIDRe = regexp.MustCompile(`^[A-Za-z0-9._-]{1,64}$`)

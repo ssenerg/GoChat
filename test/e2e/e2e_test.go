@@ -121,6 +121,23 @@ func (c *client) get(path string) (*http.Response, string) {
 	return c.do(http.MethodGet, path, nil, "", false)
 }
 
+// getRange fetches part of path, as a browser's media player does.
+func (c *client) getRange(path, ranges string) (*http.Response, string) {
+	c.t.Helper()
+	req, err := http.NewRequest(http.MethodGet, baseURL+path, nil)
+	if err != nil {
+		c.t.Fatal(err)
+	}
+	req.Header.Set("Range", ranges)
+	res, err := c.http.Do(req)
+	if err != nil {
+		c.t.Fatalf("GET %s: %v", path, err)
+	}
+	defer func() { _ = res.Body.Close() }()
+	b, _ := io.ReadAll(res.Body)
+	return res, string(b)
+}
+
 func (c *client) form(path string, values url.Values) (*http.Response, string) {
 	if c.cookie("gochat_csrf") == "" {
 		c.get("/login")
@@ -640,6 +657,19 @@ func TestEndToEnd(t *testing.T) {
 		res, got := admin.get("/files/" + att + "/inline")
 		if res.StatusCode != http.StatusOK || res.Header.Get("Content-Type") != "audio/webm" || got != string(webm) {
 			t.Fatalf("voice playback: %d %s", res.StatusCode, res.Header.Get("Content-Type"))
+		}
+		// Browsers play media in ranges; Safari plays nothing without them.
+		size := strconv.Itoa(len(webm))
+		if res, got := admin.getRange("/files/"+att+"/inline", "bytes=0-1"); res.StatusCode != http.StatusPartialContent ||
+			res.Header.Get("Content-Range") != "bytes 0-1/"+size || got != string(webm[:2]) {
+			t.Fatalf("a range of the voice message: %d %q %q", res.StatusCode, res.Header.Get("Content-Range"), got)
+		}
+		if res, got := admin.getRange("/files/"+att+"/inline", "bytes=4-"); res.StatusCode != http.StatusPartialContent || got != string(webm[4:]) {
+			t.Fatalf("the rest of the voice message: %d %d bytes", res.StatusCode, len(got))
+		}
+		if res, _ := admin.getRange("/files/"+att+"/inline", "bytes="+size+"-"); res.StatusCode != http.StatusRequestedRangeNotSatisfiable ||
+			res.Header.Get("Content-Range") != "bytes */"+size {
+			t.Fatalf("a range past the end: %d %q", res.StatusCode, res.Header.Get("Content-Range"))
 		}
 		if res, _ := upload(bob, []byte("not a recording"), "1000"); res.StatusCode != http.StatusBadRequest {
 			t.Fatalf("a voice message that is no recording: %d", res.StatusCode)
