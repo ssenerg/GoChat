@@ -148,6 +148,10 @@ select {
   background: var(--bg); font-weight: 400; font-size: 16px; cursor: pointer;
 }
 select:focus-visible { border-color: var(--accent); box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 22%, transparent); outline: none; }
+/* Selects draw their own chevron, at the same inset in every browser. */
+.select { position: relative; display: block; }
+.select select { -webkit-appearance: none; appearance: none; padding-right: 2rem; }
+.select > .i { position: absolute; top: 50%; right: .7rem; width: 16px; height: 16px; transform: translateY(-50%); color: var(--fg-muted); pointer-events: none; }
 input:not([type=radio]):not([type=checkbox]):not([type=file]):not([type=range]):focus, textarea:focus {
   border-color: var(--accent); box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 22%, transparent); outline: none;
 }
@@ -808,7 +812,7 @@ label.status-choice:has(input:focus-visible) { outline: 2px solid var(--accent);
 }
 .preset:hover { background: var(--bg-hover); }
 .status-line { display: flex; align-items: center; gap: 6px; }
-.status-line select { flex: none; width: 4.5rem; }
+.status-line .select { flex: none; width: 4.5rem; }
 .status-line input { flex: 1; min-width: 0; }
 .row.end { justify-content: flex-end; }
 

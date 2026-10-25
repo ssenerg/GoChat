@@ -10,6 +10,7 @@ import (
 var icons = map[string]string{
 	"menu":           `<path d="M4 7h16M4 12h16M4 17h16"/>`,
 	"close":          `<path d="M6 6l12 12M18 6L6 18"/>`,
+	"chevron":        `<path d="M6 9l6 6 6-6"/>`,
 	"plus":           `<path d="M12 5v14M5 12h14"/>`,
 	"search":         `<circle cx="11" cy="11" r="6.5"/><path d="M16 16l4 4"/>`,
 	"more":           `<circle cx="6" cy="12" r="1.4" fill="currentColor" stroke="none"/><circle cx="12" cy="12" r="1.4" fill="currentColor" stroke="none"/><circle cx="18" cy="12" r="1.4" fill="currentColor" stroke="none"/>`,

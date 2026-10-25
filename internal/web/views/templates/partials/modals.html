@@ -322,18 +322,18 @@
     {{end}}
   </fieldset>
   <label class="dnd-for">Do not disturb for
-    <select name="dnd">{{range .DNDFor}}<option value="{{.Value}}">{{.Label}}</option>{{end}}</select>
+    <span class="select"><select name="dnd">{{range .DNDFor}}<option value="{{.Value}}">{{.Label}}</option>{{end}}</select>{{icon "chevron"}}</span>
   </label>
   <fieldset class="status-custom">
     <legend>Custom status</legend>
     <div class="status-presets">{{range .Presets}}<button type="button" class="preset" data-status-emoji="{{.Emoji}}" data-status-text="{{.Text}}"><span aria-hidden="true">{{emojiChar .Emoji}}</span>{{.Text}}</button>{{end}}</div>
     <div class="status-line">
-      <select name="emoji" aria-label="Emoji" data-status-field><option value="">—</option>{{range .Emoji}}<option value="{{.Name}}"{{if eq .Name $.CustomEmoji}} selected{{end}}>{{.Char}}</option>{{end}}</select>
+      <span class="select"><select name="emoji" aria-label="Emoji" data-status-field><option value="">—</option>{{range .Emoji}}<option value="{{.Name}}"{{if eq .Name $.CustomEmoji}} selected{{end}}>{{.Char}}</option>{{end}}</select>{{icon "chevron"}}</span>
       <input type="text" name="text" value="{{.CustomText}}" maxlength="100" placeholder="What are you up to?" aria-label="Status text" autocomplete="off" data-status-field>
       <button type="button" class="icon-btn" data-status-clear aria-label="Clear custom status" title="Clear">{{icon "close"}}</button>
     </div>
     <label>Clear after
-      <select name="clear">{{range .ClearIn}}<option value="{{.Value}}">{{.Label}}</option>{{end}}</select>
+      <span class="select"><select name="clear">{{range .ClearIn}}<option value="{{.Value}}">{{.Label}}</option>{{end}}</select>{{icon "chevron"}}</span>
     </label>
   </fieldset>
   <div class="row end">
