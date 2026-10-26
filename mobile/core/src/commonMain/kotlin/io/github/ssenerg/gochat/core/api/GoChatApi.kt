@@ -215,6 +215,35 @@ class GoChatApi(val client: ApiClient) {
 
     suspend fun savedIds() = messages("ListSaved", ListSavedRequest(ids_only = true), ListSavedResponse.ADAPTER).message_ids
 
+    // Bots: their buttons and commands.
+
+    /** Presses a button of a bot's message; the bot's answer comes as a CallbackAnswer with the returned query id. */
+    suspend fun pressButton(m: Message, data: String) =
+        messages(
+            "PressButton",
+            PressButtonRequest(channel_id = m.channel_id, message_id = m.id, root_id = m.root_id, data_ = data),
+            PressButtonResponse.ADAPTER,
+        ).query_id
+
+    suspend fun channelCommands(channelId: String) =
+        client.call("gochat.v1.BotService/ListChannelCommands", ListChannelCommandsRequest(channel_id = channelId), ListChannelCommandsResponse.ADAPTER)
+            .commands
+
+    // Updates: what the socket missed.
+
+    private suspend fun <T : Any> updates(m: String, req: com.squareup.wire.Message<*, *>, res: com.squareup.wire.ProtoAdapter<T>) =
+        client.call("gochat.v1.UpdatesService/$m", req, res)
+
+    suspend fun difference(pts: Long, limit: Int = DIFFERENCE_LIMIT) =
+        updates("GetDifference", GetDifferenceRequest(pts = pts, limit = limit), GetDifferenceResponse.ADAPTER)
+
+    suspend fun channelDifference(channelId: String, pts: Long, limit: Int = DIFFERENCE_LIMIT) =
+        updates(
+            "GetChannelDifference",
+            GetChannelDifferenceRequest(channel_id = channelId, pts = pts, limit = limit),
+            GetChannelDifferenceResponse.ADAPTER,
+        )
+
     // Voice channels: who talks where, and the calls VoiceCall makes to talk.
 
     private suspend fun <T : Any> voice(m: String, req: com.squareup.wire.Message<*, *>, res: com.squareup.wire.ProtoAdapter<T>) =
@@ -236,5 +265,10 @@ class GoChatApi(val client: ApiClient) {
     /** Takes someone out of a voice channel's talk, for its moderators. */
     suspend fun disconnectVoiceMember(channelId: String, userId: String) {
         voice("DisconnectVoiceMember", DisconnectVoiceMemberRequest(channel_id = channelId, user_id = userId), DisconnectVoiceMemberResponse.ADAPTER)
+    }
+
+    companion object {
+        /** The most updates the server answers at once. */
+        const val DIFFERENCE_LIMIT = 100
     }
 }

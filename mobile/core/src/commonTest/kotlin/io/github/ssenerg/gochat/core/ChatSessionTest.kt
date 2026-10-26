@@ -11,16 +11,13 @@ import gochat.v1.MessagePosted
 import gochat.v1.Status
 import gochat.v1.User
 import io.github.ssenerg.gochat.core.api.ApiClient
+import io.github.ssenerg.gochat.core.api.ApiException
+import io.github.ssenerg.gochat.core.api.Caller
 import io.github.ssenerg.gochat.core.api.GoChatApi
 import io.github.ssenerg.gochat.core.model.Format
 import io.github.ssenerg.gochat.core.state.ChatSession
 import io.github.ssenerg.gochat.core.state.MemoryStore
 import io.github.ssenerg.gochat.core.state.Notice
-import io.ktor.client.engine.mock.MockEngine
-import io.ktor.client.engine.mock.respond
-import io.ktor.http.HttpHeaders
-import io.ktor.http.HttpStatusCode
-import io.ktor.http.headersOf
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.TestScope
@@ -32,7 +29,6 @@ import kotlin.test.assertTrue
 
 /** The session follows the web's rules for what notifies and what counts. */
 class ChatSessionTest {
-    private val proto = headersOf(HttpHeaders.ContentType, "application/proto")
     private val ann = User(id = "u-ann", username = "ann", display_name = "Ann")
     private val bob = User(id = "u-bob", username = "bob", display_name = "Bob")
     private val town = Channel(id = "c-town", team_id = "t1", name = "town", display_name = "Town", type = ChannelType.CHANNEL_TYPE_PUBLIC)
@@ -43,14 +39,14 @@ class ChatSessionTest {
 
     /** Ann's session in team t1, with "quiet" muted. */
     private suspend fun TestScope.open(me: User = ann): Opened {
-        val engine = MockEngine { req ->
-            when (req.url.encodedPath.substringAfterLast('/')) {
-                "ListChannels" -> respond(ListChannelsResponse(channels = listOf(town, quiet, direct)).encode(), HttpStatusCode.OK, proto)
-                "ListMutedChannels" -> respond(ListMutedChannelsResponse(channel_ids = listOf(quiet.id)).encode(), HttpStatusCode.OK, proto)
-                else -> respond("", HttpStatusCode.NotFound)
+        val calls = Caller { method, _ ->
+            when (method.substringAfterLast('/')) {
+                "ListChannels" -> ListChannelsResponse(channels = listOf(town, quiet, direct)).encode()
+                "ListMutedChannels" -> ListMutedChannelsResponse(channel_ids = listOf(quiet.id)).encode()
+                else -> throw ApiException(ApiException.NOT_FOUND, "not found")
             }
         }
-        val session = ChatSession(GoChatApi(ApiClient("https://chat.test", "tok", engine)), me, MemoryStore(), backgroundScope, null) {}
+        val session = ChatSession(GoChatApi(ApiClient("https://chat.test", "tok", caller = calls)), me, MemoryStore(), backgroundScope, null) {}
         val notices = mutableListOf<Notice>()
         backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { session.notices.collect { notices += it } }
         session.selectTeam("t1")

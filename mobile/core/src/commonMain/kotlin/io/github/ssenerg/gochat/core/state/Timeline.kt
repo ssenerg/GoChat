@@ -61,7 +61,7 @@ class Timeline internal constructor(
         paging = true
         arrived.clear()
         try {
-            val channel = session.state.value.channel(channelId) ?: session.api.channel(channelId)
+            val channel = session.state.value.channel(channelId) ?: session.api.channel(channelId)?.also { session.learn(it) }
             val page = session.api.history(channelId, limit = PAGE)
             val messages = (page.messages + arrived.filter { m -> page.messages.none { it.id == m.id } })
                 .sortedByDescending { io.github.ssenerg.gochat.core.model.uuidTime(it.id) }

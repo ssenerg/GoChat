@@ -6,6 +6,8 @@ import gochat.v1.ApiError
 import gochat.v1.Attachment
 import gochat.v1.ServerInfo
 import gochat.v1.User
+import io.github.ssenerg.gochat.core.socket.KtorDialer
+import io.github.ssenerg.gochat.core.socket.Socket
 import io.ktor.client.HttpClient
 import io.ktor.client.HttpClientConfig
 import io.ktor.client.call.body
@@ -44,9 +46,19 @@ class ApiException(val code: Int, message: String, val status: Int = 0) : Except
     }
 }
 
+/**
+ * The socket dropped, or never came up, before the server answered: whether
+ * it made the call is unknown.
+ */
+class ConnectionLost(message: String) : Exception(message)
+
+/** The server does not take this app: it is too old for the server, or the server for it. */
+class ServerRefused(message: String) : Exception(message)
+
 /** What to tell a person about a failure. */
 fun Throwable.userMessage(): String = when (this) {
     is ApiException -> message?.replaceFirstChar { it.uppercase() } ?: "Something went wrong."
+    is ServerRefused -> message ?: "The server does not take this app."
     is CancellationException -> "Cancelled."
     else -> "Cannot reach the server. Check your connection."
 }
@@ -81,18 +93,40 @@ class AppInfo(val version: String, device: String) {
     private fun parts(v: String) = v.trim().takeWhile { it.isDigit() || it == '.' }.split('.').map { it.toIntOrNull() ?: 0 }
 }
 
+/** Makes the chat API's calls: the socket in the apps, a stub in tests. */
+fun interface Caller {
+    suspend fun call(method: String, payload: ByteArray): ByteArray
+}
+
 /**
- * The client API of a GoChat server: its chat API over HTTP, in protobuf,
- * as client.proto in the server's repository describes. The session token
- * goes in the Authorization header of every request.
+ * A GoChat server: its chat API over the GoChat protocol's socket
+ * (docs/protocol.md in the server's repository), and files over HTTP with
+ * the session token in the Authorization header.
  */
-class ApiClient(baseUrl: String, token: String? = null, engine: HttpClientEngine? = null, app: AppInfo? = null) {
+class ApiClient(
+    baseUrl: String,
+    token: String? = null,
+    engine: HttpClientEngine? = null,
+    app: AppInfo? = null,
+    caller: Caller? = null,
+) {
     val baseUrl: String = normalizeServerUrl(baseUrl)
 
-    /** The session token, once signed in. */
+    /** The session token, once signed in; setting it signs the socket in. */
     var token: String? = token
+        set(value) {
+            field = value
+            if (value != null) socket.useToken(value)
+        }
 
     val http: HttpClient = if (engine != null) HttpClient(engine) { configure(app) } else HttpClient { configure(app) }
+
+    private val opened = lazy { Socket(socketUrl, app?.userAgent ?: "GoChat", token, KtorDialer(http)) }
+
+    /** The socket calls and updates come over; it connects when first used. */
+    val socket: Socket by opened
+
+    private val caller: Caller = caller ?: Caller { method, payload -> socket.call(method, payload) }
 
     private fun HttpClientConfig<*>.configure(app: AppInfo?) {
         expectSuccess = false
@@ -108,18 +142,14 @@ class ApiClient(baseUrl: String, token: String? = null, engine: HttpClientEngine
     }
 
     /** Makes one call of the chat API, such as "gochat.v1.ChannelService/GetChannel". */
-    suspend fun <Res : Any> call(method: String, request: Message<*, *>, response: ProtoAdapter<Res>): Res {
-        val res = http.post("$baseUrl/api/v1/rpc/$method") {
-            timeout { requestTimeoutMillis = 30_000 }
-            authorize()
-            contentType(PROTO)
-            accept(PROTO)
-            setBody(request.encode())
-        }
-        return decode(res, response)
-    }
+    suspend fun <Res : Any> call(method: String, request: Message<*, *>, response: ProtoAdapter<Res>): Res =
+        response.decode(caller.call(method, request.encode()))
 
-    /** What the server says of itself: its version and the oldest app it takes. It needs no token. */
+    /**
+     * What the server says of itself: its version and the oldest app it
+     * takes. It needs no token. The protocol has no such call yet, so it
+     * stays at /api/v1.
+     */
     suspend fun info(): ServerInfo {
         val res = http.get("$baseUrl/api/v1/info") {
             timeout { requestTimeoutMillis = 15_000 }
@@ -136,7 +166,7 @@ class ApiClient(baseUrl: String, token: String? = null, engine: HttpClientEngine
         voice: Boolean = false,
         durationMs: Long = 0,
     ): Attachment {
-        val res = http.post("$baseUrl/api/v1/files") {
+        val res = http.post("$baseUrl/api/v2/files") {
             timeout { requestTimeoutMillis = 10 * 60_000 }
             authorize()
             accept(PROTO)
@@ -163,7 +193,7 @@ class ApiClient(baseUrl: String, token: String? = null, engine: HttpClientEngine
         return res.body()
     }
 
-    /** Sets the caller's profile photo from any picture. */
+    /** Sets the caller's profile photo from any picture; /api/v2 has no photos yet. */
     suspend fun setPhoto(picture: ByteArray): User {
         val res = http.post("$baseUrl/api/v1/photo") {
             timeout { requestTimeoutMillis = 2 * 60_000 }
@@ -175,7 +205,7 @@ class ApiClient(baseUrl: String, token: String? = null, engine: HttpClientEngine
         return decode(res, User.ADAPTER)
     }
 
-    fun fileUrl(attachmentId: String) = "$baseUrl/api/v1/files/$attachmentId"
+    fun fileUrl(attachmentId: String) = "$baseUrl/api/v2/files/$attachmentId"
 
     /** Where a person's photo is, or null when they have none. */
     fun userPhotoUrl(user: User?): String? =
@@ -184,11 +214,14 @@ class ApiClient(baseUrl: String, token: String? = null, engine: HttpClientEngine
     fun teamPhotoUrl(teamId: String, photo: String): String? =
         photo.takeIf { it.isNotEmpty() }?.let { "$baseUrl/api/v1/photos/t/$teamId/$it" }
 
-    /** The event socket's address. */
-    val gatewayUrl: String
-        get() = baseUrl.replaceFirst("https://", "wss://").replaceFirst("http://", "ws://") + "/api/v1/gateway"
+    /** The socket's address. */
+    val socketUrl: String
+        get() = baseUrl.replaceFirst("https://", "wss://").replaceFirst("http://", "ws://") + "/api/v2/socket"
 
-    fun close() = http.close()
+    fun close() {
+        if (opened.isInitialized()) socket.close()
+        http.close()
+    }
 
     private suspend fun <T : Any> decode(res: HttpResponse, adapter: ProtoAdapter<T>): T {
         if (!res.status.isSuccess()) throw failure(res)

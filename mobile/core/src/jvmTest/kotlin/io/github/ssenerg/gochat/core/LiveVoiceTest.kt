@@ -4,7 +4,7 @@ import gochat.v1.ChannelType
 import gochat.v1.CreateChannelRequest
 import io.github.ssenerg.gochat.core.api.ApiClient
 import io.github.ssenerg.gochat.core.api.GoChatApi
-import io.github.ssenerg.gochat.core.gateway.Connection
+import io.github.ssenerg.gochat.core.socket.Connection
 import io.github.ssenerg.gochat.core.state.AppState
 import io.github.ssenerg.gochat.core.state.GoChatApp
 import io.github.ssenerg.gochat.core.state.MemoryStore
@@ -64,7 +64,7 @@ class LiveVoiceTest {
         assertEquals(null, withContext(scope.coroutineContext) { app.signIn(url!!, admin!!, password!!) })
         val session = (app.state.value as AppState.SignedIn).session
         val st = session.state.first { !it.loading && it.channels.isNotEmpty() }
-        session.gateway.connection.first { it is Connection.Online }
+        session.socket.connection.first { it is Connection.Online }
         val room = withContext(scope.coroutineContext) {
             session.createChannel(
                 CreateChannelRequest(team_id = st.teamId!!, name = "app-voice-" + Random.nextInt(100_000), display_name = "App voice", type = ChannelType.CHANNEL_TYPE_VOICE),

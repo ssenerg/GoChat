@@ -7,6 +7,7 @@ import io.github.ssenerg.gochat.core.api.ApiException
 import io.github.ssenerg.gochat.core.api.GoChatApi
 import io.github.ssenerg.gochat.core.api.normalizeServerUrl
 import io.github.ssenerg.gochat.core.api.userMessage
+import io.github.ssenerg.gochat.core.socket.Connection
 import io.github.ssenerg.gochat.core.voice.RtcEngine
 import io.ktor.client.engine.HttpClientEngine
 import kotlinx.coroutines.CancellationException
@@ -88,28 +89,33 @@ class GoChatApp(
                 _state.value = AppState.SignedOut(server, notice)
                 return@launch
             }
-            try {
-                open(api, api.me().user ?: throw ApiException(ApiException.UNAUTHENTICATED, "Sign in again."))
-            } catch (e: ApiException) {
-                api.client.close()
-                if (e.isUnauthenticated) store.put(KEY_TOKEN, null)
-                _state.value = AppState.SignedOut(server, if (e.isUnauthenticated) "Your session ended. Sign in again." else e.userMessage())
-            } catch (e: Exception) {
-                // Offline: open as the person last seen, and load once the
-                // event socket gets through; without them, try again from the
-                // sign-in screen, keeping the token.
-                val me = cachedMe()
-                if (me != null) {
-                    open(api, me)
-                } else {
-                    api.client.close()
-                    _state.value = AppState.SignedOut(server, e.userMessage())
+            // The socket resumes after the last update the app applied.
+            api.client.socket.pts = store.get(KEY_PTS)?.toLongOrNull() ?: 0
+            when (val c = api.client.socket.connect()) {
+                is Connection.Online -> open(api, c.welcome.user ?: cachedMe() ?: return@launch signedOut(api, server, "Sign in again."))
+                Connection.SignedOut -> {
+                    store.put(KEY_TOKEN, null)
+                    store.put(KEY_PTS, null)
+                    signedOut(api, server, "Your session ended. Sign in again.")
+                }
+                is Connection.Refused -> signedOut(api, server, c.reason)
+                else -> {
+                    // Offline: open as the person last seen, and load once
+                    // the socket gets through; without them, try again from
+                    // the sign-in screen, keeping the token.
+                    val me = cachedMe()
+                    if (me != null) open(api, me) else signedOut(api, server, "Cannot reach the server. Check your connection.")
                 }
             }
         }
     }
 
-    /** Signs in; returns why not, or null. */
+    private fun signedOut(api: GoChatApi, server: String, notice: String) {
+        api.client.close()
+        _state.value = AppState.SignedOut(server, notice)
+    }
+
+    /** Signs in over an anonymous socket, which then serves the session; returns why not, or null. */
     suspend fun signIn(server: String, login: String, password: String): String? {
         val url = normalizeServerUrl(server)
         val api = api(url)
@@ -129,7 +135,10 @@ class GoChatApp(
                     signedIn(api, url, res.session.token)
                     null
                 }
-                else -> "The server answered in a way this app does not understand."
+                else -> {
+                    api.client.close()
+                    "The server answered in a way this app does not understand."
+                }
             }
         } catch (e: Exception) {
             api.client.close()
@@ -192,6 +201,8 @@ class GoChatApp(
     /** Signs out of this device. */
     suspend fun signOut() {
         val s = session ?: return
+        // Signing out ends the socket too: that is no surprise.
+        s.signingOut = true
         runCatching { s.api.logout() }
         close(null)
     }
@@ -212,11 +223,13 @@ class GoChatApp(
         return if (app.olderThan(min)) "This server needs version $min of the app or later. Update the app to sign in." else null
     }
 
+    /** Says hello again on the socket that signed in, now with the session's token. */
     private suspend fun signedIn(api: GoChatApi, server: String, token: String) {
         api.client.token = token
-        val me = api.me().user ?: throw ApiException(ApiException.UNAUTHENTICATED, "Sign in again.")
+        val me = api.client.socket.authenticate(token).user ?: throw ApiException(ApiException.UNAUTHENTICATED, "Sign in again.")
         store.put(KEY_SERVER, server)
         store.put(KEY_TOKEN, token)
+        store.put(KEY_PTS, null)
         open(api, me)
     }
 
@@ -227,18 +240,22 @@ class GoChatApp(
 
     private fun open(api: GoChatApi, me: gochat.v1.User) {
         store.put(KEY_ME, Base64.encode(gochat.v1.User.ADAPTER.encode(me)))
-        val s = ChatSession(api, me, store, scope, rtc) { notice -> close(notice) }
+        val s = ChatSession(api, me, store, scope, rtc, onRefused = { notice -> close(notice, keepToken = true) }) { notice -> close(notice) }
         session = s
         _state.value = AppState.SignedIn(s)
-        s.start()
+        s.start(store.get(KEY_PTS)?.toLongOrNull() ?: 0)
     }
 
-    private fun close(notice: String?) {
+    /** Ends the session; [keepToken] when an updated app may resume it. */
+    private fun close(notice: String?, keepToken: Boolean = false) {
         val s = session ?: return
         session = null
         s.stop()
-        store.put(KEY_TOKEN, null)
-        store.put(KEY_ME, null)
+        if (!keepToken) {
+            store.put(KEY_TOKEN, null)
+            store.put(KEY_ME, null)
+            store.put(KEY_PTS, null)
+        }
         _state.value = AppState.SignedOut(s.api.client.baseUrl, notice)
         s.api.client.close()
     }
@@ -247,6 +264,7 @@ class GoChatApp(
         private const val KEY_SERVER = "server"
         private const val KEY_TOKEN = "token"
         private const val KEY_ME = "me"
+        private const val KEY_PTS = ChatSession.KEY_PTS
 
         /** Takes an invite link or its bare token. */
         fun inviteToken(input: String): String = input.trim().substringAfterLast("/join/").substringBefore('?').trim('/')

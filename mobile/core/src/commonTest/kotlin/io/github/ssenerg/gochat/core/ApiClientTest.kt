@@ -1,6 +1,7 @@
 package io.github.ssenerg.gochat.core
 
 import gochat.v1.ApiError
+import gochat.v1.Attachment
 import gochat.v1.GetChannelRequest
 import gochat.v1.GetChannelResponse
 import gochat.v1.Channel
@@ -27,17 +28,27 @@ class ApiClientTest {
     private val proto = headersOf(HttpHeaders.ContentType, "application/proto")
 
     @Test
-    fun callsSendProtobufWithTheToken() = runTest {
-        val engine = MockEngine { req ->
-            assertEquals("https://chat.test/api/v1/rpc/gochat.v1.ChannelService/GetChannel", req.url.toString())
-            assertEquals("Bearer tok", req.headers[HttpHeaders.Authorization])
-            val body = (req.body as OutgoingContent.ByteArrayContent).bytes()
-            assertEquals("c1", GetChannelRequest.ADAPTER.decode(body).channel_id)
-            respond(GetChannelResponse(channel = Channel(id = "c1", display_name = "Town")).encode(), HttpStatusCode.OK, proto)
-        }
-        val api = ApiClient("chat.test", "tok", engine)
+    fun callsAreProtobufByName() = runTest {
+        val api = ApiClient("chat.test", "tok", caller = { method, payload ->
+            assertEquals("gochat.v1.ChannelService/GetChannel", method)
+            assertEquals("c1", GetChannelRequest.ADAPTER.decode(payload).channel_id)
+            GetChannelResponse(channel = Channel(id = "c1", display_name = "Town")).encode()
+        })
         val res = api.call("gochat.v1.ChannelService/GetChannel", GetChannelRequest(channel_id = "c1"), GetChannelResponse.ADAPTER)
         assertEquals("Town", res.channel?.display_name)
+    }
+
+    @Test
+    fun filesTakeTheTokenAtApiV2() = runTest {
+        val engine = MockEngine { req ->
+            assertEquals("https://chat.test/api/v2/files?channel_id=c1&name=a.txt", req.url.toString())
+            assertEquals("Bearer tok", req.headers[HttpHeaders.Authorization])
+            assertEquals("hi", (req.body as OutgoingContent.ByteArrayContent).bytes().decodeToString())
+            respond(Attachment(id = "f1", name = "a.txt").encode(), HttpStatusCode.OK, proto)
+        }
+        val api = ApiClient("https://chat.test", "tok", engine)
+        assertEquals("f1", api.upload("c1", "a.txt", "hi".encodeToByteArray()).id)
+        assertEquals("https://chat.test/api/v2/files/f1", api.fileUrl("f1"))
     }
 
     @Test
@@ -45,9 +56,7 @@ class ApiClientTest {
         val engine = MockEngine {
             respond(ApiError(code = 7, message = "permission denied").encode(), HttpStatusCode.Forbidden, proto)
         }
-        val e = assertFailsWith<ApiException> {
-            ApiClient("https://chat.test", "tok", engine).call("gochat.v1.ChannelService/GetChannel", GetChannelRequest(), GetChannelResponse.ADAPTER)
-        }
+        val e = assertFailsWith<ApiException> { ApiClient("https://chat.test", "tok", engine).download("f1") }
         assertEquals(7, e.code)
         assertEquals("permission denied", e.message)
     }
@@ -55,17 +64,15 @@ class ApiClientTest {
     @Test
     fun aBareLimitStillReads() = runTest {
         val engine = MockEngine { respond("too many requests", HttpStatusCode.TooManyRequests) }
-        val e = assertFailsWith<ApiException> {
-            ApiClient("https://chat.test", engine = engine).call("gochat.v1.AuthService/Me", GetChannelRequest(), GetChannelResponse.ADAPTER)
-        }
+        val e = assertFailsWith<ApiException> { ApiClient("https://chat.test", engine = engine).download("f1") }
         assertEquals(ApiException.RESOURCE_EXHAUSTED, e.code)
         assertTrue(e.message!!.contains("Too many"))
     }
 
     @Test
-    fun theGatewayFollowsTheScheme() {
-        assertEquals("wss://chat.test/api/v1/gateway", ApiClient("https://chat.test").gatewayUrl)
-        assertEquals("ws://localhost:8080/api/v1/gateway", ApiClient("http://localhost:8080/").gatewayUrl)
+    fun theSocketFollowsTheScheme() {
+        assertEquals("wss://chat.test/api/v2/socket", ApiClient("https://chat.test").socketUrl)
+        assertEquals("ws://localhost:8080/api/v2/socket", ApiClient("http://localhost:8080/").socketUrl)
     }
 
     @Test

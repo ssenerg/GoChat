@@ -3,7 +3,7 @@ package io.github.ssenerg.gochat.core
 import gochat.v1.Channel
 import io.github.ssenerg.gochat.core.api.ApiClient
 import io.github.ssenerg.gochat.core.api.GoChatApi
-import io.github.ssenerg.gochat.core.gateway.Connection
+import io.github.ssenerg.gochat.core.socket.Connection
 import io.github.ssenerg.gochat.core.model.isConversation
 import io.github.ssenerg.gochat.core.state.AppState
 import io.github.ssenerg.gochat.core.state.ChatSession
@@ -64,7 +64,7 @@ class LiveServerTest {
         val st = session.state.first { !it.loading && it.channels.isNotEmpty() }
         assertEquals(teamName, st.team?.name)
         val town = st.textChannels.first { it.name == "town-square" }
-        session.gateway.connection.first { it is Connection.Online }
+        session.socket.connection.first { it is Connection.Online }
 
         val timeline = withContext(scope.coroutineContext) { session.timeline(town.id) }
         timeline.state.first { !it.loading }
@@ -128,6 +128,6 @@ class LiveServerTest {
     }
 
     private fun checkClosed(session: ChatSession) {
-        assertTrue(session.gateway.connection.value !is Connection.Online, "the socket closes with the session")
+        assertTrue(session.socket.connection.value !is Connection.Online, "the socket closes with the session")
     }
 }

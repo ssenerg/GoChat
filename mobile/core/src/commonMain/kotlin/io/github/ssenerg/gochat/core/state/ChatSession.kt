@@ -1,7 +1,9 @@
 package io.github.ssenerg.gochat.core.state
 
 import gochat.v1.Attachment
+import gochat.v1.CallbackAnswer
 import gochat.v1.Channel
+import gochat.v1.ChannelCommand
 import gochat.v1.Event
 import gochat.v1.Message
 import gochat.v1.Reaction
@@ -12,9 +14,6 @@ import gochat.v1.VoiceChannelState
 import io.github.ssenerg.gochat.core.api.ApiException
 import io.github.ssenerg.gochat.core.api.GoChatApi
 import io.github.ssenerg.gochat.core.api.userMessage
-import io.github.ssenerg.gochat.core.gateway.Connection
-import io.github.ssenerg.gochat.core.gateway.Gateway
-import io.github.ssenerg.gochat.core.gateway.GatewayMessage
 import io.github.ssenerg.gochat.core.model.Format
 import io.github.ssenerg.gochat.core.model.displayName
 import io.github.ssenerg.gochat.core.model.excerpt
@@ -26,12 +25,17 @@ import io.github.ssenerg.gochat.core.model.newer
 import io.github.ssenerg.gochat.core.model.inDnd
 import io.github.ssenerg.gochat.core.model.title
 import io.github.ssenerg.gochat.core.model.uuidTime
+import io.github.ssenerg.gochat.core.socket.Connection
+import io.github.ssenerg.gochat.core.socket.Socket
+import io.github.ssenerg.gochat.core.socket.SocketEvent
 import io.github.ssenerg.gochat.core.voice.RtcEngine
 import io.github.ssenerg.gochat.core.voice.VoiceCall
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -43,6 +47,8 @@ import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlin.time.Duration.Companion.minutes
+import kotlin.time.Duration.Companion.seconds
 import kotlin.time.TimeSource
 
 /** What the sidebar and the rest of the app show of a signed-in person's world. */
@@ -83,10 +89,13 @@ data class ChatState(
 /** A message elsewhere that calls for the person: a mention, a direct message, a reply. */
 data class Notice(val title: String, val body: String, val channelId: String, val rootId: String = "")
 
+/** A bot's answer to a button the person pressed: a passing notice, or an [alert] to dismiss. */
+data class BotAnswer(val bot: String, val text: String, val alert: Boolean)
+
 /**
  * A signed-in person's session: it loads their teams and channels, keeps
- * them current with the event socket's events, and makes the calls the
- * screens need. Use it from one thread, the main one.
+ * them current with the socket's updates, and makes the calls the screens
+ * need. Use it from one thread, the main one.
  */
 class ChatSession internal constructor(
     val api: GoChatApi,
@@ -94,19 +103,43 @@ class ChatSession internal constructor(
     private val store: KeyValueStore,
     parent: CoroutineScope,
     rtc: RtcEngine?,
+    /** The server no longer takes this app: the session ends, its token kept for an updated app. */
+    private val onRefused: ((String) -> Unit)? = null,
     private val onSignedOut: (String) -> Unit,
 ) {
     private val scope = CoroutineScope(parent.coroutineContext + SupervisorJob(parent.coroutineContext[Job]))
     private val _state = MutableStateFlow(ChatState(me = me))
     val state: StateFlow<ChatState> = _state.asStateFlow()
 
-    val gateway = Gateway(api.client, scope)
+    /** The socket the session's calls and updates come over. */
+    val socket: Socket get() = api.client.socket
+
+    private val updates = Updates(
+        scope,
+        difference = { api.difference(it) },
+        channelDifference = { id, pts -> api.channelDifference(id, pts) },
+        apply = { ev, quiet -> event(ev, quiet) },
+        reload = { sync(full = true) },
+        reloadChannel = { id ->
+            timelines[id]?.reload()
+            threads.values.filter { it.channelId == id }.forEach { it.reload() }
+        },
+        applied = { keepPts(it) },
+    )
+
+    /** Set while the person signs out, when the socket's end is expected. */
+    internal var signingOut = false
 
     /** The voice channel the person talks in, if any. */
     val voice = VoiceCall(api, rtc, store, me.id, scope)
 
     private val _notices = MutableSharedFlow<Notice>(extraBufferCapacity = 16)
     val notices: SharedFlow<Notice> = _notices.asSharedFlow()
+
+    private val _answers = MutableSharedFlow<BotAnswer>(extraBufferCapacity = 8)
+
+    /** Bots' answers to the buttons this device pressed. */
+    val answers: SharedFlow<BotAnswer> = _answers.asSharedFlow()
 
     private val timelines = LinkedHashMap<String, Timeline>()
     private val threads = LinkedHashMap<String, ThreadView>()
@@ -128,35 +161,121 @@ class ChatSession internal constructor(
      */
     fun <T> launch(work: suspend () -> T, then: (T) -> Unit = {}): Job = scope.launch { then(work()) }
 
-    internal fun start() {
-        scope.launch { gateway.messages.collect { handle(it) } }
+    /** Starts after the account's update [pts] the app kept, 0 for none; the socket's welcome loads the rest. */
+    internal fun start(pts: Long) {
+        updates.start(pts)
+        scope.launch { for (e in socket.events) handle(e) }
         // Presence reaches only the sockets that show the person: the
         // sidebar shows the conversations' people.
         scope.launch {
             _state.map { st -> st.channels.flatMap { ch -> listOfNotNull(ch.peer?.id) + ch.peers.map { it.id } }.distinct().sorted() }
                 .distinctUntilChanged()
-                .collect { gateway.watch(it) }
+                .collect { socket.watch(it) }
         }
         scope.launch {
-            gateway.connection.collect { c ->
+            socket.connection.collect { c ->
                 _state.update { it.copy(connection = c) }
-                if (c is Connection.SignedOut) onSignedOut("Your session ended. Sign in again.")
+                when {
+                    signingOut -> {}
+                    c is Connection.SignedOut -> onSignedOut("Your session ended. Sign in again.")
+                    c is Connection.Refused -> (onRefused ?: onSignedOut)(c.reason)
+                }
             }
         }
-        scope.launch {
-            loadTeams()
-            gateway.start()
-        }
-        scope.launch {
-            runCatching { api.savedIds() }.onSuccess { ids -> _state.update { it.copy(saved = ids.toSet()) } }
-        }
+        socket.start()
     }
 
     internal fun stop() {
+        savePts()
         voice.close()
-        gateway.stop()
         scope.cancel()
         voiceCache.clear()
+    }
+
+    // The account's number, kept so the app resumes after it once restarted.
+
+    private var saving: Job? = null
+
+    private fun keepPts(pts: Long) {
+        socket.pts = pts
+        if (saving?.isActive == true) return
+        saving = scope.launch {
+            delay(SAVE_PTS_MS)
+            savePts()
+        }
+    }
+
+    private fun savePts() {
+        if (updates.pts > 0) store.put(KEY_PTS, updates.pts.toString())
+    }
+
+    // Syncing: after each welcome, what the socket may have missed loads.
+
+    private var synced = false
+    private var syncing: Job? = null
+
+    /**
+     * Loads what the app shows, holding updates until it has: everything
+     * when [full], else what changed while the socket was down.
+     */
+    private fun sync(full: Boolean) {
+        val previous = syncing
+        syncing = scope.launch(start = CoroutineStart.UNDISPATCHED) {
+            updates.hold()
+            try {
+                previous?.cancelAndJoin()
+                if (full) {
+                    loadTeams()
+                    reloadViews()
+                    runCatching { api.savedIds() }.onSuccess { ids -> _state.update { it.copy(saved = ids.toSet()) } }
+                    synced = _state.value.error == null
+                } else {
+                    catchUp()
+                }
+            } finally {
+                updates.release()
+            }
+        }
+    }
+
+    private fun reloadViews() {
+        timelines.values.forEach { it.reload() }
+        threads.values.forEach { it.reload() }
+    }
+
+    /** The channels whose messages the screens hold. */
+    private fun shownChannels(): Set<String> = timelines.keys + threads.values.map { it.channelId }
+
+    /**
+     * Brings the sidebar and the open screens up to date after a reconnect:
+     * the list of channels gives the counts, and each open channel takes
+     * what it missed, the list counting it already.
+     */
+    private suspend fun catchUp() {
+        val teamId = _state.value.teamId ?: return loadTeams()
+        try {
+            val channels = api.listChannels(teamId)
+            if (teamId != _state.value.teamId) return
+            _state.update { it.copy(channels = channels, loading = false, error = null) }
+            val shown = shownChannels()
+            val listed = channels.associate { it.id to it.pts }
+            channels.filter { it.id !in shown }.forEach { updates.learn(it.id, it.pts) }
+            for (id in shown) {
+                val ok = updates.knows(id) && updates.fill(id, quietThrough = listed[id] ?: 0)
+                if (!ok) {
+                    timelines[id]?.reload()
+                    threads.values.filter { it.channelId == id }.forEach { it.reload() }
+                }
+                listed[id]?.let { updates.learn(id, it) }
+            }
+            visibleChannel?.let { markRead(it) }
+            val thread = visibleThread
+            val threadChannel = visibleChannel
+            if (thread != null && threadChannel != null) runCatching { api.markThreadRead(threadChannel, thread) }
+            loadAround(teamId, channels)
+        } catch (e: Exception) {
+            fail(e)
+        }
     }
 
     // Loading.
@@ -178,7 +297,14 @@ class ChatSession internal constructor(
         if (teamId == _state.value.teamId) return
         store.put(KEY_TEAM, teamId)
         _state.update { it.copy(teamId = teamId, channels = emptyList(), voice = emptyMap(), loading = true) }
-        scope.launch { loadSidebar() }
+        scope.launch {
+            updates.hold()
+            try {
+                loadSidebar()
+            } finally {
+                updates.release()
+            }
+        }
     }
 
     /** Loads the team's channels, mutes, voice states and the peers' presence again. */
@@ -189,23 +315,32 @@ class ChatSession internal constructor(
             val muted = api.mutedChannels().toSet()
             if (teamId != _state.value.teamId) return
             _state.update { it.copy(channels = channels, muted = muted, loading = false, error = null) }
-            val peers = channels.flatMap { ch -> listOfNotNull(ch.peer?.id) + ch.peers.map { it.id } }.distinct()
-            // The server answers presence for so many people at a time.
-            for (batch in peers.chunked(PRESENCE_BATCH)) {
-                val p = runCatching { api.presence(batch) }.getOrNull() ?: continue
-                val online = p.online_user_ids.toSet()
-                _state.update { st ->
-                    st.copy(presence = st.presence + batch.associateWith { id -> statusFor(id in online, p.statuses[id]) })
-                }
-            }
-            runCatching { api.voiceStates(teamId) }.onSuccess { list ->
-                _state.update { st -> st.copy(voice = list.associateBy { it.channel_id }) }
-            }
-            runCatching { api.threads(teamId, limit = 0) }.onSuccess { t ->
-                _state.update { it.copy(threadsUnread = t.unread_count) }
-            }
+            // Each channel's updates count from the list's numbers; another
+            // team's channels are no longer followed.
+            updates.keepOnly(channels.map { it.id }.toSet() + shownChannels())
+            channels.forEach { updates.learn(it.id, it.pts) }
+            loadAround(teamId, channels)
         } catch (e: Exception) {
             fail(e)
+        }
+    }
+
+    /** What updates do not carry again after a reconnect: presence, voice states, unread threads. */
+    private suspend fun loadAround(teamId: String, channels: List<Channel>) {
+        val peers = channels.flatMap { ch -> listOfNotNull(ch.peer?.id) + ch.peers.map { it.id } }.distinct()
+        // The server answers presence for so many people at a time.
+        for (batch in peers.chunked(PRESENCE_BATCH)) {
+            val p = runCatching { api.presence(batch) }.getOrNull() ?: continue
+            val online = p.online_user_ids.toSet()
+            _state.update { st ->
+                st.copy(presence = st.presence + batch.associateWith { id -> statusFor(id in online, p.statuses[id]) })
+            }
+        }
+        runCatching { api.voiceStates(teamId) }.onSuccess { list ->
+            _state.update { st -> st.copy(voice = list.associateBy { it.channel_id }) }
+        }
+        runCatching { api.threads(teamId, limit = 0) }.onSuccess { t ->
+            _state.update { it.copy(threadsUnread = t.unread_count) }
         }
     }
 
@@ -223,14 +358,8 @@ class ChatSession internal constructor(
         _state.update { it.copy(loading = false, error = e.userMessage()) }
     }
 
-    /** Loads everything again, after a lost connection. */
-    fun refresh() {
-        scope.launch {
-            loadTeams()
-            timelines.values.forEach { it.reload() }
-            threads.values.forEach { it.reload() }
-        }
-    }
+    /** Loads everything again. */
+    fun refresh() = sync(full = true)
 
     // Screens.
 
@@ -260,20 +389,22 @@ class ChatSession internal constructor(
         background?.cancel()
         background = null
         if (foreground) {
-            // The socket's Ready says it missed events, and the session loads again.
+            // The socket's welcome catches the session up.
             if (asleep) {
                 asleep = false
-                gateway.start()
+                socket.start()
             } else {
-                gateway.retryNow()
+                socket.retryNow()
             }
             return
         }
+        // The system may end the app in the background.
+        savePts()
         background = scope.launch {
             delay(BACKGROUND_GRACE_MS)
             if (voice.state.value == null) {
                 asleep = true
-                gateway.stop()
+                socket.stop()
             }
         }
     }
@@ -283,7 +414,7 @@ class ChatSession internal constructor(
         visibleChannel = channelId
         visibleThread = rootId
         // Who types reaches only the sockets that show the channel.
-        gateway.view(channelId)
+        socket.view(channelId)
         if (channelId != null) markRead(channelId)
         if (channelId != null && rootId != null) {
             scope.launch { runCatching { api.markThreadRead(channelId, rootId) } }
@@ -364,6 +495,7 @@ class ChatSession internal constructor(
     suspend fun deleteConversation(channelId: String, everyone: Boolean): String? = act {
         api.deleteConversation(channelId, everyone)
         _state.update { st -> st.copy(channels = st.channels.filter { it.id != channelId }) }
+        updates.forget(channelId)
     }
 
     suspend fun joinChannel(id: String): Channel? = api.joinChannel(id)?.also { addChannel(it) }
@@ -374,6 +506,7 @@ class ChatSession internal constructor(
     suspend fun leaveChannel(id: String): String? = act {
         api.leaveChannel(id)
         _state.update { st -> st.copy(channels = st.channels.filter { it.id != id }) }
+        updates.forget(id)
     }
 
     suspend fun createChannel(req: gochat.v1.CreateChannelRequest): Channel? = api.createChannel(req)?.also { addChannel(it) }
@@ -409,25 +542,83 @@ class ChatSession internal constructor(
 
     private fun addChannel(ch: Channel) {
         _state.update { st -> st.copy(channels = st.channels.filter { it.id != ch.id } + ch) }
+        updates.learn(ch.id, ch.pts)
     }
 
-    // Events.
+    /** Follows the updates of a channel read on its own, as a screen does for one not in the sidebar. */
+    internal fun learn(ch: Channel) = updates.learn(ch.id, ch.pts)
 
-    private fun handle(msg: GatewayMessage) {
-        when (msg) {
-            is GatewayMessage.Ready -> {
-                _state.update { it.copy(me = msg.ready.user ?: it.me) }
-                // Events may have been lost, or the first load failed, as
-                // when the app opened offline.
-                if (msg.resync || _state.value.error != null) refresh()
+    // Bots.
+
+    private class Press(val at: TimeSource.Monotonic.ValueTimeMark, val mine: Boolean, val answer: CallbackAnswer? = null)
+
+    // Buttons this device pressed, by query, until answered; and answers
+    // that came before the press's own answer said it was this device's.
+    private val presses = LinkedHashMap<String, Press>()
+
+    /** Presses a button of a bot's message; the bot's answer comes in [answers]. Returns why not, or null. */
+    suspend fun press(m: Message, data: String): String? = act {
+        val queryId = api.pressButton(m, data)
+        sweepPresses()
+        val early = presses.remove(queryId)?.answer
+        if (early != null) showAnswer(early) else presses[queryId] = Press(TimeSource.Monotonic.markNow(), mine = true)
+    }
+
+    private fun answered(a: CallbackAnswer) {
+        val p = presses[a.query_id]
+        if (p != null && p.mine) {
+            presses.remove(a.query_id)
+            showAnswer(a)
+            return
+        }
+        sweepPresses()
+        if (p == null && presses.size < MAX_PRESSES) presses[a.query_id] = Press(TimeSource.Monotonic.markNow(), mine = false, answer = a)
+    }
+
+    private fun sweepPresses() {
+        presses.entries.removeAll { (_, p) -> p.at.elapsedNow() > if (p.mine) PRESS_TTL else EARLY_TTL }
+    }
+
+    private fun showAnswer(a: CallbackAnswer) {
+        if (a.text.isNotEmpty()) _answers.tryEmit(BotAnswer(a.bot.displayName(), a.text, a.alert))
+    }
+
+    private val commands = HashMap<String, Pair<TimeSource.Monotonic.ValueTimeMark, List<ChannelCommand>>>()
+
+    /** The commands of the channel's bots starting with [prefix], for the composer to suggest. */
+    suspend fun commands(channelId: String, prefix: String): List<ChannelCommand> {
+        val kept = commands[channelId]?.takeIf { it.first.elapsedNow() < COMMANDS_TTL }?.second
+        val all = kept ?: try {
+            api.channelCommands(channelId).sortedBy { it.command?.name }.also { commands[channelId] = TimeSource.Monotonic.markNow() to it }
+        } catch (e: Exception) {
+            if (e is kotlinx.coroutines.CancellationException) throw e
+            return emptyList()
+        }
+        return all.filter { it.command?.name?.startsWith(prefix) == true }.take(MAX_SUGGESTIONS)
+    }
+
+    // Updates.
+
+    private fun handle(e: SocketEvent) {
+        when (e) {
+            is SocketEvent.Welcome -> {
+                val w = e.welcome
+                _state.update { it.copy(me = w.user ?: it.me) }
+                updates.welcome(w.pts, w.reload)
+                // The first welcome loads everything, as does one after too
+                // much was missed or a load that failed; the others catch up.
+                sync(full = !synced || w.reload)
             }
-            is GatewayMessage.Received -> event(msg.event)
+            is SocketEvent.Updates -> updates.received(e.events)
+            is SocketEvent.Ephemeral -> event(e.event)
         }
     }
 
-    internal fun event(ev: Event) {
+    /** Applies one update; [quiet] when the sidebar's counts already hold it. */
+    internal fun event(ev: Event, quiet: Boolean = false) {
         val st = _state.value
-        ev.message_posted?.let { posted(it) }
+        ev.callback_answer?.let { answered(it) }
+        ev.message_posted?.let { posted(it, quiet) }
         ev.message_edited?.message?.let { apply(it) }
         ev.message_deleted?.let { removeMessage(it.channel_id, it.message_id, it.root_id) }
         ev.typing?.let { t ->
@@ -437,11 +628,15 @@ class ChatSession internal constructor(
         ev.reactions_changed?.let { applyReactions(it.channel_id, it.message_id, it.root_id, it.reactions) }
         ev.channel_joined?.channel?.let { ch ->
             // Conversations belong to a team, as channels do.
-            if (ch.team_id == st.teamId || (ch.isConversation && ch.team_id.isEmpty())) addChannel(ch)
+            if (ch.team_id == st.teamId || (ch.isConversation && ch.team_id.isEmpty())) {
+                _state.update { s -> s.copy(channels = s.channels.filter { it.id != ch.id } + ch) }
+                updates.joined(ch.id, ch.pts)
+            }
         }
         ev.channel_left?.let { left ->
             _state.update { s -> s.copy(channels = s.channels.filter { it.id != left.channel_id }) }
             timelines[left.channel_id]?.gone(left.own)
+            updates.forget(left.channel_id)
         }
         ev.channel_updated?.channel?.let { ch ->
             if (st.channel(ch.id) != null) {
@@ -490,7 +685,8 @@ class ChatSession internal constructor(
         }
         ev.team_joined?.team?.let { t ->
             _state.update { s -> s.copy(teams = s.teams.filter { it.id != t.id } + t) }
-            if (st.teamId == null) selectTeam(t.id)
+            // While the first load runs, it picks the team.
+            if (st.teamId == null && synced) selectTeam(t.id)
         }
         ev.team_left?.let { left ->
             _state.update { s -> s.copy(teams = s.teams.filter { it.id != left.team_id }) }
@@ -510,7 +706,7 @@ class ChatSession internal constructor(
         }
     }
 
-    private fun posted(p: gochat.v1.MessagePosted) {
+    private fun posted(p: gochat.v1.MessagePosted, quiet: Boolean) {
         val m = p.message ?: return
         val participants = p.participant_ids
         val st = _state.value
@@ -519,6 +715,17 @@ class ChatSession internal constructor(
         // Another team's conversations and threads show in that team alone,
         // as on the web; its mentions still call for the person.
         val elsewhere = p.team_id.isNotEmpty() && p.team_id != st.teamId
+        if (quiet) {
+            // Caught up after a reconnect: the screens take it, the counts
+            // came with the list.
+            if (m.root_id.isNotEmpty()) {
+                threads[m.root_id]?.added(m)
+                timelines[m.channel_id]?.replied(m)
+            } else {
+                timelines[m.channel_id]?.added(m)
+            }
+            return
+        }
         if (!mine && (!elsewhere || !p.conversation)) notify(m, ch, p.conversation, participants)
         if (m.root_id.isNotEmpty()) {
             threads[m.root_id]?.added(m)
@@ -569,10 +776,16 @@ class ChatSession internal constructor(
         if (onScreen) return
         val reply = rootId.isNotEmpty() && st.me.id in participants
         if (!conversation && !reply && !m.mentions(st.me)) return
+        // A message may come twice, before and after its channel was followed.
+        if (m.id in notified) return
+        notified += m.id
+        if (notified.size > MAX_NOTIFIED) notified.remove(notified.first())
         val where = ch?.let { if (it.isConversation) "" else " in #${it.title()}" } ?: ""
         val title = if (rootId.isNotEmpty()) "${m.author.displayName()} replied$where" else "${m.author.displayName()}$where"
         _notices.tryEmit(Notice(title, m.excerpt(), m.channel_id, rootId))
     }
+
+    private val notified = LinkedHashSet<String>()
 
     private fun apply(m: Message?) {
         if (m == null) return
@@ -593,9 +806,22 @@ class ChatSession internal constructor(
 
     companion object {
         private const val KEY_TEAM = "team"
+
+        /** The last account update applied, to resume after once the app restarts. */
+        internal const val KEY_PTS = "pts"
         private const val PRESENCE_BATCH = 200
         private const val BACKGROUND_GRACE_MS = 60_000L
         private const val KEPT_VIEWS = 8
         private const val TYPING_EVERY_MS = 3_000L
+        private const val SAVE_PTS_MS = 2_000L
+        private const val MAX_NOTIFIED = 200
+
+        // A press waits so long for its bot's answer; an answer that came
+        // first waits so long for its press, among so many.
+        private val PRESS_TTL = 2.minutes
+        private val EARLY_TTL = 10.seconds
+        private const val MAX_PRESSES = 64
+        private val COMMANDS_TTL = 1.minutes
+        private const val MAX_SUGGESTIONS = 8
     }
 }
