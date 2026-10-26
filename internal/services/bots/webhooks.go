@@ -28,7 +28,7 @@ import (
 )
 
 // SecretHeader carries a webhook's secret on each delivery.
-const SecretHeader = "X-GoChat-Bot-Secret"
+const SecretHeader = "X-GoChat-Bot-Secret" //nolint:gosec // a header name, not a secret
 
 const (
 	maxWebhookURL = 2048
@@ -108,7 +108,7 @@ func checkWebhook(raw string, allowPrivate bool) error {
 	switch {
 	case err != nil || len(raw) > maxWebhookURL || u.Host == "" || u.User != nil || u.Fragment != "":
 		return ierrors.InvalidArgument("the webhook is an https URL, without credentials")
-	case u.Scheme != "https" && !(allowPrivate && u.Scheme == "http"):
+	case u.Scheme != "https" && (!allowPrivate || u.Scheme != "http"):
 		return ierrors.InvalidArgument("the webhook is an https URL")
 	}
 	if addr, err := netip.ParseAddr(u.Hostname()); err == nil && !allowPrivate && !Public(addr) {

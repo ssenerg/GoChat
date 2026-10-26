@@ -155,7 +155,7 @@ func TestResumesAfterTheLastUpdate(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer c.Close()
+	defer func() { _ = c.Close() }()
 	if c.Me().GetId() != "bot" {
 		t.Fatalf("me: %v", c.Me())
 	}
@@ -193,7 +193,7 @@ func TestReloadsWhenTheServerCannotReplay(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer c.Close()
+	defer func() { _ = c.Close() }()
 	if u := next(t, c); !u.Reload {
 		t.Fatalf("first: %v", u)
 	}

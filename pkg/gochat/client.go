@@ -115,12 +115,12 @@ func Dial(ctx context.Context, opts Options) (*Client, error) {
 	select {
 	case err := <-first:
 		if err != nil {
-			c.Close()
+			_ = c.Close()
 			return nil, err
 		}
 		return c, nil
 	case <-ctx.Done():
-		c.Close()
+		_ = c.Close()
 		return nil, ctx.Err()
 	}
 }

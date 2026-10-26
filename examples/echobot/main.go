@@ -40,7 +40,7 @@ func run(ctx context.Context, url, token, state string) error {
 	if err != nil {
 		return err
 	}
-	defer c.Close()
+	defer func() { _ = c.Close() }()
 	me := c.Me()
 	log.Printf("signed in as @%s", me.GetUsername())
 
