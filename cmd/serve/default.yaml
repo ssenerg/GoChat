@@ -148,6 +148,15 @@ services:
     idle_timeout: 10m
     op_timeout: 10s
     difference_limit: 100
+  bots:
+    workers: 4
+    op_timeout: 10s
+    max_per_owner: 20
+    webhook_timeout: 10s
+    webhook_retry_max: 5m
+    # Lets webhooks reach loopback and private addresses, and plain http:
+    # for development only.
+    allow_private_webhooks: false
   hub:
     gateway_queue_limit: 65536
     presence_grace: 10s

@@ -41,6 +41,7 @@ import (
 type Repo interface {
 	GetUser(ctx context.Context, id gocql.UUID) (*models.User, error)
 	ChannelsPts(ctx context.Context, channelIDs []gocql.UUID) (map[gocql.UUID]int64, error)
+	ListBotIDs(ctx context.Context, owner gocql.UUID) ([]gocql.UUID, error)
 	UpdateDisplayName(ctx context.Context, id gocql.UUID, name string, now time.Time) error
 	UpdateMemberDisplayName(ctx context.Context, userID gocql.UUID, name string) error
 	SetUserPhoto(ctx context.Context, id gocql.UUID, version string, now time.Time) error
@@ -143,6 +144,8 @@ func (w *worker) Receive(c *actor.Context) {
 		out, err = w.listTeamMembers(ctx, msg)
 	case RemoveTeamMember:
 		out, err = w.removeTeamMember(ctx, msg)
+	case AddBot:
+		out, err = w.addBot(ctx, msg)
 	case UpdateTeamMemberRole:
 		out, err = w.updateTeamMemberRole(ctx, msg)
 	case CreateInvite:
@@ -470,18 +473,12 @@ func (w *worker) removeTeamMember(ctx context.Context, msg RemoveTeamMember) (Do
 	}
 	// The channels go after the team: a join racing the removal then finds
 	// no team, or joined in time to be listed here.
-	memberships, err := w.Repo.ListUserChannels(ctx, target, teamID)
-	if err != nil {
+	if err := w.leaveChannels(ctx, msg.P, teamID, target); err != nil {
 		return Done{}, err
 	}
-	for _, cm := range memberships {
-		req := channels.RemoveMember{Target: channels.Target{P: msg.P, ChannelID: cm.ChannelID}, UserID: target, System: true}
-		if _, err := actors.Ask[channels.Done](ctx, w.Engine, w.Channels, req); err != nil {
-			return Done{}, err
-		}
+	if err := w.dropBots(ctx, msg.P, teamID, target); err != nil {
+		return Done{}, err
 	}
-	w.Engine.Send(w.Voice, voice.DropUser{UserID: target, TeamID: teamID})
-	w.deliver(&pb.Event{Payload: &pb.Event_TeamLeft{TeamLeft: &pb.TeamLeft{TeamId: teamID.String()}}}, target)
 	go w.recheckWatches(context.WithoutCancel(ctx), target)
 	return Done{}, nil
 }

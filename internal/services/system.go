@@ -13,6 +13,8 @@ import (
 	"github.com/ssenerg/gochat/internal/repos/minio"
 	"github.com/ssenerg/gochat/internal/repos/scylla"
 	"github.com/ssenerg/gochat/internal/services/accounts"
+	"github.com/ssenerg/gochat/internal/services/bots"
+	"github.com/ssenerg/gochat/internal/services/callbacks"
 	"github.com/ssenerg/gochat/internal/services/channels"
 	"github.com/ssenerg/gochat/internal/services/directory"
 	"github.com/ssenerg/gochat/internal/services/files"
@@ -38,6 +40,7 @@ type System struct {
 	Voice     *actor.PID
 	// Updates numbers what happens to each account.
 	Updates  *actor.PID
+	Bots     *actor.PID
 	Sessions *accounts.Deps
 	Users    *users.Cache
 	janitor  *actor.PID
@@ -45,6 +48,10 @@ type System struct {
 	backfill *actor.PID
 	adopter  *actor.PID
 	events   *actor.PID
+	// callbacks holds the presses bots have yet to answer, webhooks
+	// delivers the updates of bots that have one.
+	callbacks *actor.PID
+	webhooks  *actor.PID
 }
 
 func Start(logger *zap.Logger, cfg *Config, repo *scylla.Repository, storage *minio.Storage, az *authz.Authorizer) (*System, error) {
@@ -78,7 +85,8 @@ func Start(logger *zap.Logger, cfg *Config, repo *scylla.Repository, storage *mi
 		Logger: logger.Named("updates"), Cfg: cfg.Updates, Repo: repo, Engine: engine, Hub: s.Hub,
 		Render: channels.Render(channelDeps),
 	}), "updates", actor.WithID("main"), recovered)
-	channelDeps.Updates = s.Updates
+	s.callbacks = engine.Spawn(callbacks.New(s.Hub), "callbacks", actor.WithID("main"), recovered)
+	channelDeps.Updates, channelDeps.Callbacks = s.Updates, s.callbacks
 	s.Channels = engine.Spawn(channels.New(channelDeps), "channels", actor.WithID("main"), recovered)
 	fileDeps := &files.Deps{
 		Logger: logger.Named("files"), Cfg: cfg.Files, Repo: repo, Storage: storage,
@@ -103,6 +111,15 @@ func Start(logger *zap.Logger, cfg *Config, repo *scylla.Repository, storage *mi
 	cancel()
 	s.Accounts = engine.Spawn(accounts.Pool(accountDeps), "accounts", actor.WithID("main"))
 	s.Auth = engine.Spawn(accounts.Pool(accountDeps), "accounts", actor.WithID("auth"))
+	botDeps := &bots.Deps{
+		Logger: logger.Named("bots"), Cfg: cfg.Bots, Repo: repo, Users: userCache, Engine: engine,
+		Directory: s.Directory, Channels: s.Channels, Callbacks: s.callbacks, Revoke: accountDeps.Revoked,
+	}
+	s.webhooks = engine.Spawn(bots.Webhooks(&bots.WebhookDeps{
+		Deps: botDeps, Updates: s.Updates, Client: bots.Client(cfg.Bots.WebhookTimeout, cfg.Bots.AllowPrivateWebhooks),
+	}), "webhooks", actor.WithID("main"), recovered)
+	botDeps.Webhooks = s.webhooks
+	s.Bots = engine.Spawn(bots.Pool(botDeps), "bots", actor.WithID("main"))
 	logger.Info("actors started")
 	return s, nil
 }
@@ -114,7 +131,7 @@ func (s *System) Stop(timeout time.Duration) {
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
-	for _, pid := range []*actor.PID{s.Accounts, s.Auth, s.Directory, s.Files, s.Search, s.backfill, s.adopter, s.janitor, s.Channels, s.Voice, s.Updates, s.filing, s.Hub, s.events} {
+	for _, pid := range []*actor.PID{s.Bots, s.webhooks, s.Accounts, s.Auth, s.Directory, s.Files, s.Search, s.backfill, s.adopter, s.janitor, s.Channels, s.Voice, s.callbacks, s.Updates, s.filing, s.Hub, s.events} {
 		if pid == nil {
 			continue
 		}

@@ -88,6 +88,19 @@ func (w *worker) setDeactivated(ctx context.Context, msg SetDeactivated) (*model
 		if err != nil {
 			return nil, err
 		}
+		// Their bots stop with them: their sockets close, and their tokens
+		// are refused while the owner is deactivated.
+		bots, err := w.Repo.ListBotIDs(ctx, id)
+		if err != nil {
+			return nil, err
+		}
+		for _, id := range bots {
+			bot, err := w.Repo.GetBot(ctx, id)
+			if err != nil {
+				return nil, err
+			}
+			w.revoked(id, [][]byte{bot.TokenHash}, true)
+		}
 	}
 	return user, nil
 }

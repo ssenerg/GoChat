@@ -68,6 +68,9 @@ type User struct {
 	StatusEmoji string    `db:"status_emoji"`
 	StatusText  string    `db:"status_text"`
 	StatusUntil time.Time `db:"status_until"`
+	// Bot marks a bot, which BotOwner owns.
+	Bot      bool       `db:"bot"`
+	BotOwner gocql.UUID `db:"bot_owner"`
 }
 
 type Session struct {
@@ -132,6 +135,10 @@ type ChannelMember struct {
 	TeamID    gocql.UUID  `db:"team_id"`
 	Role      ChannelRole `db:"role"`
 	JoinedAt  time.Time   `db:"joined_at"`
+	// Bot marks a bot, and BotSeesAll one that gets every message of the
+	// channel, as it was when added.
+	Bot        bool `db:"bot"`
+	BotSeesAll bool `db:"bot_sees_all"`
 }
 
 type Message struct {
@@ -149,6 +156,8 @@ type Message struct {
 	LastReplyAt  time.Time    `db:"last_reply_at"`
 	Participants []gocql.UUID `db:"participants"`
 	Pinned       bool         `db:"pinned"`
+	// Markup holds the buttons a bot put under the message, a pb.Markup.
+	Markup []byte `db:"markup"`
 }
 
 type Attachment struct {
@@ -185,6 +194,26 @@ type Principal struct {
 	SessionHash []byte
 	SessionID   string
 	ExpiresAt   time.Time
+	// Bot is set for a bot signed in with its token.
+	Bot bool
+}
+
+// Bot is what a bot has beyond its user.
+type Bot struct {
+	ID          gocql.UUID `db:"id"`
+	OwnerID     gocql.UUID `db:"owner_id"`
+	Description string     `db:"description"`
+	SeesAll     bool       `db:"sees_all"`
+	// Commands is the bot's commands, a pb.GetCommandsResponse.
+	Commands  []byte    `db:"commands"`
+	TokenHash []byte    `db:"token_hash"`
+	CreatedAt time.Time `db:"created_at"`
+	// The webhook, and how its deliveries go.
+	WebhookURL     string    `db:"webhook_url"`
+	WebhookSecret  string    `db:"webhook_secret"`
+	DeliveredPts   int64     `db:"delivered_pts"`
+	WebhookError   string    `db:"webhook_error"`
+	WebhookErrorAt time.Time `db:"webhook_error_at"`
 }
 
 // The kinds of an update log's entries: a message's post or edit is kept

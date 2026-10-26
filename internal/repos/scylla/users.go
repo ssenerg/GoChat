@@ -13,7 +13,7 @@ import (
 
 const (
 	userWritten = "id, username, email, display_name, password_hash, system_role, totp_enabled, totp_secret, totp_pending, totp_last_step, deactivated, created_at, updated_at"
-	userColumns = userWritten + ", photo, status, dnd_until, status_emoji, status_text, status_until"
+	userColumns = userWritten + ", photo, status, dnd_until, status_emoji, status_text, status_until, bot, bot_owner"
 )
 
 // CreateUser claims the username and the email, then writes the user. A claim

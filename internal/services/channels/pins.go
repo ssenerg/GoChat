@@ -73,7 +73,7 @@ func (a *channel) pin(msg Pin) (*pb.Message, error) {
 		return nil, err
 	}
 	mine := proto.CloneOf(out[0])
-	a.broadcast(&pb.Event{Payload: &pb.Event_MessageEdited{MessageEdited: &pb.MessageEdited{Message: out[0]}}})
+	a.broadcast(&pb.Event{Payload: &pb.Event_MessageEdited{MessageEdited: &pb.MessageEdited{Message: out[0]}}}, m)
 	return mine, a.markSaved(ctx, msg.P.UserID, []*pb.Message{mine})
 }
 

@@ -66,6 +66,9 @@ type Repo interface {
 	GetTeam(ctx context.Context, id gocql.UUID) (*models.Team, error)
 	GetTeamMember(ctx context.Context, teamID, userID gocql.UUID) (*models.TeamMember, error)
 	GetInvite(ctx context.Context, hash []byte) (*models.Invite, error)
+	BotOfToken(ctx context.Context, hash []byte) (gocql.UUID, error)
+	ListBotIDs(ctx context.Context, owner gocql.UUID) ([]gocql.UUID, error)
+	GetBot(ctx context.Context, id gocql.UUID) (*models.Bot, error)
 	ConsumeInvite(ctx context.Context, inv *models.Invite, userID gocql.UUID, now time.Time) (bool, error)
 	ReleaseInvite(ctx context.Context, inv *models.Invite, userID gocql.UUID, now time.Time) error
 }
@@ -130,10 +133,10 @@ func NewDeps(logger *zap.Logger, cfg *Config, repo Repo, userCache *users.Cache,
 	}, nil
 }
 
-// Cached returns the principal of a session token without a lookup when one
-// is cached, for the hot path of every request.
+// Cached returns the principal of a session's or a bot's token without a
+// lookup when one is cached, for the hot path of every request.
 func (d *Deps) Cached(token string) (*models.Principal, bool) {
-	if !secure.ValidToken(token) {
+	if !secure.ValidCredential(token) {
 		return nil, false
 	}
 	p, ok := d.sessions.Get(string(secure.Hash(token)))
@@ -551,13 +554,16 @@ func (w *worker) checkSecondFactor(ctx context.Context, user *models.User, code 
 }
 
 func (w *worker) authenticate(ctx context.Context, msg Authenticate) (*models.Principal, error) {
-	if !secure.ValidToken(msg.Token) {
+	if !secure.ValidCredential(msg.Token) {
 		return nil, ierrors.Unauthenticated()
 	}
 	hash := secure.Hash(msg.Token)
 	now := time.Now()
 	if p, ok := w.sessions.Get(string(hash)); ok && now.Before(p.ExpiresAt) {
 		return p, nil
+	}
+	if secure.IsBotToken(msg.Token) {
+		return w.authenticateBot(ctx, hash, now)
 	}
 	s, err := w.Repo.GetSession(ctx, hash)
 	if err != nil {
@@ -602,6 +608,53 @@ func (w *worker) authenticate(ctx context.Context, msg Authenticate) (*models.Pr
 	return p, nil
 }
 
+// botSession is how long a bot's principal lasts: its sockets reconnect
+// then, and see a deactivation of the bot's owner at the latest.
+const botSession = 24 * time.Hour
+
+// authenticateBot resolves a bot's token. A bot works while it and its
+// owner are active.
+func (w *worker) authenticateBot(ctx context.Context, hash []byte, now time.Time) (*models.Principal, error) {
+	id, err := w.Repo.BotOfToken(ctx, hash)
+	if err != nil {
+		if ierrors.Is(err, ierrors.CodeNotFound) {
+			return nil, ierrors.Unauthenticated()
+		}
+		return nil, err
+	}
+	bot, err := w.Repo.GetUser(ctx, id)
+	if err != nil {
+		if ierrors.Is(err, ierrors.CodeNotFound) {
+			return nil, ierrors.Unauthenticated()
+		}
+		return nil, err
+	}
+	if bot.Deactivated || !bot.Bot {
+		return nil, ierrors.Unauthenticated()
+	}
+	owner, err := w.Repo.GetUser(ctx, bot.BotOwner)
+	if err != nil && !ierrors.Is(err, ierrors.CodeNotFound) {
+		return nil, err
+	}
+	if owner == nil || owner.Deactivated {
+		return nil, ierrors.Unauthenticated()
+	}
+	p := &models.Principal{
+		UserID:      bot.ID,
+		Role:        models.SystemRoleUser,
+		SessionHash: hash,
+		SessionID:   secure.PublicID(hash),
+		ExpiresAt:   now.Add(botSession),
+		Bot:         true,
+	}
+	w.sessions.SetUntil(string(hash), p, p.ExpiresAt)
+	if _, ok := w.revokedSessions.Get(string(hash)); ok {
+		w.sessions.Delete(string(hash))
+		return nil, ierrors.Unauthenticated()
+	}
+	return p, nil
+}
+
 // touch records that s is in use, at most every LastSeenInterval unless it
 // moved to another address.
 func (w *worker) touch(ctx context.Context, s *models.Session, now time.Time, ip string) {
@@ -626,21 +679,25 @@ func (w *worker) logout(ctx context.Context, p *models.Principal) (Done, error) 
 	return Done{}, nil
 }
 
-// revoked forgets revoked sessions and closes the connections they opened,
-// or with all every connection of the user.
 func (w *worker) revoked(userID gocql.UUID, hashes [][]byte, all bool) {
+	w.Revoked(userID, hashes, all)
+}
+
+// Revoked forgets revoked sessions, or bot tokens, and closes the
+// connections they opened, or with all every connection of the user.
+func (d *Deps) Revoked(userID gocql.UUID, hashes [][]byte, all bool) {
 	if len(hashes) == 0 && !all {
 		return
 	}
 	idList := make([]string, len(hashes))
 	for i, h := range hashes {
-		w.revokedSessions.Set(string(h), struct{}{})
-		w.sessions.Delete(string(h))
+		d.revokedSessions.Set(string(h), struct{}{})
+		d.sessions.Delete(string(h))
 		idList[i] = secure.PublicID(h)
 	}
-	w.Engine.Send(w.Hub, hub.RevokeSessions{UserID: userID.String(), SessionIDs: idList, All: all})
-	if w.Voice != nil {
-		w.Engine.Send(w.Voice, voice.RevokeSessions{UserID: userID, SessionIDs: idList, All: all})
+	d.Engine.Send(d.Hub, hub.RevokeSessions{UserID: userID.String(), SessionIDs: idList, All: all})
+	if d.Voice != nil {
+		d.Engine.Send(d.Voice, voice.RevokeSessions{UserID: userID, SessionIDs: idList, All: all})
 	}
 }
 

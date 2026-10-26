@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/gocql/gocql"
+	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/timestamppb"
 
 	pb "github.com/ssenerg/gochat/api/protobuf/gen/gochat/v1"
@@ -101,6 +102,8 @@ func User(u *models.User) *pb.User {
 		Status:       Status(u.Status),
 		DndUntil:     Time(u.DNDUntil),
 		CustomStatus: Custom(u, time.Now()),
+		Bot:          u.Bot,
+		BotOwnerId:   ID(u.BotOwner),
 	}
 }
 
@@ -131,6 +134,8 @@ func PublicUser(u *models.User) *pb.User {
 		Deactivated:  u.Deactivated,
 		Photo:        u.Photo,
 		CustomStatus: Custom(u, time.Now()),
+		Bot:          u.Bot,
+		BotOwnerId:   ID(u.BotOwner),
 	}
 }
 
@@ -210,6 +215,12 @@ func Message(m *models.Message, author *pb.User, atts []*models.Attachment) *pb.
 	}
 	for _, a := range atts {
 		out.Attachments = append(out.Attachments, Attachment(a))
+	}
+	if len(m.Markup) > 0 {
+		var markup pb.Markup
+		if proto.Unmarshal(m.Markup, &markup) == nil {
+			out.Markup = &markup
+		}
 	}
 	return out
 }

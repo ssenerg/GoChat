@@ -13,6 +13,7 @@ import (
 	"github.com/ssenerg/gochat/internal/core/ids"
 	"github.com/ssenerg/gochat/internal/core/models"
 	ierrors "github.com/ssenerg/gochat/internal/errors"
+	"github.com/ssenerg/gochat/internal/services/users"
 )
 
 // leavingRepo answers that the user belongs to the team until they join a
@@ -27,6 +28,18 @@ func (r *leavingRepo) GetTeamMember(_ context.Context, teamID, userID gocql.UUID
 		return nil, ierrors.NotFound("not a member")
 	}
 	return &models.TeamMember{TeamID: teamID, UserID: userID, Role: models.TeamRoleMember}, nil
+}
+
+func (r *leavingRepo) GetUser(_ context.Context, id gocql.UUID) (*models.User, error) {
+	return &models.User{ID: id, Username: "someone"}, nil
+}
+
+func (r *leavingRepo) GetUsers(ctx context.Context, list []gocql.UUID) ([]*models.User, error) {
+	out := make([]*models.User, len(list))
+	for i, id := range list {
+		out[i], _ = r.GetUser(ctx, id)
+	}
+	return out, nil
 }
 
 func (r *leavingRepo) AddChannelMember(context.Context, *models.ChannelMember) error {
@@ -46,8 +59,11 @@ func TestJoinUndoneWhenTheTeamLeft(t *testing.T) {
 	}
 	repo := &leavingRepo{}
 	a := &channel{
-		Deps: &Deps{Logger: zap.NewNop(), Cfg: &Config{OpTimeout: time.Second}, Repo: logged(repo), UpdatesCfg: testUpdates, Authz: az},
-		id:   ids.New(), ch: &models.Channel{TeamID: ids.New(), Kind: models.ChannelPublic},
+		Deps: &Deps{
+			Logger: zap.NewNop(), Cfg: &Config{OpTimeout: time.Second}, Repo: logged(repo), UpdatesCfg: testUpdates, Authz: az,
+			Users: users.NewCache(repo, 10, time.Minute),
+		},
+		id: ids.New(), ch: &models.Channel{TeamID: ids.New(), Kind: models.ChannelPublic},
 		members: map[gocql.UUID]models.ChannelRole{}, typing: map[gocql.UUID]time.Time{},
 	}
 	user := ids.New()

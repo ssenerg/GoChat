@@ -12,6 +12,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"strings"
 )
 
 const tokenBytes = 32
@@ -24,6 +25,22 @@ func Token() string {
 	}
 	return base64.RawURLEncoding.EncodeToString(b)
 }
+
+// botPrefix starts a bot's token, telling it from a session's.
+const botPrefix = "b_"
+
+// BotToken returns a bot's token: a Token behind the bot prefix.
+func BotToken() string { return botPrefix + Token() }
+
+// IsBotToken reports whether s is shaped like a BotToken.
+func IsBotToken(s string) bool {
+	rest, ok := strings.CutPrefix(s, botPrefix)
+	return ok && ValidToken(rest)
+}
+
+// ValidCredential reports whether s is shaped like a session's or a bot's
+// token.
+func ValidCredential(s string) bool { return ValidToken(s) || IsBotToken(s) }
 
 // ValidToken reports whether s is shaped like a Token, so a lookup is never
 // spent on garbage.

@@ -51,6 +51,17 @@ type GetDifference struct {
 	Limit  int
 }
 
+// Listen has PID nudged, with Nudge, whenever UserID gets an update;
+// Unlisten stops it.
+type (
+	Listen struct {
+		UserID gocql.UUID
+		PID    *actor.PID
+	}
+	Unlisten struct{ UserID gocql.UUID }
+	Nudge    struct{ UserID gocql.UUID }
+)
+
 // request is a message for one account's sequencer.
 type request interface{ account() gocql.UUID }
 
@@ -78,15 +89,16 @@ type (
 
 type manager struct {
 	*Deps
-	children map[gocql.UUID]*child
-	gen      uint64
+	children  map[gocql.UUID]*child
+	gen       uint64
+	listeners map[gocql.UUID]*actor.PID
 }
 
 // New runs one sequencer per active account, so each account's updates
 // leave in the order they were numbered.
 func New(d *Deps) actor.Producer {
 	return func() actor.Receiver {
-		return &manager{Deps: d, children: make(map[gocql.UUID]*child)}
+		return &manager{Deps: d, children: make(map[gocql.UUID]*child), listeners: make(map[gocql.UUID]*actor.PID)}
 	}
 }
 
@@ -100,7 +112,15 @@ func (m *manager) Receive(c *actor.Context) {
 	case Push:
 		for _, id := range msg.UserIDs {
 			m.route(c, push{userID: id, event: msg.Event})
+			// A difference asked after the nudge follows the push.
+			if pid := m.listeners[id]; pid != nil {
+				c.Send(pid, Nudge{UserID: id})
+			}
 		}
+	case Listen:
+		m.listeners[msg.UserID] = msg.PID
+	case Unlisten:
+		delete(m.listeners, msg.UserID)
 	case State:
 		m.route(c, msg)
 	case GetDifference:

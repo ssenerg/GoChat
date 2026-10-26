@@ -42,11 +42,13 @@ type VoiceAccessResult struct {
 type View struct{ Target }
 
 // Post writes a message, or with RootID a reply in that message's thread.
+// Only bots put buttons under their messages, with Markup.
 type Post struct {
 	Target
 	Content       string
 	AttachmentIDs []string
 	RootID        string
+	Markup        *pb.Markup
 }
 
 // Edit, Delete and GetMessage name a reply by its RootID as well.
@@ -55,6 +57,7 @@ type Edit struct {
 	MessageID string
 	RootID    string
 	Content   string
+	Markup    *pb.Markup
 }
 
 type Delete struct {
@@ -195,5 +198,17 @@ type Difference struct {
 	Pts   int64
 	Limit int
 }
+
+// Press presses a button of a bot's message, replying with the press's
+// query id.
+type Press struct {
+	Target
+	MessageID string
+	RootID    string
+	Data      string
+}
+
+// BotMembers replies with the ids of the channel's bots, for a member.
+type BotMembers struct{ Target }
 
 type Done struct{}

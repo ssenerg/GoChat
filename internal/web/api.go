@@ -73,7 +73,11 @@ var apiCalls = map[string][]string{
 		"PinMessage", "ListPinned", "SaveMessage", "ListSaved", "PressButton",
 	},
 	"gochat.v1.UpdatesService": {"GetState", "GetDifference", "GetChannelDifference"},
-	"gochat.v1.VoiceService":   {"JoinVoice", "LeaveVoice", "UpdateVoiceState", "DisconnectVoiceMember", "ListVoiceStates"},
+	"gochat.v1.BotService": {
+		"CreateBot", "ListBots", "UpdateBot", "ResetBotToken", "DeleteBot", "AddBotToTeam", "ListChannelCommands",
+		"SetCommands", "GetCommands", "AnswerCallback", "SetWebhook", "DeleteWebhook", "GetWebhookInfo", "ConfirmUpdates",
+	},
+	"gochat.v1.VoiceService": {"JoinVoice", "LeaveVoice", "UpdateVoiceState", "DisconnectVoiceMember", "ListVoiceStates"},
 }
 
 // apiLimited are the calls on the stricter budget of the sign-in pages:
@@ -175,10 +179,11 @@ func answerEncoding(r *http.Request) apiEncoding {
 	return encJSON
 }
 
-// apiToken is the request's bearer token, or "" without a well-formed one.
+// apiToken is the request's bearer token, a session's or a bot's, or "" without
+// a well-formed one.
 func apiToken(r *http.Request) string {
 	token, ok := strings.CutPrefix(r.Header.Get("Authorization"), "Bearer ")
-	if !ok || !secure.ValidToken(token) {
+	if !ok || !secure.ValidCredential(token) {
 		return ""
 	}
 	return token

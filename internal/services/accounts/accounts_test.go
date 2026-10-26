@@ -39,6 +39,7 @@ type fakeRepo struct {
 	sessions     map[string]*models.Session
 	bootstrapped bool
 	touched      int
+	bots         map[gocql.UUID]*models.Bot
 }
 
 func newFakeRepo() *fakeRepo {

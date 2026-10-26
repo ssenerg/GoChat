@@ -37,7 +37,16 @@ service BotService {
   rpc SetWebhook(SetWebhookRequest) returns (SetWebhookResponse);
   rpc DeleteWebhook(DeleteWebhookRequest) returns (DeleteWebhookResponse);
   rpc GetWebhookInfo(GetWebhookInfoRequest) returns (GetWebhookInfoResponse);
+  // ConfirmUpdates records that the bot handled its updates up to pts:
+  // the HTTP Bot API's getUpdates starts after it when it names no offset.
+  rpc ConfirmUpdates(ConfirmUpdatesRequest) returns (ConfirmUpdatesResponse);
 }
+
+message ConfirmUpdatesRequest {
+  int64 pts = 1;
+}
+
+message ConfirmUpdatesResponse {}
 
 message Bot {
   User user = 1;

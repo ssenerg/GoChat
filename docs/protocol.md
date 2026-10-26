@@ -234,7 +234,8 @@ what the bot had when it was added; add it again to change it.
 | `ChannelService` | `ListChannels`, `GetChannel`, `ListChannelMembers`, `JoinChannel`, `LeaveChannel` |
 | `MessageService` | `PostMessage`, `EditMessage`, `DeleteMessage` (its own), `GetMessage`, `ListMessages`, `ListThread` (with `sees_all`), `SendTyping`, `React` |
 | `UpdatesService` | `GetState`, `GetDifference` |
-| `BotService` | `SetCommands`, `GetCommands`, `AnswerCallback`, `SetWebhook`, `DeleteWebhook`, `GetWebhookInfo` |
+| `BotService` | `SetCommands`, `GetCommands`, `AnswerCallback`, `SetWebhook`, `DeleteWebhook`, `GetWebhookInfo`, `ConfirmUpdates` |
+| `FileService` | uploads and downloads, at `/api/v2/files` |
 
 Any other call answers code 12.
 

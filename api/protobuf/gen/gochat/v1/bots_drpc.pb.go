@@ -51,6 +51,7 @@ type DRPCBotServiceClient interface {
 	SetWebhook(ctx context.Context, in *SetWebhookRequest) (*SetWebhookResponse, error)
 	DeleteWebhook(ctx context.Context, in *DeleteWebhookRequest) (*DeleteWebhookResponse, error)
 	GetWebhookInfo(ctx context.Context, in *GetWebhookInfoRequest) (*GetWebhookInfoResponse, error)
+	ConfirmUpdates(ctx context.Context, in *ConfirmUpdatesRequest) (*ConfirmUpdatesResponse, error)
 }
 
 type drpcBotServiceClient struct {
@@ -180,6 +181,15 @@ func (c *drpcBotServiceClient) GetWebhookInfo(ctx context.Context, in *GetWebhoo
 	return out, nil
 }
 
+func (c *drpcBotServiceClient) ConfirmUpdates(ctx context.Context, in *ConfirmUpdatesRequest) (*ConfirmUpdatesResponse, error) {
+	out := new(ConfirmUpdatesResponse)
+	err := c.cc.Invoke(ctx, "/gochat.v1.BotService/ConfirmUpdates", drpcEncoding_File_gochat_v1_bots_proto{}, in, out)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 type DRPCBotServiceServer interface {
 	CreateBot(context.Context, *CreateBotRequest) (*CreateBotResponse, error)
 	ListBots(context.Context, *ListBotsRequest) (*ListBotsResponse, error)
@@ -194,6 +204,7 @@ type DRPCBotServiceServer interface {
 	SetWebhook(context.Context, *SetWebhookRequest) (*SetWebhookResponse, error)
 	DeleteWebhook(context.Context, *DeleteWebhookRequest) (*DeleteWebhookResponse, error)
 	GetWebhookInfo(context.Context, *GetWebhookInfoRequest) (*GetWebhookInfoResponse, error)
+	ConfirmUpdates(context.Context, *ConfirmUpdatesRequest) (*ConfirmUpdatesResponse, error)
 }
 
 type DRPCBotServiceUnimplementedServer struct{}
@@ -250,9 +261,13 @@ func (s *DRPCBotServiceUnimplementedServer) GetWebhookInfo(context.Context, *Get
 	return nil, drpcerr.WithCode(errors.New("Unimplemented"), drpcerr.Unimplemented)
 }
 
+func (s *DRPCBotServiceUnimplementedServer) ConfirmUpdates(context.Context, *ConfirmUpdatesRequest) (*ConfirmUpdatesResponse, error) {
+	return nil, drpcerr.WithCode(errors.New("Unimplemented"), drpcerr.Unimplemented)
+}
+
 type DRPCBotServiceDescription struct{}
 
-func (DRPCBotServiceDescription) NumMethods() int { return 13 }
+func (DRPCBotServiceDescription) NumMethods() int { return 14 }
 
 func (DRPCBotServiceDescription) Method(n int) (string, drpc.Encoding, drpc.Receiver, interface{}, bool) {
 	switch n {
@@ -373,6 +388,15 @@ func (DRPCBotServiceDescription) Method(n int) (string, drpc.Encoding, drpc.Rece
 						in1.(*GetWebhookInfoRequest),
 					)
 			}, DRPCBotServiceServer.GetWebhookInfo, true
+	case 13:
+		return "/gochat.v1.BotService/ConfirmUpdates", drpcEncoding_File_gochat_v1_bots_proto{},
+			func(srv interface{}, ctx context.Context, in1, in2 interface{}) (drpc.Message, error) {
+				return srv.(DRPCBotServiceServer).
+					ConfirmUpdates(
+						ctx,
+						in1.(*ConfirmUpdatesRequest),
+					)
+			}, DRPCBotServiceServer.ConfirmUpdates, true
 	default:
 		return "", nil, nil, nil, false
 	}
@@ -636,6 +660,26 @@ func (x *drpcBotService_GetWebhookInfoStream) GetStream() drpc.Stream {
 }
 
 func (x *drpcBotService_GetWebhookInfoStream) SendAndClose(m *GetWebhookInfoResponse) error {
+	if err := x.MsgSend(m, drpcEncoding_File_gochat_v1_bots_proto{}); err != nil {
+		return err
+	}
+	return x.CloseSend()
+}
+
+type DRPCBotService_ConfirmUpdatesStream interface {
+	drpc.Stream
+	SendAndClose(*ConfirmUpdatesResponse) error
+}
+
+type drpcBotService_ConfirmUpdatesStream struct {
+	drpc.Stream
+}
+
+func (x *drpcBotService_ConfirmUpdatesStream) GetStream() drpc.Stream {
+	return x.Stream
+}
+
+func (x *drpcBotService_ConfirmUpdatesStream) SendAndClose(m *ConfirmUpdatesResponse) error {
 	if err := x.MsgSend(m, drpcEncoding_File_gochat_v1_bots_proto{}); err != nil {
 		return err
 	}

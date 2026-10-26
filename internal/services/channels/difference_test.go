@@ -124,7 +124,7 @@ func newLoggedChannel(t *testing.T, kind models.ChannelKind) (*channel, *message
 	}
 	a := &channel{
 		Deps: &Deps{
-			Logger: zap.NewNop(), Cfg: &Config{OpTimeout: time.Second}, Repo: log, Authz: az,
+			Logger: zap.NewNop(), Cfg: &Config{OpTimeout: time.Second, PostRate: 100, PostBurst: 100}, Repo: log, Authz: az,
 			Users: users.NewCache(repo, 10, time.Minute), Engine: engine, Hub: sink, UpdatesCfg: testUpdates,
 		},
 		id: ch.ID, ch: ch, members: map[gocql.UUID]models.ChannelRole{member: models.ChannelRoleMember},
@@ -141,7 +141,7 @@ func say(a *channel, repo *messageRepo, author gocql.UUID, text string) *models.
 	repo.messages[m.ID] = m
 	repo.mu.Unlock()
 	out := convertMessage(m)
-	a.broadcast(&pb.Event{Payload: &pb.Event_MessagePosted{MessagePosted: &pb.MessagePosted{Message: out, TeamId: a.ch.TeamID.String()}}})
+	a.broadcast(&pb.Event{Payload: &pb.Event_MessagePosted{MessagePosted: &pb.MessagePosted{Message: out, TeamId: a.ch.TeamID.String()}}}, m)
 	return m
 }
 

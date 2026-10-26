@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"slices"
+	"strings"
 	"time"
 
 	"github.com/gocql/gocql"
@@ -13,8 +14,8 @@ import (
 )
 
 const (
-	messageColumns = "channel_id, bucket, id, user_id, content, attachments, edited_at, reply_count, last_reply_at, participants, pinned"
-	replyColumns   = "channel_id, root_id, id, user_id, content, attachments, edited_at, pinned"
+	messageColumns = "channel_id, bucket, id, user_id, content, attachments, edited_at, reply_count, last_reply_at, participants, pinned, markup"
+	replyColumns   = "channel_id, root_id, id, user_id, content, attachments, edited_at, pinned, markup"
 )
 
 // InsertMessage writes m, and the bucket it opens when newBucket is set.
@@ -24,15 +25,24 @@ func (r *Repository) InsertMessage(ctx context.Context, m *models.Message, newBu
 			return wrap(err)
 		}
 	}
-	// Absent columns are left out: a null or a whole collection would each
-	// write a tombstone.
-	if len(m.Attachments) == 0 {
-		return wrap(r.query(ctx, "INSERT INTO messages (channel_id, bucket, id, user_id, content) VALUES (?, ?, ?, ?, ?)",
-			m.ChannelID, m.Bucket, m.ID, m.UserID, m.Content).ExecRelease())
-	}
-	return wrap(r.query(ctx, "INSERT INTO messages (channel_id, bucket, id, user_id, content, attachments) VALUES (?, ?, ?, ?, ?, ?)",
-		m.ChannelID, m.Bucket, m.ID, m.UserID, m.Content, m.Attachments).ExecRelease())
+	cols, vals := optional(m, "channel_id, bucket, id, user_id, content", m.ChannelID, m.Bucket, m.ID, m.UserID, m.Content)
+	return wrap(r.query(ctx, "INSERT INTO messages ("+cols+") VALUES ("+marks(len(vals))+")", vals...).ExecRelease())
 }
+
+// optional adds m's attachments and buttons to the columns of an insert
+// when it has them: a null or a whole collection would each write a
+// tombstone.
+func optional(m *models.Message, cols string, vals ...any) (string, []any) {
+	if len(m.Attachments) > 0 {
+		cols, vals = cols+", attachments", append(vals, m.Attachments)
+	}
+	if len(m.Markup) > 0 {
+		cols, vals = cols+", markup", append(vals, m.Markup)
+	}
+	return cols, vals
+}
+
+func marks(n int) string { return "?" + strings.Repeat(", ?", n-1) }
 
 func (r *Repository) GetMessage(ctx context.Context, channelID, id gocql.UUID) (*models.Message, error) {
 	var m models.Message
@@ -110,12 +120,18 @@ func (r *Repository) ListMessages(ctx context.Context, channelID, before gocql.U
 
 // InsertReply writes a reply to its thread.
 func (r *Repository) InsertReply(ctx context.Context, m *models.Message) error {
-	if len(m.Attachments) == 0 {
-		return wrap(r.query(ctx, "INSERT INTO replies (channel_id, root_id, id, user_id, content) VALUES (?, ?, ?, ?, ?)",
-			m.ChannelID, m.RootID, m.ID, m.UserID, m.Content).ExecRelease())
+	cols, vals := optional(m, "channel_id, root_id, id, user_id, content", m.ChannelID, m.RootID, m.ID, m.UserID, m.Content)
+	return wrap(r.query(ctx, "INSERT INTO replies ("+cols+") VALUES ("+marks(len(vals))+")", vals...).ExecRelease())
+}
+
+// SetMarkup replaces the buttons of a message, or of a reply with rootID.
+func (r *Repository) SetMarkup(ctx context.Context, channelID, rootID, id gocql.UUID, markup []byte) error {
+	if ids.IsZero(rootID) {
+		return wrap(r.query(ctx, "UPDATE messages SET markup = ? WHERE channel_id = ? AND bucket = ? AND id = ?",
+			markup, channelID, ids.BucketOf(id), id).ExecRelease())
 	}
-	return wrap(r.query(ctx, "INSERT INTO replies (channel_id, root_id, id, user_id, content, attachments) VALUES (?, ?, ?, ?, ?, ?)",
-		m.ChannelID, m.RootID, m.ID, m.UserID, m.Content, m.Attachments).ExecRelease())
+	return wrap(r.query(ctx, "UPDATE replies SET markup = ? WHERE channel_id = ? AND root_id = ? AND id = ?",
+		markup, channelID, rootID, id).ExecRelease())
 }
 
 func (r *Repository) GetReply(ctx context.Context, channelID, rootID, id gocql.UUID) (*models.Message, error) {

@@ -2,6 +2,7 @@ package directory
 
 import (
 	"context"
+	"maps"
 	"slices"
 	"strings"
 	"time"
@@ -67,14 +68,21 @@ func (w *worker) openGroup(ctx context.Context, msg OpenGroup) (*pb.Channel, err
 	if _, err := w.membership(ctx, teamID, msg.P.UserID); err != nil {
 		return nil, err
 	}
+	bots := map[gocql.UUID]bool{}
 	for _, id := range members[1:] {
-		if err := w.reachable(ctx, teamID, id); err != nil {
+		bot, err := w.reachable(ctx, teamID, id)
+		if err != nil {
 			return nil, err
 		}
+		bots[id] = bot
 	}
 	kind, display := models.ChannelGroup, "Group"
 	if len(members) == 2 {
 		kind, display = models.ChannelDirect, "Direct"
+	}
+	// A bot talks with one person at a time.
+	if kind == models.ChannelGroup && slices.Contains(slices.Collect(maps.Values(bots)), true) {
+		return nil, ierrors.InvalidArgument("bots are not part of group conversations")
 	}
 	now := time.Now().UTC()
 	ch := &models.Channel{
@@ -83,7 +91,8 @@ func (w *worker) openGroup(ctx context.Context, msg OpenGroup) (*pb.Channel, err
 	}
 	cms := make([]*models.ChannelMember, len(members))
 	for i, id := range members {
-		cms[i] = &models.ChannelMember{ChannelID: ch.ID, UserID: id, TeamID: teamID, Role: models.ChannelRoleMember, JoinedAt: now}
+		// A bot sees everything of a conversation it is in.
+		cms[i] = &models.ChannelMember{ChannelID: ch.ID, UserID: id, TeamID: teamID, Role: models.ChannelRoleMember, JoinedAt: now, Bot: bots[id], BotSeesAll: bots[id]}
 	}
 	chID, err := w.Repo.CreateDirectChannel(ctx, scylla.ConversationKey(teamID, ch.Name), ch, cms)
 	if err != nil {
@@ -113,16 +122,16 @@ func (w *worker) openGroup(ctx context.Context, msg OpenGroup) (*pb.Channel, err
 }
 
 // reachable checks target is an active member of the team.
-func (w *worker) reachable(ctx context.Context, teamID, target gocql.UUID) error {
+func (w *worker) reachable(ctx context.Context, teamID, target gocql.UUID) (bool, error) {
 	peer, err := w.Users.Get(ctx, target)
 	if err != nil || peer.Deactivated {
-		return ierrors.NotFound("user not found")
+		return false, ierrors.NotFound("user not found")
 	}
 	if _, err := w.Repo.GetTeamMember(ctx, teamID, target); err != nil {
 		if ierrors.Is(err, ierrors.CodeNotFound) {
-			return ierrors.NotFound("user not found")
+			return false, ierrors.NotFound("user not found")
 		}
-		return err
+		return false, err
 	}
-	return nil
+	return peer.Bot, nil
 }

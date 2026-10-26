@@ -421,7 +421,7 @@ func (s *gatewayService) attach(ctx context.Context, key string, a *pb.Attach) {
 		retry := err != nil && !ierrors.Is(err, ierrors.CodeUnauthenticated) && !ierrors.Is(err, ierrors.CodeNotFound)
 		s.sys.Engine.Send(s.sys.Hub, hub.Reject{GatewayID: key, ConnID: a.ConnId, Retry: retry})
 	}
-	if !secure.ValidToken(a.SessionToken) {
+	if !secure.ValidCredential(a.SessionToken) {
 		reject(nil)
 		return
 	}

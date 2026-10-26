@@ -190,8 +190,13 @@ func (r *Repository) SetArchived(ctx context.Context, id gocql.UUID, at time.Tim
 }
 
 func addMemberQueries(b *gocql.Batch, m *models.ChannelMember) {
-	b.Query("INSERT INTO channel_members (channel_id, user_id, team_id, role, joined_at) VALUES (?, ?, ?, ?, ?)",
-		m.ChannelID, m.UserID, m.TeamID, string(m.Role), m.JoinedAt)
+	if m.Bot {
+		b.Query("INSERT INTO channel_members (channel_id, user_id, team_id, role, joined_at, bot, bot_sees_all) VALUES (?, ?, ?, ?, ?, ?, ?)",
+			m.ChannelID, m.UserID, m.TeamID, string(m.Role), m.JoinedAt, true, m.BotSeesAll)
+	} else {
+		b.Query("INSERT INTO channel_members (channel_id, user_id, team_id, role, joined_at) VALUES (?, ?, ?, ?, ?)",
+			m.ChannelID, m.UserID, m.TeamID, string(m.Role), m.JoinedAt)
+	}
 	b.Query("INSERT INTO user_channels (user_id, team_id, channel_id, role, joined_at) VALUES (?, ?, ?, ?, ?)",
 		m.UserID, m.TeamID, m.ChannelID, string(m.Role), m.JoinedAt)
 }
@@ -246,7 +251,7 @@ func (r *Repository) RemoveChannelMember(ctx context.Context, m *models.ChannelM
 
 func (r *Repository) ListChannelMembers(ctx context.Context, channelID gocql.UUID) ([]*models.ChannelMember, error) {
 	var out []*models.ChannelMember
-	err := r.query(ctx, "SELECT channel_id, user_id, team_id, role, joined_at FROM channel_members WHERE channel_id = ?", channelID).SelectRelease(&out)
+	err := r.query(ctx, "SELECT channel_id, user_id, team_id, role, joined_at, bot, bot_sees_all FROM channel_members WHERE channel_id = ?", channelID).SelectRelease(&out)
 	return out, wrap(err)
 }
 

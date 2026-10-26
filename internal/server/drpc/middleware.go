@@ -35,6 +35,41 @@ var streaming = map[string]bool{
 	"/gochat.v1.FileService/Download":   true,
 }
 
+// botCalls are the calls open to bots: reading and writing in the
+// channels they are in, about themselves, and their updates. Any other is
+// refused, whatever its own checks.
+var botCalls = map[string]bool{
+	"/gochat.v1.AuthService/Me":                    true,
+	"/gochat.v1.UserService/GetUser":               true,
+	"/gochat.v1.UserService/UpdateProfile":         true,
+	"/gochat.v1.TeamService/ListTeams":             true,
+	"/gochat.v1.TeamService/GetTeam":               true,
+	"/gochat.v1.TeamService/ListTeamMembers":       true,
+	"/gochat.v1.ChannelService/ListChannels":       true,
+	"/gochat.v1.ChannelService/GetChannel":         true,
+	"/gochat.v1.ChannelService/ListChannelMembers": true,
+	"/gochat.v1.ChannelService/JoinChannel":        true,
+	"/gochat.v1.ChannelService/LeaveChannel":       true,
+	"/gochat.v1.MessageService/PostMessage":        true,
+	"/gochat.v1.MessageService/EditMessage":        true,
+	"/gochat.v1.MessageService/DeleteMessage":      true,
+	"/gochat.v1.MessageService/GetMessage":         true,
+	"/gochat.v1.MessageService/ListMessages":       true,
+	"/gochat.v1.MessageService/ListThread":         true,
+	"/gochat.v1.MessageService/SendTyping":         true,
+	"/gochat.v1.MessageService/React":              true,
+	"/gochat.v1.FileService/Upload":                true,
+	"/gochat.v1.FileService/Download":              true,
+	"/gochat.v1.UpdatesService/GetState":           true,
+	"/gochat.v1.UpdatesService/GetDifference":      true,
+	"/gochat.v1.BotService/SetCommands":            true,
+	"/gochat.v1.BotService/GetCommands":            true,
+	"/gochat.v1.BotService/AnswerCallback":         true,
+	"/gochat.v1.BotService/SetWebhook":             true,
+	"/gochat.v1.BotService/DeleteWebhook":          true,
+	"/gochat.v1.BotService/GetWebhookInfo":         true,
+}
+
 type principalKey struct{}
 
 type clientKey struct{}
@@ -96,6 +131,9 @@ func Guard(logger *zap.Logger, cfg *Config, resolve Resolver) func(drpc.Handler)
 				p, err := resolve(ctx, token)
 				if err != nil && !ierrors.Is(err, ierrors.CodeUnauthenticated) {
 					return err
+				}
+				if p != nil && p.Bot && !botCalls[rpc] {
+					return ierrors.New(ierrors.CodeUnimplemented, "bots cannot make this call")
 				}
 				if p != nil {
 					ctx = context.WithValue(ctx, principalKey{}, p)

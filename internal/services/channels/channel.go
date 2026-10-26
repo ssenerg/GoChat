@@ -57,6 +57,7 @@ type channel struct {
 	// last written, so a later number always wins.
 	pts   int64
 	stamp int64
+	bots  map[gocql.UUID]*botMember
 }
 
 func newChannel(d *Deps, id gocql.UUID) actor.Producer {
@@ -161,6 +162,11 @@ func (a *channel) load() {
 	for _, m := range members {
 		a.members[m.UserID] = m.Role
 	}
+	if err := a.loadBots(ctx, members); err != nil {
+		a.Logger.Error("failed to load a channel's bots", zap.String("channel", a.id.String()), zap.Error(err))
+		a.loadErr = ierrors.Unavailable("channel is unavailable, try again")
+		return
+	}
 	a.cleared = make(map[gocql.UUID]gocql.UUID)
 	if ch.Kind == models.ChannelDirect {
 		for _, m := range members {
@@ -178,12 +184,14 @@ func (a *channel) load() {
 	a.snapshot()
 }
 
-// snapshot rebuilds the recipients. Deliver messages share them, so they
-// are replaced, never modified.
+// snapshot rebuilds the recipients, the members who are not bots. Deliver
+// messages share them, so they are replaced, never modified.
 func (a *channel) snapshot() {
 	out := make(hub.Members, len(a.members))
 	for id := range a.members {
-		out[id.String()] = struct{}{}
+		if _, bot := a.bots[id]; !bot {
+			out[id.String()] = struct{}{}
+		}
 	}
 	a.recipients = out
 }
@@ -198,12 +206,21 @@ func (a *channel) deliver(userID gocql.UUID, ev *pb.Event) {
 }
 
 // broadcast numbers ev in the channel's updates and sends it to every
-// member.
-func (a *channel) broadcast(ev *pb.Event) {
+// member, and to the bots that see it: about names the message it is
+// about, and that message's thread root when it is a reply.
+func (a *channel) broadcast(ev *pb.Event, about ...*models.Message) {
 	a.number(ev)
 	if len(a.recipients) > 0 {
 		a.Engine.Send(a.Hub, hub.Deliver{Members: a.recipients, Event: ev})
 	}
+	var m, root *models.Message
+	if len(about) > 0 {
+		m = about[0]
+	}
+	if len(about) > 1 {
+		root = about[1]
+	}
+	a.toBots(ev, m, root)
 }
 
 // number gives ev the channel's next number and logs it, before anyone
@@ -297,6 +314,10 @@ func (a *channel) handle(c *actor.Context, req Request) {
 		out, err = a.deleteConversation(msg)
 	case Difference:
 		err = a.difference(c, msg)
+	case Press:
+		out, err = a.press(msg)
+	case BotMembers:
+		out, err = a.botIDs(msg)
 	default:
 		return
 	}
@@ -318,7 +339,7 @@ func (a *channel) voiceRefuses(req Request) error {
 		return nil
 	}
 	switch req.(type) {
-	case Post, Edit, Delete, History, GetMessage, Thread, ThreadRead, Typing, React, Pin, Pins, Save, Follow, Mute, MarkRead, SetVoice, Difference:
+	case Post, Edit, Delete, History, GetMessage, Thread, ThreadRead, Typing, React, Pin, Pins, Save, Follow, Mute, MarkRead, SetVoice, Difference, Press:
 		return ierrors.FailedPrecondition("voice channels carry no messages")
 	case Join, AddMember:
 		return ierrors.FailedPrecondition("everyone in the team may talk in a voice channel: join the talk instead")
@@ -498,6 +519,10 @@ func (a *channel) post(msg Post) (*pb.Message, error) {
 	if content == "" && len(attIDs) == 0 {
 		return nil, ierrors.InvalidArgument("message is empty")
 	}
+	markup, err := markupOf(msg.P, msg.Markup)
+	if err != nil {
+		return nil, err
+	}
 
 	ctx, cancel := a.ctx()
 	defer cancel()
@@ -528,6 +553,7 @@ func (a *channel) post(msg Post) (*pb.Message, error) {
 		UserID:      msg.P.UserID,
 		Content:     content,
 		Attachments: attIDs,
+		Markup:      markup,
 	}
 	for i, att := range atts {
 		ok, err := a.Repo.ClaimAttachment(ctx, att, id)
@@ -563,7 +589,7 @@ func (a *channel) post(msg Post) (*pb.Message, error) {
 	delete(a.typing, msg.P.UserID)
 
 	out := convert.Message(m, convert.PublicUser(author), atts)
-	a.broadcast(&pb.Event{Payload: &pb.Event_MessagePosted{MessagePosted: a.posted(out, nil)}})
+	a.broadcast(&pb.Event{Payload: &pb.Event_MessagePosted{MessagePosted: a.posted(out, nil)}}, m)
 	a.recordMentions(m)
 	a.file(index.Add{Doc: a.doc(m)})
 	return out, nil
@@ -663,7 +689,7 @@ func (a *channel) reply(ctx context.Context, root, m *models.Message, author *mo
 		}
 	}
 	out := convert.Message(m, convert.PublicUser(author), atts)
-	a.broadcast(&pb.Event{Payload: &pb.Event_MessagePosted{MessagePosted: a.posted(out, notify)}})
+	a.broadcast(&pb.Event{Payload: &pb.Event_MessagePosted{MessagePosted: a.posted(out, notify)}}, m, root)
 	a.recordMentions(m)
 	a.file(index.Add{Doc: a.doc(m)})
 
@@ -687,7 +713,7 @@ func (a *channel) rootChanged(ctx context.Context, root *models.Message) {
 		a.Logger.Warn("failed to render a thread's root", zap.String("channel", a.id.String()), zap.Error(err))
 		return
 	}
-	a.broadcast(&pb.Event{Payload: &pb.Event_MessageEdited{MessageEdited: &pb.MessageEdited{Message: out[0]}}})
+	a.broadcast(&pb.Event{Payload: &pb.Event_MessageEdited{MessageEdited: &pb.MessageEdited{Message: out[0]}}}, root)
 }
 
 // unclaim returns attachments claimed for a message that was not written to
@@ -802,6 +828,10 @@ func (a *channel) edit(msg Edit) (*pb.Message, error) {
 	if content == "" && len(m.Attachments) == 0 {
 		return nil, ierrors.InvalidArgument("message is empty")
 	}
+	markup, err := markupOf(msg.P, msg.Markup)
+	if err != nil {
+		return nil, err
+	}
 	author, err := a.Users.Get(ctx, m.UserID)
 	if err != nil {
 		return nil, err
@@ -819,12 +849,19 @@ func (a *channel) edit(msg Edit) (*pb.Message, error) {
 	if err != nil {
 		return nil, err
 	}
+	// A bot's edit sets its buttons, none when it gives none.
+	if msg.P.Bot && !slices.Equal(markup, m.Markup) {
+		if err := a.Repo.SetMarkup(ctx, a.id, m.RootID, m.ID, markup); err != nil {
+			return nil, err
+		}
+		m.Markup = markup
+	}
 	old := m.Content
 	m.Content, m.EditedAt = content, now
 	a.file(index.Update{Doc: a.doc(m), Old: old})
 	out := convert.Message(m, convert.PublicUser(author), orderAttachments(m.Attachments, atts))
 	mine := proto.CloneOf(out)
-	a.broadcast(&pb.Event{Payload: &pb.Event_MessageEdited{MessageEdited: &pb.MessageEdited{Message: out}}})
+	a.broadcast(&pb.Event{Payload: &pb.Event_MessageEdited{MessageEdited: &pb.MessageEdited{Message: out}}}, m)
 	return mine, a.markSaved(ctx, msg.P.UserID, []*pb.Message{mine})
 }
 
@@ -846,6 +883,8 @@ func (a *channel) delete(msg Delete) (Done, error) {
 		if !a.Authz.Can(authz.ObjMessage, authz.ActDeleteOwn, string(role), string(msg.P.Role)) {
 			return Done{}, ierrors.PermissionDenied()
 		}
+	} else if msg.P.Bot {
+		return Done{}, ierrors.PermissionDenied()
 	} else {
 		tr, err := a.teamRole(ctx, msg.P.UserID)
 		if err != nil {
@@ -876,7 +915,7 @@ func (a *channel) delete(msg Delete) (Done, error) {
 	}
 	a.broadcast(&pb.Event{Payload: &pb.Event_MessageDeleted{MessageDeleted: &pb.MessageDeleted{
 		ChannelId: a.id.String(), MessageId: m.ID.String(),
-	}}})
+	}}}, m)
 	return Done{}, nil
 }
 
@@ -890,7 +929,7 @@ func (a *channel) deleteReply(ctx context.Context, m *models.Message) error {
 	a.dropAttachments(m.Attachments)
 	a.broadcast(&pb.Event{Payload: &pb.Event_MessageDeleted{MessageDeleted: &pb.MessageDeleted{
 		ChannelId: a.id.String(), MessageId: m.ID.String(), RootId: m.RootID.String(),
-	}}})
+	}}}, m)
 	root, err := a.Repo.GetMessage(ctx, a.id, m.RootID)
 	if err != nil {
 		return nil
@@ -988,7 +1027,7 @@ func (a *channel) react(msg React) ([]*pb.Reaction, error) {
 	out := groupReactions(rows)[m.ID]
 	a.broadcast(&pb.Event{Payload: &pb.Event_ReactionsChanged{ReactionsChanged: &pb.ReactionsChanged{
 		ChannelId: a.id.String(), MessageId: m.ID.String(), RootId: convert.ID(m.RootID), Reactions: out,
-	}}})
+	}}}, m)
 	return out, nil
 }
 
@@ -1094,7 +1133,7 @@ func (a *channel) canRead(p *models.Principal) error {
 	if !a.Authz.Can(authz.ObjMessage, authz.ActRead, string(role), string(p.Role)) {
 		return ierrors.PermissionDenied()
 	}
-	return nil
+	return a.readsHistory(p)
 }
 
 // history reads off the actor: the membership check happens here, in order,
@@ -1314,11 +1353,17 @@ func (a *channel) markRead(c *actor.Context, msg MarkRead) error {
 }
 
 func (a *channel) addLocal(ctx context.Context, userID gocql.UUID, role models.ChannelRole) error {
-	m := &models.ChannelMember{ChannelID: a.id, UserID: userID, TeamID: a.ch.TeamID, Role: role, JoinedAt: time.Now().UTC()}
+	m, bot, err := a.newMember(ctx, userID, role)
+	if err != nil {
+		return err
+	}
 	if err := a.Repo.AddChannelMember(ctx, m); err != nil {
 		return err
 	}
 	a.members[userID] = role
+	if bot != nil {
+		a.bots[userID] = bot
+	}
 	a.snapshot()
 	return nil
 }
@@ -1331,6 +1376,7 @@ func (a *channel) removeLocal(ctx context.Context, userID gocql.UUID) error {
 	delete(a.members, userID)
 	delete(a.typing, userID)
 	delete(a.posters, userID)
+	delete(a.bots, userID)
 	a.snapshot()
 	return nil
 }
@@ -1446,6 +1492,9 @@ func (a *channel) addMember(msg AddMember) (Done, error) {
 	}
 	if tr == "" {
 		return Done{}, ierrors.InvalidArgument("only team members can be added")
+	}
+	if err := a.mayAddBot(ctx, msg.P, role, target); err != nil {
+		return Done{}, err
 	}
 	if err := a.addTeamMember(ctx, target); err != nil {
 		if ierrors.Is(err, ierrors.CodeNotFound) {
