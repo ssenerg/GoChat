@@ -794,6 +794,10 @@ func TestEndToEnd(t *testing.T) {
 		testClientAPI(t, bobName, bobPass, town)
 	})
 
+	run("bots: commands, buttons, catching up and the HTTP Bot API", func(t *testing.T) {
+		testBots(t, admin, adminWS, teamID, town, view)
+	})
+
 	run("private channels stay private", func(t *testing.T) {
 		name := "secret-" + random(3)
 		res, body := admin.hx("/t/"+teamName+"/channels", url.Values{"name": {name}, "display_name": {"Secret"}, "type": {"private"}})

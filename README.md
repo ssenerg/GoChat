@@ -7,14 +7,16 @@ all delivered in real time. The whole application runs on
 the [hollywood](https://github.com/anthdm/hollywood) actor engine, on both the
 server and the web gateway, and the browser UI is server-rendered HTML driven
 by [htmx](https://htmx.org) over a WebSocket. Native apps for Android and iOS,
-in Kotlin, live in [mobile](mobile).
+in Kotlin, live in [mobile](mobile). Bots sign in with a token and speak the
+same protocol as apps, with commands, buttons on their messages, an HTTP Bot
+API and webhooks.
 
 ## Architecture
 
 ```
  browser ──HTTPS/WS──▶ gochat web ──DRPC (protobuf)──▶ gochat server ──▶ ScyllaDB
   (htmx)               gateway actors                    service actors    MinIO
- apps ──/api/v1──────▶    ▲                                   ▲
+ apps, bots ──/api───▶    ▲                                   ▲
  (Android, iOS)                                               │
     │ signaling WS + WebRTC (Opus over UDP/TCP)               │ DRPC stream
     └──────────────────────────────────────────▶ gochat voice ┘
@@ -30,6 +32,8 @@ in Kotlin, live in [mobile](mobile).
 | `channels` → one actor per channel | membership, authorization, posting, edits, history, read state, typing |
 | `files` (pool) | upload grants, downloads, orphan cleanup |
 | `hub` | live connections of every web gateway, event fan-out, presence |
+| `updates` → one actor per account | numbers the account's updates and keeps their log |
+| `bots` (pool) | bot accounts and tokens, commands, button answers, webhooks |
 | `voice` | who talks in which voice channel, join tokens, the voice servers |
 
 A channel actor is the single writer for its channel, so ordering and
@@ -81,6 +85,38 @@ browser's own filter (the default), or strong, which runs
 before sending it, adding 20 ms. A browser that cannot run it uses its own
 filter.
 
+### The GoChat protocol and bots
+
+Apps and bots speak one protocol, in the manner of Telegram's MTProto, over
+one socket at `/api/v2/socket`: binary protobuf frames carrying calls of the
+chat API, their results, and updates. [docs/protocol.md](docs/protocol.md)
+specifies it.
+
+- Updates are numbered: each account's in one sequence (`pts`), each text
+  channel's in another, and kept in a log for a week. A client that comes
+  back says the last number it applied and gets what it missed, in order;
+  `UpdatesService` fills any gap.
+- A bot is an account its owner creates in **Settings → Bots**, with a token
+  that only the owner sees, once. The owner adds it to a team, and channel
+  members add it to channels. Unless it is set to see every message, a bot
+  gets commands (`/echo hi`), mentions of it, replies in its threads and its
+  direct messages.
+- A bot's commands show in the composer as people type `/`, and its messages
+  may carry buttons: a press reaches the bot as a `CallbackQuery`, and its
+  answer shows to the person who pressed.
+- Bots that would rather not keep a socket use the HTTP Bot API:
+  `POST /api/v2/bot/<method>` with JSON, such as `sendMessage`, `getUpdates`
+  (long polling) or `setWebhook`, which has the server POST each update to
+  the bot's https address.
+
+[pkg/gochat](pkg/gochat) is a Go client of the protocol that reconnects and
+catches up by itself, and [examples/echobot](examples/echobot) a bot built on
+it:
+
+```bash
+GOCHAT_URL=http://localhost:8080 GOCHAT_BOT_TOKEN=b_... go run ./examples/echobot -state echobot.pts
+```
+
 ### Client API for native apps
 
 The web gateway also serves the [mobile apps](mobile) at `/api/v1`, the way
@@ -115,7 +151,8 @@ API never reads cookies, so no page can make a browser call it for a
 signed-in person, and it opens only the calls people make: not the gateways'
 streams, nor the photo calls that expect a picture the gateway has already
 processed. [client.proto](api/protobuf/proto/gochat/v1/client.proto)
-documents it, close codes included.
+documents it, close codes included. `/api/v1` stays until the apps move to
+the GoChat protocol, which serves the same calls.
 
 ### Storage
 
@@ -416,6 +453,11 @@ Secrets that should come from the environment:
 | `SERVICES_ACCOUNTS_SECRET_KEY` | server |
 | `SERVICES_ACCOUNTS_SETUP_TOKEN` (until the first account exists) | server |
 
+`services.updates` sets how long the update logs keep updates (`retention`,
+a week by default), and `services.bots` how many bots a person may own and
+how webhooks are delivered. Webhooks go only to public addresses unless
+`services.bots.allow_private_webhooks` is set, for development.
+
 Set `web.public_url` to the origin browsers use; an `https` origin turns on
 `Secure` cookies and HSTS. Behind a reverse proxy, list its addresses in
 `web.trusted_proxies` so rate limits see client addresses.
@@ -433,7 +475,9 @@ just test
 The end-to-end suite in [test/e2e](test/e2e) drives a running stack through the
 web gateway: invites, real-time delivery, typing, attachments, voice messages
 and their channel setting, voice channels (with Pion peers that talk through
-the voice server), the client API the apps use, private channel isolation,
+the voice server), the client API the apps use, bots (commands, buttons,
+catching up after a restart, the HTTP Bot API and token resets through
+[pkg/gochat](pkg/gochat)), private channel isolation,
 CSRF, TOTP with recovery codes, session revocation, deactivation and storage
 quotas. It needs an existing admin account and team, or with
 `GOCHAT_E2E_BOOTSTRAP=1` and the server's token in `GOCHAT_E2E_SETUP_TOKEN`
@@ -450,16 +494,19 @@ api/protobuf/      protobuf sources and generated protobuf + DRPC code
 cmd/               cobra commands and embedded default configs
 config/            configs for host runs and for the Docker stack
 deployments/       Dockerfile and compose files
+docs/              the GoChat protocol's specification
+examples/          bots built on pkg/gochat
 internal/actors    ask, pools and middleware on top of hollywood
 internal/app       wiring of the server and web processes
 internal/authz     casbin model and enforcer
 internal/core      ids, passwords, TOTP, sealing, validation, models, caches
 internal/repos     Scylla and MinIO repositories
 internal/server    DRPC handlers and the admin listener
-internal/services  hub, accounts, directory, channels, files, voice
+internal/services  hub, accounts, directory, channels, updates, bots, files, voice
 internal/voiceserver  the voice server: signaling, rooms, media
 internal/web       HTTP handlers, gateway actors, templates and static assets
 migrations/scylla  CQL migrations
 mobile/            the Android and iOS apps (Kotlin Multiplatform, Compose)
+pkg/gochat         a Go client of the GoChat protocol, for bots
 test/e2e           end-to-end tests
 ```
