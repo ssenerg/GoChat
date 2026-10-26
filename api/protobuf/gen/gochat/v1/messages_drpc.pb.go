@@ -54,6 +54,7 @@ type DRPCMessageServiceClient interface {
 	ListPinned(ctx context.Context, in *ListPinnedRequest) (*ListPinnedResponse, error)
 	SaveMessage(ctx context.Context, in *SaveMessageRequest) (*SaveMessageResponse, error)
 	ListSaved(ctx context.Context, in *ListSavedRequest) (*ListSavedResponse, error)
+	PressButton(ctx context.Context, in *PressButtonRequest) (*PressButtonResponse, error)
 }
 
 type drpcMessageServiceClient struct {
@@ -210,6 +211,15 @@ func (c *drpcMessageServiceClient) ListSaved(ctx context.Context, in *ListSavedR
 	return out, nil
 }
 
+func (c *drpcMessageServiceClient) PressButton(ctx context.Context, in *PressButtonRequest) (*PressButtonResponse, error) {
+	out := new(PressButtonResponse)
+	err := c.cc.Invoke(ctx, "/gochat.v1.MessageService/PressButton", drpcEncoding_File_gochat_v1_messages_proto{}, in, out)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 type DRPCMessageServiceServer interface {
 	PostMessage(context.Context, *PostMessageRequest) (*PostMessageResponse, error)
 	EditMessage(context.Context, *EditMessageRequest) (*EditMessageResponse, error)
@@ -227,6 +237,7 @@ type DRPCMessageServiceServer interface {
 	ListPinned(context.Context, *ListPinnedRequest) (*ListPinnedResponse, error)
 	SaveMessage(context.Context, *SaveMessageRequest) (*SaveMessageResponse, error)
 	ListSaved(context.Context, *ListSavedRequest) (*ListSavedResponse, error)
+	PressButton(context.Context, *PressButtonRequest) (*PressButtonResponse, error)
 }
 
 type DRPCMessageServiceUnimplementedServer struct{}
@@ -295,9 +306,13 @@ func (s *DRPCMessageServiceUnimplementedServer) ListSaved(context.Context, *List
 	return nil, drpcerr.WithCode(errors.New("Unimplemented"), drpcerr.Unimplemented)
 }
 
+func (s *DRPCMessageServiceUnimplementedServer) PressButton(context.Context, *PressButtonRequest) (*PressButtonResponse, error) {
+	return nil, drpcerr.WithCode(errors.New("Unimplemented"), drpcerr.Unimplemented)
+}
+
 type DRPCMessageServiceDescription struct{}
 
-func (DRPCMessageServiceDescription) NumMethods() int { return 16 }
+func (DRPCMessageServiceDescription) NumMethods() int { return 17 }
 
 func (DRPCMessageServiceDescription) Method(n int) (string, drpc.Encoding, drpc.Receiver, interface{}, bool) {
 	switch n {
@@ -445,6 +460,15 @@ func (DRPCMessageServiceDescription) Method(n int) (string, drpc.Encoding, drpc.
 						in1.(*ListSavedRequest),
 					)
 			}, DRPCMessageServiceServer.ListSaved, true
+	case 16:
+		return "/gochat.v1.MessageService/PressButton", drpcEncoding_File_gochat_v1_messages_proto{},
+			func(srv interface{}, ctx context.Context, in1, in2 interface{}) (drpc.Message, error) {
+				return srv.(DRPCMessageServiceServer).
+					PressButton(
+						ctx,
+						in1.(*PressButtonRequest),
+					)
+			}, DRPCMessageServiceServer.PressButton, true
 	default:
 		return "", nil, nil, nil, false
 	}
@@ -768,6 +792,26 @@ func (x *drpcMessageService_ListSavedStream) GetStream() drpc.Stream {
 }
 
 func (x *drpcMessageService_ListSavedStream) SendAndClose(m *ListSavedResponse) error {
+	if err := x.MsgSend(m, drpcEncoding_File_gochat_v1_messages_proto{}); err != nil {
+		return err
+	}
+	return x.CloseSend()
+}
+
+type DRPCMessageService_PressButtonStream interface {
+	drpc.Stream
+	SendAndClose(*PressButtonResponse) error
+}
+
+type drpcMessageService_PressButtonStream struct {
+	drpc.Stream
+}
+
+func (x *drpcMessageService_PressButtonStream) GetStream() drpc.Stream {
+	return x.Stream
+}
+
+func (x *drpcMessageService_PressButtonStream) SendAndClose(m *PressButtonResponse) error {
 	if err := x.MsgSend(m, drpcEncoding_File_gochat_v1_messages_proto{}); err != nil {
 		return err
 	}

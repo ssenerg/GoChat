@@ -1,0 +1,178 @@
+syntax = "proto3";
+
+package gochat.v1;
+
+import "gochat/v1/types.proto";
+import "google/protobuf/timestamp.proto";
+
+// BotService manages bots. A bot is an account of its own that a person
+// owns: it signs in with a token rather than a password, and speaks the
+// same protocol as the apps, with fewer calls open to it.
+service BotService {
+  // CreateBot makes a bot owned by the caller and answers its token, which
+  // is shown once.
+  rpc CreateBot(CreateBotRequest) returns (CreateBotResponse);
+  // ListBots lists the caller's bots.
+  rpc ListBots(ListBotsRequest) returns (ListBotsResponse);
+  rpc UpdateBot(UpdateBotRequest) returns (UpdateBotResponse);
+  // ResetBotToken replaces a bot's token: the old one stops working at
+  // once, and the bot's sockets close.
+  rpc ResetBotToken(ResetBotTokenRequest) returns (ResetBotTokenResponse);
+  // DeleteBot turns a bot off for good; its messages stay.
+  rpc DeleteBot(DeleteBotRequest) returns (DeleteBotResponse);
+  // AddBotToTeam adds the caller's bot to a team the caller may invite
+  // people to.
+  rpc AddBotToTeam(AddBotToTeamRequest) returns (AddBotToTeamResponse);
+  // ListChannelCommands lists the commands of the bots in a channel, for
+  // the composer to suggest.
+  rpc ListChannelCommands(ListChannelCommandsRequest) returns (ListChannelCommandsResponse);
+
+  // The calls bots make about themselves.
+  rpc SetCommands(SetCommandsRequest) returns (SetCommandsResponse);
+  rpc GetCommands(GetCommandsRequest) returns (GetCommandsResponse);
+  // AnswerCallback answers a button press: the presser sees text.
+  rpc AnswerCallback(AnswerCallbackRequest) returns (AnswerCallbackResponse);
+  // SetWebhook has the server POST the bot's updates to url, in JSON,
+  // instead of the bot asking for them.
+  rpc SetWebhook(SetWebhookRequest) returns (SetWebhookResponse);
+  rpc DeleteWebhook(DeleteWebhookRequest) returns (DeleteWebhookResponse);
+  rpc GetWebhookInfo(GetWebhookInfoRequest) returns (GetWebhookInfoResponse);
+}
+
+message Bot {
+  User user = 1;
+  string description = 2;
+  // Whether the bot receives every message of the channels it is added to
+  // from now on, and may read their history. Otherwise it receives
+  // commands, mentions of it, replies in its threads and its direct
+  // conversations. A channel keeps what the bot had when it was added.
+  bool sees_all = 3;
+  repeated BotCommand commands = 4;
+  google.protobuf.Timestamp created_at = 5;
+  // The webhook's address, empty when the bot asks for its updates.
+  string webhook_url = 6;
+}
+
+// BotCommand is a command a bot offers, typed as /name.
+message BotCommand {
+  // 1-32 characters: lowercase letters, digits and underscores.
+  string name = 1;
+  string description = 2;
+}
+
+message CreateBotRequest {
+  // Ends in "bot", such as "weather_bot".
+  string username = 1;
+  string display_name = 2;
+  string description = 3;
+}
+
+message CreateBotResponse {
+  Bot bot = 1;
+  // Shown once: only its hash is stored.
+  string token = 2;
+}
+
+message ListBotsRequest {}
+
+message ListBotsResponse {
+  repeated Bot bots = 1;
+}
+
+message UpdateBotRequest {
+  string bot_id = 1;
+  string display_name = 2;
+  string description = 3;
+  bool sees_all = 4;
+}
+
+message UpdateBotResponse {
+  Bot bot = 1;
+}
+
+message ResetBotTokenRequest {
+  string bot_id = 1;
+}
+
+message ResetBotTokenResponse {
+  string token = 1;
+}
+
+message DeleteBotRequest {
+  string bot_id = 1;
+}
+
+message DeleteBotResponse {}
+
+message AddBotToTeamRequest {
+  string bot_id = 1;
+  string team_id = 2;
+}
+
+message AddBotToTeamResponse {}
+
+message ListChannelCommandsRequest {
+  string channel_id = 1;
+}
+
+// ChannelCommand is a command of a bot in a channel.
+message ChannelCommand {
+  BotCommand command = 1;
+  User bot = 2;
+}
+
+message ListChannelCommandsResponse {
+  repeated ChannelCommand commands = 1;
+}
+
+message SetCommandsRequest {
+  // At most 100; they replace the bot's commands.
+  repeated BotCommand commands = 1;
+}
+
+message SetCommandsResponse {}
+
+message GetCommandsRequest {}
+
+message GetCommandsResponse {
+  repeated BotCommand commands = 1;
+}
+
+message AnswerCallbackRequest {
+  // The id of the CallbackQuery update.
+  string query_id = 1;
+  // Up to 200 characters shown to the presser; empty shows nothing.
+  string text = 2;
+  // Shows text as an alert to dismiss rather than a passing notice.
+  bool alert = 3;
+}
+
+message AnswerCallbackResponse {}
+
+message SetWebhookRequest {
+  // An https URL.
+  string url = 1;
+  // Sent back in the X-GoChat-Bot-Secret header of every delivery, so the
+  // bot knows the request is the server's: 1-256 characters of A-Z, a-z,
+  // 0-9, _ and -.
+  string secret = 2;
+}
+
+message SetWebhookResponse {}
+
+message DeleteWebhookRequest {}
+
+message DeleteWebhookResponse {}
+
+message GetWebhookInfoRequest {}
+
+message GetWebhookInfoResponse {
+  string url = 1;
+  // The last update delivered.
+  int64 delivered_pts = 2;
+  // Updates waiting to be delivered.
+  int64 pending = 3;
+  // Why the last delivery failed, and when; empty after a success.
+  string last_error = 4;
+  google.protobuf.Timestamp last_error_at = 5;
+}

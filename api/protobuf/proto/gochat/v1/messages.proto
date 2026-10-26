@@ -28,6 +28,22 @@ service MessageService {
   // SaveMessage keeps a message in the caller's own list, or drops it.
   rpc SaveMessage(SaveMessageRequest) returns (SaveMessageResponse);
   rpc ListSaved(ListSavedRequest) returns (ListSavedResponse);
+  // PressButton presses a button of a bot's message: the bot gets a
+  // CallbackQuery, and its answer comes back as a CallbackAnswer event.
+  rpc PressButton(PressButtonRequest) returns (PressButtonResponse);
+}
+
+message PressButtonRequest {
+  string channel_id = 1;
+  string message_id = 2;
+  string root_id = 3;
+  // The button's callback_data.
+  string data = 4;
+}
+
+message PressButtonResponse {
+  // The CallbackAnswer for this press carries it.
+  string query_id = 1;
 }
 
 message PinMessageRequest {
@@ -151,6 +167,8 @@ message PostMessageRequest {
   repeated string attachment_ids = 3;
   // Set to reply in the thread of that root message.
   string root_id = 4;
+  // Buttons under the message; bots only.
+  Markup markup = 5;
 }
 
 message PostMessageResponse {
@@ -163,6 +181,8 @@ message EditMessageRequest {
   string content = 3;
   // Set when the message is a reply.
   string root_id = 4;
+  // The message's buttons from now on, none when unset; bots only.
+  Markup markup = 5;
 }
 
 message EditMessageResponse {

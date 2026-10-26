@@ -1,0 +1,59 @@
+syntax = "proto3";
+
+package gochat.v1;
+
+import "gochat/v1/gateway.proto";
+
+// UpdatesService replays what a client missed. Every account numbers its
+// own updates (joining and leaving channels and teams, mutes, saves, and
+// for a bot everything it receives), and every channel numbers its own
+// (messages, edits, deletions, reactions, pins and changes to it). A
+// client keeps the last number it applied of each, and asks here for what
+// came after. See docs/protocol.md.
+service UpdatesService {
+  rpc GetState(GetStateRequest) returns (GetStateResponse);
+  rpc GetDifference(GetDifferenceRequest) returns (GetDifferenceResponse);
+  // GetChannelDifference replays a channel's updates to one of its
+  // members. Bots get theirs from GetDifference.
+  rpc GetChannelDifference(GetChannelDifferenceRequest) returns (GetChannelDifferenceResponse);
+}
+
+message GetStateRequest {}
+
+message GetStateResponse {
+  // The number of the account's latest update.
+  int64 pts = 1;
+}
+
+message GetDifferenceRequest {
+  // The last update applied.
+  int64 pts = 1;
+  // At most this many updates; zero takes the server's default.
+  uint32 limit = 2;
+}
+
+message GetDifferenceResponse {
+  // The updates after pts, oldest first. Messages are as they are now: one
+  // deleted since is left out, and its deletion follows.
+  repeated Event updates = 1;
+  // The state after these updates.
+  int64 pts = 2;
+  // Set when the asked pts is older than the server keeps: the client
+  // loads what it shows again and takes pts as its state.
+  bool too_long = 3;
+  // Set when more updates follow: ask again from pts.
+  bool more = 4;
+}
+
+message GetChannelDifferenceRequest {
+  string channel_id = 1;
+  int64 pts = 2;
+  uint32 limit = 3;
+}
+
+message GetChannelDifferenceResponse {
+  repeated Event updates = 1;
+  int64 pts = 2;
+  bool too_long = 3;
+  bool more = 4;
+}

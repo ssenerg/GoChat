@@ -66,6 +66,9 @@ message User {
   Status status = 9;
   google.protobuf.Timestamp dnd_until = 10;
   CustomStatus custom_status = 11;
+  // A bot, and the person who owns it.
+  bool bot = 12;
+  string bot_owner_id = 13;
 }
 
 message Session {
@@ -136,6 +139,9 @@ message Channel {
   // Whether members may post voice messages. Direct and group
   // conversations always allow them.
   bool voice_enabled = 17;
+  // The number of the channel's latest update: a client replays what
+  // follows it with UpdatesService.GetChannelDifference.
+  int64 pts = 18;
 }
 
 message ChannelMember {
@@ -171,6 +177,29 @@ message Message {
   bool pinned = 12;
   // Whether the caller saved the message.
   bool saved = 13;
+  // The buttons a bot put under the message.
+  Markup markup = 14;
+}
+
+// Markup is rows of buttons under a bot's message.
+message Markup {
+  repeated ButtonRow rows = 1;
+}
+
+message ButtonRow {
+  repeated Button buttons = 1;
+}
+
+// Button is a button under a bot's message: pressing one with
+// callback_data tells the bot, one with url opens it.
+message Button {
+  string text = 1;
+  oneof action {
+    // Up to 64 bytes, handed back to the bot in a CallbackQuery.
+    string callback_data = 2;
+    // An http or https URL.
+    string url = 3;
+  }
 }
 
 // VoiceState is one person talking in a voice channel.

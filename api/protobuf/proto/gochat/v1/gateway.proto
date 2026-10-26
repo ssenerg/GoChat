@@ -106,7 +106,34 @@ message Event {
     PinsChanged pins_changed = 16;
     ProfileChanged profile_changed = 17;
     VoiceChannelUpdate voice_channel_update = 18;
+    CallbackQuery callback_query = 23;
+    CallbackAnswer callback_answer = 24;
   }
+  // The update's number, set on updates of a sequence: of the channel
+  // pts_channel_id names, or of the recipient's account without it.
+  // pts_count is how many numbers the update takes, so a client sees a
+  // gap when its last number plus pts_count falls short of pts.
+  int64 pts = 20;
+  int32 pts_count = 21;
+  string pts_channel_id = 22;
+}
+
+// CallbackQuery tells a bot someone pressed a button of its message.
+message CallbackQuery {
+  // AnswerCallback takes it, within a minute.
+  string id = 1;
+  User from = 2;
+  Message message = 3;
+  string data = 4;
+}
+
+// CallbackAnswer is a bot's answer to the presser of its button.
+message CallbackAnswer {
+  string query_id = 1;
+  string text = 2;
+  bool alert = 3;
+  // The bot that answered.
+  User bot = 4;
 }
 
 // VoiceChannelUpdate tells a team's members who talks in one of its voice

@@ -1,0 +1,119 @@
+syntax = "proto3";
+
+package gochat.v1;
+
+import "gochat/v1/client.proto";
+import "gochat/v1/gateway.proto";
+import "gochat/v1/types.proto";
+import "google/protobuf/timestamp.proto";
+
+// The GoChat protocol is how native apps and bots talk to a GoChat server:
+// one socket carrying calls of the chat API, their results, and the
+// caller's updates, numbered so that nothing is missed across reconnects.
+// docs/protocol.md is its specification.
+//
+// GET /api/v2/socket opens it as a WebSocket with the subprotocol
+// "gochat.v2". Each binary message is one frame: Up from the client, Down
+// from the server. The client's first frame is a SocketHello.
+
+// Up is a frame the client sends.
+message Up {
+  oneof frame {
+    SocketHello hello = 1;
+    Call call = 2;
+    // What the client shows, as on the app socket of /api/v1: typing goes
+    // only to the sockets showing its channel, presence and profile
+    // changes only to those showing the person. Bots need neither.
+    AppView view = 3;
+    AppWatch watch = 4;
+    Ping ping = 5;
+  }
+}
+
+// SocketHello opens the session of the socket.
+message SocketHello {
+  // A session token from AuthService, or a bot token.
+  string token = 1;
+  // The client and its version, such as "GoChat Android 0.5" or
+  // "weatherbot/1.2", for the session list.
+  string client = 2;
+  // The protocol layer the client speaks. The server answers with the
+  // layer it speaks; a client older than the server's oldest is closed
+  // with 4011.
+  uint32 layer = 3;
+  // The last update of the caller's account the client applied, to resume
+  // after it; 0 to start from now.
+  int64 pts = 4;
+}
+
+// Call makes one call of the chat API.
+message Call {
+  // Chosen by the client, unique among its calls in flight; the Result
+  // carries it back. Results may come in any order.
+  uint64 id = 1;
+  // The call's full name, such as "gochat.v1.MessageService/PostMessage".
+  string method = 2;
+  // The request, in protobuf.
+  bytes payload = 3;
+}
+
+message Ping {
+  uint64 id = 1;
+}
+
+// Down is a frame the server sends.
+message Down {
+  oneof frame {
+    SocketWelcome welcome = 1;
+    Result result = 2;
+    Updates updates = 3;
+    // An event that is not numbered and is never replayed: typing,
+    // presence, profile and voice changes, and the answer to a button the
+    // client pressed.
+    Event ephemeral = 4;
+    Pong pong = 5;
+  }
+}
+
+// SocketWelcome says the socket serves the caller from now on. It comes
+// again when the server reconnected the socket, after which the stream
+// goes on from pts as before, unless reset is set.
+message SocketWelcome {
+  User user = 1;
+  // The session's public id; a bot's names its token.
+  string session_id = 2;
+  // When the session, and the socket with it, ends. A bot's renews: it
+  // reconnects then.
+  google.protobuf.Timestamp expires_at = 3;
+  // The account's update number the stream continues from: updates after
+  // it follow, in order, with nothing left out.
+  int64 pts = 4;
+  // The layer the server speaks.
+  uint32 layer = 5;
+  // Set when the client's SocketHello.pts, or what it got before the
+  // server reconnected the socket, is older than the server keeps: the
+  // client loads what it shows again and takes pts as its state.
+  bool reset = 6;
+}
+
+// Result is the outcome of a Call.
+message Result {
+  uint64 id = 1;
+  oneof outcome {
+    // The response, in protobuf.
+    bytes payload = 2;
+    ApiError error = 3;
+  }
+}
+
+// Updates carries numbered updates, oldest first. An update numbered in
+// the account's sequence has pts and pts_count; one numbered in a
+// channel's sequence also has pts_channel_id. See docs/protocol.md for
+// what a client does with them.
+message Updates {
+  repeated Event updates = 1;
+}
+
+message Pong {
+  uint64 id = 1;
+}

@@ -849,6 +849,10 @@ func (s *messageService) ListSaved(ctx context.Context, req *pb.ListSavedRequest
 	return &pb.ListSavedResponse{Hits: res.Hits, MessageIds: res.IDs}, nil
 }
 
+func (s *messageService) PressButton(context.Context, *pb.PressButtonRequest) (*pb.PressButtonResponse, error) {
+	return nil, ierrors.New(ierrors.CodeUnimplemented, "buttons are not available yet")
+}
+
 func (s *messageService) MarkThreadRead(ctx context.Context, req *pb.MarkThreadReadRequest) (*pb.MarkThreadReadResponse, error) {
 	t, err := channelTarget(ctx, req.ChannelId)
 	if err != nil {
