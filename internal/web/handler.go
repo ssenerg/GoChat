@@ -55,21 +55,24 @@ type Handler struct {
 	zipper     *zipper
 	// zipped holds the static files gzipped, by name.
 	zipped map[string][]byte
+	// botPolls holds the bots' getUpdates that wait.
+	botPolls *botPolls
 }
 
 func NewHandler(logger *zap.Logger, cfg *Config, client *drpc.Client, r *render.Renderer, engine *actor.Engine, gw *gateway.Deps) *Handler {
 	u, _ := url.Parse(cfg.PublicURL)
 	h := &Handler{
-		logger: logger.Named("web"),
-		cfg:    cfg,
-		client: client,
-		render: r,
-		engine: engine,
-		gw:     gw,
-		secure: u.Scheme == "https",
-		origin: u.Scheme + "://" + u.Host,
-		auth:   newIPLimiter(rate.Limit(cfg.RateLimit.AuthPerMinute/60), cfg.RateLimit.AuthBurst),
-		reqs:   newIPLimiter(rate.Limit(cfg.RateLimit.RequestsPerSecond), cfg.RateLimit.RequestBurst),
+		logger:   logger.Named("web"),
+		cfg:      cfg,
+		client:   client,
+		render:   r,
+		engine:   engine,
+		gw:       gw,
+		secure:   u.Scheme == "https",
+		botPolls: &botPolls{polls: make(map[string]*poll)},
+		origin:   u.Scheme + "://" + u.Host,
+		auth:     newIPLimiter(rate.Limit(cfg.RateLimit.AuthPerMinute/60), cfg.RateLimit.AuthBurst),
+		reqs:     newIPLimiter(rate.Limit(cfg.RateLimit.RequestsPerSecond), cfg.RateLimit.RequestBurst),
 
 		apiSessions: newIPLimiter(rate.Limit(cfg.RateLimit.RequestsPerSecond), cfg.RateLimit.RequestBurst),
 		apiShared:   newIPLimiter(rate.Limit(cfg.RateLimit.RequestsPerSecond*apiSharedFactor), cfg.RateLimit.RequestBurst*apiSharedFactor),
@@ -237,6 +240,7 @@ func (h *Handler) Routes() http.Handler {
 	mux.HandleFunc("GET /api/v2/socket", h.apiSocket)
 	mux.HandleFunc("POST /api/v2/files", h.apiUpload)
 	mux.HandleFunc("GET /api/v2/files/{id}", h.apiDownload)
+	mux.HandleFunc("POST /api/v2/bot/{method...}", h.botAPI)
 
 	return h.recover(h.headers(h.throttle(mux)))
 }
