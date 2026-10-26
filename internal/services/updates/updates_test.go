@@ -25,11 +25,21 @@ type memRepo struct {
 	mu       sync.Mutex
 	logs     map[gocql.UUID][]*scylla.LogEntry
 	messages map[gocql.UUID]*models.Message
+	users    map[gocql.UUID]*models.User
 	failLoad bool
 }
 
+func (r *memRepo) Get(_ context.Context, id gocql.UUID) (*models.User, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if u := r.users[id]; u != nil {
+		return u, nil
+	}
+	return nil, ierrors.NotFound("not found")
+}
+
 func newMemRepo() *memRepo {
-	return &memRepo{logs: map[gocql.UUID][]*scylla.LogEntry{}, messages: map[gocql.UUID]*models.Message{}}
+	return &memRepo{logs: map[gocql.UUID][]*scylla.LogEntry{}, messages: map[gocql.UUID]*models.Message{}, users: map[gocql.UUID]*models.User{}}
 }
 
 func (r *memRepo) GetMessage(_ context.Context, _, id gocql.UUID) (*models.Message, error) {
@@ -120,7 +130,7 @@ func start(t *testing.T, repo *memRepo) (*actor.Engine, *actor.PID, *sink) {
 		return out, nil
 	}
 	pid := engine.Spawn(New(&Deps{
-		Logger: zap.NewNop(), Repo: repo, Engine: engine, Hub: h, Render: render,
+		Logger: zap.NewNop(), Repo: repo, Engine: engine, Hub: h, Render: render, Users: repo,
 		Cfg: &Config{Retention: time.Hour, IdleTimeout: time.Minute, OpTimeout: time.Second, DifferenceLimit: 2},
 	}), "updates")
 	return engine, pid, seen
@@ -273,5 +283,29 @@ func TestAPressKeepsOnlyAReference(t *testing.T) {
 	repo.mu.Unlock()
 	if d, err = actors.Ask[*Difference](ctx, engine, pid, GetDifference{UserID: bot, Pts: 1}); err != nil || len(d.Updates) != 0 || d.Pts != 2 {
 		t.Fatalf("a press on a deleted message: %+v, %v", d, err)
+	}
+}
+
+func TestBotsThatCanNoLongerActGetNoUpdates(t *testing.T) {
+	repo := newMemRepo()
+	owner, gone := ids.New(), ids.New()
+	live, deleted, orphan := ids.New(), ids.New(), ids.New()
+	repo.users[owner] = &models.User{ID: owner}
+	repo.users[gone] = &models.User{ID: gone, Deactivated: true}
+	repo.users[live] = &models.User{ID: live, Bot: true, BotOwner: owner}
+	repo.users[deleted] = &models.User{ID: deleted, Bot: true, BotOwner: owner, Deactivated: true}
+	repo.users[orphan] = &models.User{ID: orphan, Bot: true, BotOwner: gone}
+	engine, pid, seen := start(t, repo)
+	engine.Send(pid, Push{UserIDs: []gocql.UUID{deleted, orphan, live}, Event: muted("x")})
+	engine.Send(pid, Push{UserIDs: []gocql.UUID{live}, Event: muted("y")})
+	seen.take(t, 2)
+	time.Sleep(50 * time.Millisecond)
+	seen.mu.Lock()
+	extra := len(seen.got)
+	seen.mu.Unlock()
+	repo.mu.Lock()
+	defer repo.mu.Unlock()
+	if extra != 0 || len(repo.logs[deleted]) != 0 || len(repo.logs[orphan]) != 0 || len(repo.logs[live]) != 2 {
+		t.Fatalf("logged %d for the deleted bot, %d for the orphan, %d for the live one", len(repo.logs[deleted]), len(repo.logs[orphan]), len(repo.logs[live]))
 	}
 }

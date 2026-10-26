@@ -83,7 +83,7 @@ func Start(logger *zap.Logger, cfg *Config, repo *scylla.Repository, storage *mi
 	}
 	s.Updates = engine.Spawn(updates.New(&updates.Deps{
 		Logger: logger.Named("updates"), Cfg: cfg.Updates, Repo: repo, Engine: engine, Hub: s.Hub,
-		Render: channels.Render(channelDeps),
+		Render: channels.Render(channelDeps), Users: userCache,
 	}), "updates", actor.WithID("main"), recovered)
 	s.callbacks = engine.Spawn(callbacks.New(s.Hub), "callbacks", actor.WithID("main"), recovered)
 	channelDeps.Updates, channelDeps.Callbacks = s.Updates, s.callbacks

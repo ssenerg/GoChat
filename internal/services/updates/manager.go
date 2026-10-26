@@ -11,6 +11,7 @@ import (
 
 	pb "github.com/ssenerg/gochat/api/protobuf/gen/gochat/v1"
 	"github.com/ssenerg/gochat/internal/actors"
+	"github.com/ssenerg/gochat/internal/core/models"
 	ierrors "github.com/ssenerg/gochat/internal/errors"
 	"github.com/ssenerg/gochat/internal/repos/scylla"
 	"github.com/ssenerg/gochat/internal/services/hub"
@@ -31,6 +32,14 @@ type Deps struct {
 	Hub    *actor.PID
 	// Render renders the messages a bot's log refers to.
 	Render Renderer
+	// Users tells the bots that can no longer act, whose updates are
+	// dropped; nil keeps every update.
+	Users Accounts
+}
+
+// Accounts reads accounts.
+type Accounts interface {
+	Get(ctx context.Context, id gocql.UUID) (*models.User, error)
 }
 
 // Push numbers Event in the updates of each of UserIDs, logs it and sends
@@ -233,6 +242,9 @@ func (a *account) handle(c *actor.Context, req request) {
 // never seen before a difference could replay it. An update that cannot be
 // numbered is still sent, without its number.
 func (a *account) push(msg push) {
+	if a.retired() {
+		return
+	}
 	ev := &pb.Event{Payload: msg.event.Payload}
 	if a.loadErr == nil {
 		a.pts++
@@ -247,6 +259,25 @@ func (a *account) push(msg push) {
 		cancel()
 	}
 	a.Engine.Send(a.Hub, hub.Deliver{UserIDs: []string{a.id.String()}, Event: ev})
+}
+
+// retired reports whether the account is a bot that can no longer act:
+// deleted, or its owner deactivated.
+func (a *account) retired() bool {
+	if a.Users == nil {
+		return false
+	}
+	ctx, cancel := a.ctx()
+	defer cancel()
+	u, err := a.Users.Get(ctx, a.id)
+	if err != nil || !u.Bot {
+		return false
+	}
+	if u.Deactivated {
+		return true
+	}
+	owner, err := a.Users.Get(ctx, u.BotOwner)
+	return err == nil && owner.Deactivated
 }
 
 // difference reads off the actor: every update up to the current number is
