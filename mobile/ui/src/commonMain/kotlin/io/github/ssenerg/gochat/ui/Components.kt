@@ -35,6 +35,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.LinkAnnotation
 import androidx.compose.ui.text.SpanStyle
@@ -136,6 +138,19 @@ fun MentionBadge(count: Int) {
         contentAlignment = Alignment.Center,
     ) {
         Text(if (count > 99) "99+" else count.toString(), color = c.unreadInk, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+    }
+}
+
+/** Marks a bot's name, as the web does. */
+@Composable
+fun BotBadge(modifier: Modifier = Modifier) {
+    Box(
+        modifier.clip(RoundedCornerShape(6.dp)).background(MaterialTheme.colorScheme.primaryContainer)
+            .padding(horizontal = 5.dp, vertical = 1.dp)
+            .semantics(mergeDescendants = true) { contentDescription = "Bot" },
+        contentAlignment = Alignment.Center,
+    ) {
+        Text("BOT", color = MaterialTheme.colorScheme.onPrimaryContainer, fontSize = 10.sp, fontWeight = FontWeight.Bold, letterSpacing = 0.4.sp)
     }
 }
 

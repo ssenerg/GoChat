@@ -9,11 +9,14 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.SnackbarDuration
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.SnackbarResult
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.VerticalDivider
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
@@ -22,12 +25,15 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateListOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import io.github.ssenerg.gochat.core.state.BotAnswer
 import io.github.ssenerg.gochat.core.state.ChatSession
 import io.github.ssenerg.gochat.core.state.GoChatApp
 import io.github.ssenerg.gochat.ui.EmptyState
@@ -137,6 +143,20 @@ fun MainScreen(app: GoChatApp, session: ChatSession) {
     // Why a call ended or could not start.
     LaunchedEffect(session) {
         session.voice.errors.collect { toasts.show(it) }
+    }
+
+    // A bot's answer to a button pressed here: a passing notice, or an alert.
+    var alert by remember(session) { mutableStateOf<BotAnswer?>(null) }
+    LaunchedEffect(session) {
+        session.answers.collect { a -> if (a.alert) alert = a else toasts.show("${a.bot}: ${a.text}") }
+    }
+    alert?.let { a ->
+        AlertDialog(
+            onDismissRequest = { alert = null },
+            title = { Text(a.bot) },
+            text = { Text(a.text) },
+            confirmButton = { TextButton(onClick = { alert = null }) { Text("OK") } },
+        )
     }
 
     // What is on screen is what gets read; in the background nothing is.

@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -19,6 +20,7 @@ import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.OpenInNew
 import androidx.compose.material.icons.filled.AddReaction
 import androidx.compose.material.icons.filled.Description
 import androidx.compose.material.icons.filled.Error
@@ -27,14 +29,17 @@ import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.PushPin
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Slider
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -46,12 +51,14 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import gochat.v1.Attachment
+import gochat.v1.Markup
 import gochat.v1.Message
 import gochat.v1.User
 import io.github.ssenerg.gochat.core.api.userMessage
@@ -63,6 +70,7 @@ import io.github.ssenerg.gochat.core.model.sentAtMillis
 import io.github.ssenerg.gochat.core.state.ChatSession
 import io.github.ssenerg.gochat.core.state.Pending
 import io.github.ssenerg.gochat.ui.Avatar
+import io.github.ssenerg.gochat.ui.BotBadge
 import io.github.ssenerg.gochat.ui.LocalChatColors
 import io.github.ssenerg.gochat.ui.LocalImages
 import io.github.ssenerg.gochat.ui.LocalPlatform
@@ -101,6 +109,10 @@ fun MessageRow(
                         overflow = TextOverflow.Ellipsis,
                         modifier = Modifier.weight(1f, fill = false),
                     )
+                    if (m.author?.bot == true) {
+                        Spacer(Modifier.width(6.dp))
+                        BotBadge()
+                    }
                     Spacer(Modifier.width(8.dp))
                     Text(Format.clock(m.sentAtMillis()), color = colors.muted, fontSize = 12.sp)
                     if (m.pinned) {
@@ -112,6 +124,7 @@ fun MessageRow(
             if (m.content.isNotBlank()) MessageText(m.content)
             if (m.edited_at != null) Text("(edited)", color = colors.muted, fontSize = 11.sp)
             m.attachments.forEach { att -> AttachmentView(att, session) }
+            m.markup?.takeIf { it.rows.isNotEmpty() }?.let { BotButtons(m, it, session) }
             if (m.reactions.isNotEmpty()) Reactions(m, me, session, onMore = onLongPress)
             if (m.reply_count > 0 && onOpenThread != null) {
                 Text(
@@ -125,6 +138,79 @@ fun MessageRow(
             }
         }
     }
+}
+
+/**
+ * The buttons a bot put under its message: one with data tells the bot,
+ * whose answer the session shows; one with a link opens it, once the
+ * person saw where it leads.
+ */
+@Composable
+private fun BotButtons(m: Message, markup: Markup, session: ChatSession) {
+    val toasts = LocalToasts.current
+    var pressing by remember(m.id) { mutableStateOf<String?>(null) }
+    var link by remember { mutableStateOf<String?>(null) }
+    Column(Modifier.padding(top = 6.dp).widthIn(max = 420.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        markup.rows.forEach { row ->
+            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                row.buttons.forEach { b ->
+                    val data = b.callback_data
+                    val url = b.url
+                    OutlinedButton(
+                        onClick = {
+                            when {
+                                url != null -> link = url
+                                data != null -> {
+                                    pressing = data
+                                    session.launch({ session.press(m, data) }) { err ->
+                                        pressing = null
+                                        err?.let { toasts.show(it) }
+                                    }
+                                }
+                            }
+                        },
+                        enabled = url != null || (data != null && pressing == null),
+                        shape = RoundedCornerShape(10.dp),
+                        contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
+                        modifier = Modifier.weight(1f).heightIn(min = 36.dp),
+                    ) {
+                        if (data != null && pressing == data) {
+                            CircularProgressIndicator(Modifier.size(14.dp), strokeWidth = 2.dp)
+                            Spacer(Modifier.width(6.dp))
+                        }
+                        Text(b.text, maxLines = 1, overflow = TextOverflow.Ellipsis, fontSize = 13.sp)
+                        if (url != null) {
+                            Spacer(Modifier.width(4.dp))
+                            Icon(Icons.AutoMirrored.Filled.OpenInNew, contentDescription = "Opens a link", modifier = Modifier.size(14.dp))
+                        }
+                    }
+                }
+            }
+        }
+    }
+    link?.let { url -> OpenLinkDialog(url, onDismiss = { link = null }) }
+}
+
+/** Asks before opening a bot's link, whose button may name it as anything. */
+@Composable
+private fun OpenLinkDialog(url: String, onDismiss: () -> Unit) {
+    val uri = LocalUriHandler.current
+    val toasts = LocalToasts.current
+    val safe = url.startsWith("https://") || url.startsWith("http://")
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Open this link?") },
+        text = { Text(if (safe) url else "This link cannot be opened: $url") },
+        confirmButton = {
+            if (safe) {
+                TextButton(onClick = {
+                    onDismiss()
+                    runCatching { uri.openUri(url) }.onFailure { toasts.show("No app here opens this link.") }
+                }) { Text("Open") }
+            }
+        },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
+    )
 }
 
 /** A message on its way. */

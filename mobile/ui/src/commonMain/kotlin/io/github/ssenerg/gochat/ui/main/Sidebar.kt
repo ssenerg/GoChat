@@ -60,7 +60,7 @@ import gochat.v1.Status
 import gochat.v1.Team
 import gochat.v1.VoiceChannelState
 import io.github.ssenerg.gochat.core.api.userMessage
-import io.github.ssenerg.gochat.core.gateway.Connection
+import io.github.ssenerg.gochat.core.socket.Connection
 import io.github.ssenerg.gochat.core.model.displayName
 import io.github.ssenerg.gochat.core.model.isPrivate
 import io.github.ssenerg.gochat.core.model.isUnread
@@ -70,6 +70,7 @@ import io.github.ssenerg.gochat.core.state.ChatState
 import io.github.ssenerg.gochat.core.state.GoChatApp
 import io.github.ssenerg.gochat.ui.Avatar
 import io.github.ssenerg.gochat.ui.AvatarWithStatus
+import io.github.ssenerg.gochat.ui.BotBadge
 import io.github.ssenerg.gochat.ui.LocalChatColors
 import io.github.ssenerg.gochat.ui.LocalImages
 import io.github.ssenerg.gochat.ui.LocalPlatform
@@ -210,6 +211,7 @@ private fun ConnectionBanner(c: Connection) {
         is Connection.Online, Connection.SignedOut -> return
         Connection.Connecting -> "Connecting…"
         is Connection.Offline -> "${c.reason}…"
+        is Connection.Refused -> c.reason
     }
     Row(
         Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 4.dp)
@@ -378,14 +380,20 @@ private fun ConversationRow(ch: Channel, st: ChatState, active: Boolean, onClick
                 }
             }
             Spacer(Modifier.width(10.dp))
-            Text(
-                ch.title(),
-                color = colors.sidebarText.copy(alpha = if (unread) 1f else 0.85f),
-                fontWeight = if (unread) FontWeight.Bold else FontWeight.Normal,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.weight(1f),
-            )
+            Row(Modifier.weight(1f), verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    ch.title(),
+                    color = colors.sidebarText.copy(alpha = if (unread) 1f else 0.85f),
+                    fontWeight = if (unread) FontWeight.Bold else FontWeight.Normal,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f, fill = false),
+                )
+                if (peer?.bot == true) {
+                    Spacer(Modifier.width(6.dp))
+                    BotBadge()
+                }
+            }
             if (ch.mention_count > 0 && !active) MentionBadge(ch.mention_count)
         }
     }

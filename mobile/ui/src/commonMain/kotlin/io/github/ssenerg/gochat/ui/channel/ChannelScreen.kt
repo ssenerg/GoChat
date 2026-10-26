@@ -62,6 +62,7 @@ import io.github.ssenerg.gochat.core.state.ChatSession
 import io.github.ssenerg.gochat.core.state.ChatState
 import io.github.ssenerg.gochat.ui.AvatarWithStatus
 import io.github.ssenerg.gochat.ui.BackButton
+import io.github.ssenerg.gochat.ui.BotBadge
 import io.github.ssenerg.gochat.ui.ErrorState
 import io.github.ssenerg.gochat.ui.LocalChatColors
 import io.github.ssenerg.gochat.ui.Loading
@@ -181,6 +182,7 @@ fun ChannelScreen(session: ChatSession, channelId: String) {
                     },
                     onTyping = { session.typing(channelId) },
                     upload = { name, bytes, voice, duration -> session.upload(channelId, name, bytes, voice, duration) },
+                    commands = { prefix -> session.commands(channelId, prefix) },
                 )
             }
         }
@@ -212,7 +214,19 @@ private fun ChannelTitle(channel: Channel?, chat: ChatState) {
             Spacer(Modifier.width(6.dp))
         }
         Column {
-            Text(channel.title(), maxLines = 1, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.titleMedium)
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    channel.title(),
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    style = MaterialTheme.typography.titleMedium,
+                    modifier = Modifier.weight(1f, fill = false),
+                )
+                if (peer?.bot == true) {
+                    Spacer(Modifier.width(6.dp))
+                    BotBadge()
+                }
+            }
             val sub = when {
                 peer != null -> statusLabel(chat.statusOf(peer.id))
                 else -> channel.purpose

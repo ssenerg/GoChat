@@ -119,10 +119,11 @@ GOCHAT_URL=http://localhost:8080 GOCHAT_BOT_TOKEN=b_... go run ./examples/echobo
 
 ### Client API for native apps
 
-The web gateway also serves the [mobile apps](mobile) at `/api/v1`, the way
-Discord's apps use its REST API and gateway. It forwards calls of the same
-chat API the pages use, so the server checks every one as it does for the
-web:
+The [mobile apps](mobile) speak [the GoChat protocol](docs/protocol.md)
+from version 0.3.0. The web gateway still serves apps 0.2 and older at
+`/api/v1`, the way Discord's apps use its REST API and gateway. It forwards
+calls of the same chat API the pages use, so the server checks every one as
+it does for the web:
 
 - `POST /api/v1/rpc/<service>/<method>` makes one call, such as
   `/api/v1/rpc/gochat.v1.ChannelService/GetChannel`, with the request as
@@ -151,8 +152,8 @@ API never reads cookies, so no page can make a browser call it for a
 signed-in person, and it opens only the calls people make: not the gateways'
 streams, nor the photo calls that expect a picture the gateway has already
 processed. [client.proto](api/protobuf/proto/gochat/v1/client.proto)
-documents it, close codes included. `/api/v1` stays until the apps move to
-the GoChat protocol, which serves the same calls.
+documents it, close codes included. Newer apps still read `/api/v1/info` and
+photos there; [retiring-api-v1.md](docs/retiring-api-v1.md) plans the rest.
 
 ### Storage
 

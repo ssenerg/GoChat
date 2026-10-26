@@ -184,6 +184,7 @@ fun ThreadScreen(session: ChatSession, channelId: String, rootId: String) {
                     },
                     onTyping = { session.typing(channelId) },
                     upload = { name, bytes, voice, duration -> session.upload(channelId, name, bytes, voice, duration) },
+                    commands = { prefix -> session.commands(channelId, prefix) },
                 )
             }
         }

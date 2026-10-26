@@ -3,8 +3,9 @@
 Native apps for GoChat, written once in Kotlin with
 [Kotlin Multiplatform](https://kotlinlang.org/docs/multiplatform.html) and
 [Compose Multiplatform](https://www.jetbrains.com/compose-multiplatform/).
-They talk to a GoChat server through its [client API](../README.md#client-api-for-native-apps)
-at `/api/v1`, in the same protobuf messages the web gateway uses.
+They talk to a GoChat server over [the GoChat protocol](../docs/protocol.md):
+one socket at `/api/v2/socket` for the chat API's calls and the person's
+updates, in the same protobuf messages the web gateway uses.
 
 ## Layout
 
@@ -16,11 +17,17 @@ iosApp/      the Xcode project: a SwiftUI shell that shows the shared screens
 ```
 
 - **core** generates its protobuf types with [Wire](https://square.github.io/wire/)
-  from the server's own `api/protobuf/proto`. `ApiClient` makes calls over
-  [Ktor](https://ktor.io); `Gateway` keeps the event socket open and
-  reconnects; `GoChatApp` restores the session and signs people in;
-  `ChatSession` holds teams, channels, presence and voice states and applies
-  every event the server sends; `Timeline` and `ThreadView` hold a channel's
+  from the server's own `api/protobuf/proto`. `Socket` keeps the protocol's
+  socket open over [Ktor](https://ktor.io): it multiplexes calls by id,
+  pings, and reconnects with backoff, resuming after the last account update
+  applied. `ApiClient` makes calls over it, and moves files over HTTP.
+  `GoChatApp` restores the session and signs people in over an anonymous
+  socket, which then says hello again with the session's token. `Updates`
+  applies the account's and each channel's numbered updates in order and
+  asks for the difference after a gap. `ChatSession` holds teams, channels,
+  presence and voice states, applies every update, catches up after a
+  reconnect, and keeps the account's number so a restarted app resumes after
+  it; `Timeline` and `ThreadView` hold a channel's
   and a thread's messages; `VoiceCall` talks in a voice channel, speaking the
   voice server's signaling protocol as the web's voice client does, over the
   platform's WebRTC (`RtcEngine`). Formatting and the message Markdown live
@@ -50,6 +57,9 @@ iosApp/      the Xcode project: a SwiftUI shell that shows the shared screens
   followed threads; saved messages.
 - Voice messages: record, send and play. Both apps record AAC in MP4,
   which the server takes and every platform plays.
+- Bots: a BOT badge, the buttons under their messages (a press tells the
+  bot, whose answer shows as a notice or an alert; a link opens once the
+  person saw where it leads), and their commands suggested as one types `/`.
 - Browse, create, mute and leave channels; moderators rename them, change
   their privacy, turn voice messages on or off and archive them. Delete a
   direct conversation for yourself or for both people. Conversations belong
@@ -93,6 +103,8 @@ cd mobile
 With a running stack, the same command also drives it as the apps do: it
 signs in, receives events from another device, sends, reacts, replies,
 uploads a voice message, edits, deletes, opens a conversation and signs out.
+It catches up after being away and after a restart, and runs a bot written
+with the core: its command, buttons and answers.
 
 ```bash
 GOCHAT_E2E_URL=http://localhost:8080 GOCHAT_E2E_ADMIN=admin \

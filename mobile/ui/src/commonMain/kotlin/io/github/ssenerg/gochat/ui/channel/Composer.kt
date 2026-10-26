@@ -6,6 +6,7 @@ import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -20,6 +21,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardOptions
@@ -54,13 +56,18 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.text.TextRange
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardCapitalization
+import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import gochat.v1.Attachment
+import gochat.v1.ChannelCommand
 import io.github.ssenerg.gochat.core.api.userMessage
 import io.github.ssenerg.gochat.core.model.Format
+import io.github.ssenerg.gochat.core.model.displayName
 import io.github.ssenerg.gochat.ui.LocalChatColors
 import io.github.ssenerg.gochat.ui.main.LocalToasts
 import io.github.ssenerg.gochat.ui.rememberFilePicker
@@ -77,9 +84,13 @@ private class Upload(val key: Int, val name: String) {
 /** The longest voice message, as the server takes by default. */
 private const val MAX_RECORDING_MS = 10 * 60_000L
 
+// A command being typed: the message so far is / and its name's start.
+private val commandTyped = Regex("^/([a-z0-9_]{0,32})$")
+
 /**
  * Where messages are written: text, files, and voice messages when the
- * channel takes them.
+ * channel takes them. [commands] suggests the channel's bots' commands
+ * while a message starts with /.
  */
 @Composable
 fun Composer(
@@ -90,11 +101,23 @@ fun Composer(
     onSend: (text: String, attachmentIds: List<String>) -> Unit,
     onTyping: () -> Unit,
     upload: suspend (name: String, bytes: ByteArray, voice: Boolean, durationMs: Long) -> Attachment,
+    commands: (suspend (prefix: String) -> List<ChannelCommand>)? = null,
 ) {
     val toasts = LocalToasts.current
     val scope = rememberCoroutineScope()
-    var text by remember { mutableStateOf("") }
-    LaunchedEffect(editing) { text = editing ?: "" }
+    var field by remember { mutableStateOf(TextFieldValue("")) }
+    val text = field.text
+    LaunchedEffect(editing) { field = (editing ?: "").let { TextFieldValue(it, TextRange(it.length)) } }
+    var suggestions by remember { mutableStateOf(emptyList<ChannelCommand>()) }
+    LaunchedEffect(text, editing) {
+        val typed = commandTyped.find(text.lowercase())
+        if (commands == null || editing != null || typed == null) {
+            suggestions = emptyList()
+            return@LaunchedEffect
+        }
+        delay(150)
+        suggestions = commands(typed.groupValues[1])
+    }
     val uploads = remember { mutableStateListOf<Upload>() }
     var nextKey by remember { mutableStateOf(0) }
 
@@ -144,7 +167,7 @@ fun Composer(
     fun send() {
         if (!canSend) return
         onSend(text, if (editing != null) emptyList() else doneIds)
-        text = ""
+        field = TextFieldValue("")
         uploads.clear()
     }
 
@@ -158,6 +181,13 @@ fun Composer(
                     IconButton(onClick = onCancelEdit, modifier = Modifier.size(32.dp)) {
                         Icon(Icons.Filled.Close, contentDescription = "Stop editing", modifier = Modifier.size(18.dp))
                     }
+                }
+            }
+            if (suggestions.isNotEmpty()) {
+                CommandSuggestions(suggestions) { c ->
+                    val typed = "/" + c.command?.name.orEmpty() + " "
+                    field = TextFieldValue(typed, TextRange(typed.length))
+                    suggestions = emptyList()
                 }
             }
             if (uploads.isNotEmpty()) {
@@ -190,10 +220,10 @@ fun Composer(
                     ) {
                         if (text.isEmpty()) Text(placeholder, color = LocalChatColors.current.muted, maxLines = 1, overflow = TextOverflow.Ellipsis)
                         BasicTextField(
-                            value = text,
+                            value = field,
                             onValueChange = {
-                                text = it
-                                if (it.isNotBlank() && editing == null) onTyping()
+                                field = it
+                                if (it.text.isNotBlank() && editing == null) onTyping()
                             },
                             textStyle = MaterialTheme.typography.bodyLarge.copy(color = MaterialTheme.colorScheme.onSurface),
                             cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
@@ -228,6 +258,36 @@ fun Composer(
         LaunchedEffect(Unit) {
             delay(MAX_RECORDING_MS)
             if (recording) finishRecording()
+        }
+    }
+}
+
+/** The commands that match what is typed: one tap writes it. */
+@Composable
+private fun CommandSuggestions(items: List<ChannelCommand>, onPick: (ChannelCommand) -> Unit) {
+    Surface(
+        shape = RoundedCornerShape(12.dp),
+        color = MaterialTheme.colorScheme.surfaceContainerHigh,
+        modifier = Modifier.fillMaxWidth().padding(bottom = 6.dp),
+    ) {
+        Column(Modifier.heightIn(max = 240.dp).verticalScroll(rememberScrollState()).padding(vertical = 4.dp)) {
+            items.forEach { c ->
+                Row(
+                    Modifier.fillMaxWidth().clickable { onPick(c) }.padding(horizontal = 14.dp, vertical = 8.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text("/" + c.command?.name.orEmpty(), fontWeight = FontWeight.SemiBold)
+                    Spacer(Modifier.width(10.dp))
+                    Text(
+                        listOf(c.command?.description.orEmpty(), c.bot.displayName()).filter { it.isNotEmpty() }.joinToString(" · "),
+                        color = LocalChatColors.current.muted,
+                        fontSize = 13.sp,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.weight(1f),
+                    )
+                }
+            }
         }
     }
 }

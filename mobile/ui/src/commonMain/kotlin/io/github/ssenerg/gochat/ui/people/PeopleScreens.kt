@@ -55,6 +55,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardCapitalization
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import gochat.v1.Channel
 import gochat.v1.ChannelMember
@@ -73,6 +74,7 @@ import io.github.ssenerg.gochat.core.model.title
 import io.github.ssenerg.gochat.core.state.ChatSession
 import io.github.ssenerg.gochat.ui.AvatarWithStatus
 import io.github.ssenerg.gochat.ui.BackButton
+import io.github.ssenerg.gochat.ui.BotBadge
 import io.github.ssenerg.gochat.ui.EmptyState
 import io.github.ssenerg.gochat.ui.ErrorState
 import io.github.ssenerg.gochat.ui.LocalChatColors
@@ -168,7 +170,7 @@ fun NewConversationScreen(session: ChatSession) {
                             items(others, key = { it.id }) { u ->
                                 val chosen = picked.any { it.id == u.id }
                                 ListItem(
-                                    headlineContent = { Text(u.displayName()) },
+                                    headlineContent = { NameWithBadge(u) },
                                     supportingContent = { Text("@" + u.username) },
                                     leadingContent = { AvatarWithStatus(u, chat.statusOf(u.id)) },
                                     trailingContent = {
@@ -457,7 +459,7 @@ fun ChannelInfoScreen(session: ChatSession, channelId: String) {
                 items(list.filter { it.user != null }.distinctBy { it.user?.id }, key = { it.user?.id.orEmpty() }) { m ->
                     val u = m.user ?: return@items
                     ListItem(
-                        headlineContent = { Text(u.displayName()) },
+                        headlineContent = { NameWithBadge(u) },
                         supportingContent = { Text("@" + u.username) },
                         leadingContent = { AvatarWithStatus(u, chat.statusOf(u.id)) },
                         trailingContent = if (moderator && u.id != chat.me.id && !channel.isConversation) {
@@ -579,4 +581,16 @@ private fun EditChannelDialog(channel: Channel, session: ChatSession, onDone: ()
         },
         dismissButton = { TextButton(onClick = onDone) { Text("Cancel") } },
     )
+}
+
+/** A person's name, marked when they are a bot. */
+@Composable
+private fun NameWithBadge(u: User) {
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Text(u.displayName(), maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
+        if (u.bot) {
+            Spacer(Modifier.width(6.dp))
+            BotBadge()
+        }
+    }
 }
