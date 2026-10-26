@@ -68,6 +68,7 @@ var botCalls = map[string]bool{
 	"/gochat.v1.BotService/SetWebhook":             true,
 	"/gochat.v1.BotService/DeleteWebhook":          true,
 	"/gochat.v1.BotService/GetWebhookInfo":         true,
+	"/gochat.v1.BotService/ConfirmUpdates":         true,
 }
 
 type principalKey struct{}

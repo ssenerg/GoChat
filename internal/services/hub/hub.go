@@ -415,6 +415,10 @@ func (h *hub) attach(c *actor.Context, msg Attach) {
 	h.send(c, gw, &pb.ConnectResponse{Frame: &pb.ConnectResponse_Attached{Attached: &pb.Attached{
 		ConnId: msg.ConnID, User: msg.User, SessionId: msg.SessionID, ExpiresAt: timestamppb.New(msg.ExpiresAt),
 	}}})
+	// Bots show no presence.
+	if msg.User.GetBot() {
+		return
+	}
 	if _, ok := h.chosen[userID]; !ok {
 		h.choose(c, userID, choice{status: msg.User.GetStatus(), dndUntil: msg.User.GetDndUntil().AsTime()})
 	}
@@ -648,7 +652,7 @@ func (h *hub) route(msg Deliver) map[*gateway][]uint64 {
 // shallowEvent copies an event's envelope so each gateway gets its own
 // recipient list while the payload is shared, read-only.
 func shallowEvent(e *pb.Event) *pb.Event {
-	return &pb.Event{Broadcast: e.Broadcast, Payload: e.Payload}
+	return &pb.Event{Broadcast: e.Broadcast, Payload: e.Payload, Pts: e.Pts, PtsCount: e.PtsCount, PtsChannelId: e.PtsChannelId}
 }
 
 func (h *hub) revoke(c *actor.Context, msg RevokeSessions) {

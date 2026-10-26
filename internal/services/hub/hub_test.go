@@ -165,6 +165,22 @@ func TestDeliverToConnections(t *testing.T) {
 	}
 }
 
+func TestDeliverKeepsTheNumbers(t *testing.T) {
+	h := startHub(t, "gw1")
+	h.attach("gw1", 1, "a")
+	ev := &pb.Event{Payload: typing("ch").Payload, Pts: 7, PtsCount: 1, PtsChannelId: "ch"}
+	h.engine.Send(h.pid, Deliver{UserIDs: []string{"a"}, Event: ev})
+	if got := h.wires["gw1"].event(t); got.Pts != 7 || got.PtsCount != 1 || got.PtsChannelId != "ch" {
+		t.Fatalf("got %v", got)
+	}
+}
+
+func TestBotsShowNoPresence(t *testing.T) {
+	h := startHub(t, "gw1")
+	h.engine.Send(h.pid, Attach{GatewayID: "gw1", ConnID: 1, User: &pb.User{Id: "bot", Bot: true}, SessionID: "sbot", ExpiresAt: time.Now().Add(time.Hour)})
+	h.wires["gw1"].noneOf(t, func(ev *pb.Event) bool { return ev.GetPresence() != nil })
+}
+
 func TestTypingGoesToViewers(t *testing.T) {
 	h := startHub(t, "gw1", "gw2")
 	h.attach("gw1", 1, "a")
