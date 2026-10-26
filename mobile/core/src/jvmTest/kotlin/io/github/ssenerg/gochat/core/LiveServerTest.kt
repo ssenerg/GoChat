@@ -130,4 +130,78 @@ class LiveServerTest {
     private fun checkClosed(session: ChatSession) {
         assertTrue(session.socket.connection.value !is Connection.Online, "the socket closes with the session")
     }
+
+    @Test
+    fun anAppCatchesUpAfterBeingAway() {
+        if (url == null || admin == null || password == null || teamName == null) {
+            println("GOCHAT_E2E_URL is not set: skipping")
+            return
+        }
+        runBlocking {
+            val main = Dispatchers.Default.limitedParallelism(1)
+            val scope = CoroutineScope(SupervisorJob() + main)
+            try {
+                withTimeout(60_000) { away(scope) }
+            } finally {
+                scope.cancel()
+            }
+        }
+    }
+
+    private suspend fun away(scope: CoroutineScope) {
+        val store = MemoryStore()
+        val app = GoChatApp(store, scope)
+        assertEquals(null, withContext(scope.coroutineContext) { app.signIn(url!!, admin!!, password!!) })
+        val session = (app.state.value as AppState.SignedIn).session
+        val town = session.state.first { !it.loading && it.channels.isNotEmpty() }.textChannels.first { it.name == "town-square" }
+        val timeline = withContext(scope.coroutineContext) {
+            session.setVisible(town.id)
+            session.timeline(town.id)
+        }
+        timeline.state.first { !it.loading }
+
+        val other = GoChatApi(ApiClient(url!!))
+        other.client.token = other.login(admin!!, password!!).session!!.token
+        val before = other.post(town.id, "before going away")!!
+        timeline.state.first { s -> s.messages.any { it.id == before.id } }
+
+        // The app goes away: the phone is offline, or the app in the background.
+        withContext(scope.coroutineContext) { session.socket.stop() }
+        session.socket.connection.first { it !is Connection.Online }
+        val missed = (1..3).map { other.post(town.id, "while away $it")!! }
+        other.edit(before, "edited while away")
+        other.react(missed[0], "tada", remove = false)
+        other.delete(missed[1])
+        // An update of the account: only the replay brings it, as catching up
+        // does not ask for mutes again.
+        other.setMuted(town.id, true)
+        try {
+            withContext(scope.coroutineContext) { session.socket.start() }
+            val caught = timeline.state.first { s ->
+                s.messages.any { it.id == missed[2].id } && s.messages.none { it.id == missed[1].id } &&
+                    s.messages.first { it.id == before.id }.content == "edited while away" &&
+                    s.messages.first { it.id == missed[0].id }.reactions.any { it.emoji == "tada" }
+            }
+            assertEquals(1, caught.messages.count { it.id == missed[0].id }, "each message once")
+            session.state.first { town.id in it.muted }
+
+            // The account's number is kept: a restarted app resumes after it.
+            val kept = withTimeout(10_000) {
+                while (store.get("pts") == null) kotlinx.coroutines.delay(100)
+                store.get("pts")!!.toLong()
+            }
+            assertTrue(kept > 0)
+            val restarted = GoChatApp(store, scope)
+            withContext(scope.coroutineContext) { restarted.start() }
+            val again = (restarted.state.first { it is AppState.SignedIn } as AppState.SignedIn).session
+            val welcome = (again.socket.connection.first { it is Connection.Online } as Connection.Online).welcome
+            assertTrue(welcome.pts >= kept && !welcome.reload, "resumed after $kept: ${welcome.pts}, reload ${welcome.reload}")
+            again.state.first { !it.loading && town.id in it.muted }
+            withContext(scope.coroutineContext) { again.socket.stop() }
+        } finally {
+            other.setMuted(town.id, false)
+            withContext(scope.coroutineContext) { app.signOut() }
+            other.logout()
+        }
+    }
 }
