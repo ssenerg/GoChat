@@ -315,8 +315,9 @@ the bot's updates itself: each update, in order, as one
 `POST <url>` with the update's JSON as the body and the header
 `X-GoChat-Bot-Secret: <secret>`. A 2xx answer delivers it; anything else,
 or no answer within 10 seconds, is retried with a growing delay, and the
-next update waits. `getWebhookInfo` tells the last delivered `pts`, how many
-wait, and the last error.
+next update waits. A new webhook gets the updates after it was set; moving
+it to another URL keeps its place. `getWebhookInfo` tells the last
+delivered `pts`, how many wait, and the last error.
 
 Webhook URLs must be https and reach a public address: the server refuses
 loopback, private, link-local and other internal addresses, at every

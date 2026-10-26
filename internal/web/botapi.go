@@ -246,6 +246,11 @@ func (h *Handler) getUpdates(w http.ResponseWriter, r *http.Request, call drpc.C
 			h.pollEnded(w, r, pctx, err)
 			return
 		}
+		// Updates about messages deleted since are passed over.
+		if len(d.Updates) == 0 && !d.TooLong && d.Pts > from {
+			from = d.Pts
+			continue
+		}
 		if len(d.Updates) > 0 || d.TooLong || wait == 0 {
 			h.botOK(w, d)
 			return

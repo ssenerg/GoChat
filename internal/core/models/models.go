@@ -222,4 +222,5 @@ const (
 	UpdateEvent  = 0
 	UpdatePosted = 1
 	UpdateEdited = 2
+	UpdatePress  = 3
 )

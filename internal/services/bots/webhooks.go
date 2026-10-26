@@ -56,6 +56,21 @@ func (w *worker) setWebhook(ctx context.Context, msg SetWebhook) (Done, error) {
 		if !secretRe.MatchString(msg.Secret) {
 			return Done{}, ierrors.InvalidArgument("the secret is up to 256 letters, digits, '_' and '-'")
 		}
+		// A new webhook gets the updates after it, not those the bot read
+		// over its socket.
+		b, err := w.Repo.GetBot(ctx, msg.P.UserID)
+		if err != nil {
+			return Done{}, err
+		}
+		if b.WebhookURL == "" {
+			pts, err := w.Repo.AccountPts(ctx, msg.P.UserID)
+			if err != nil {
+				return Done{}, err
+			}
+			if err := w.Repo.SetDelivered(ctx, msg.P.UserID, pts); err != nil {
+				return Done{}, err
+			}
+		}
 	}
 	if err := w.Repo.SetWebhook(ctx, msg.P.UserID, msg.URL, msg.Secret); err != nil {
 		return Done{}, err
@@ -91,7 +106,11 @@ func (w *worker) confirm(ctx context.Context, msg Confirm) (Done, error) {
 	if msg.Pts < 0 {
 		return Done{}, ierrors.InvalidArgument("invalid pts")
 	}
-	return Done{}, w.Repo.SetDelivered(ctx, msg.P.UserID, msg.Pts)
+	latest, err := w.Repo.AccountPts(ctx, msg.P.UserID)
+	if err != nil {
+		return Done{}, err
+	}
+	return Done{}, w.Repo.SetDelivered(ctx, msg.P.UserID, min(msg.Pts, latest))
 }
 
 func timeOf(t time.Time) *timestamppb.Timestamp {
@@ -307,6 +326,11 @@ func (k *hook) run(ctx context.Context) {
 			continue
 		}
 		if len(d.Updates) == 0 {
+			// Updates about messages deleted since are passed over.
+			if d.Pts > b.DeliveredPts {
+				k.confirm(ctx, d.Pts)
+				continue
+			}
 			k.idle(ctx)
 			continue
 		}

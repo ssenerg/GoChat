@@ -70,7 +70,12 @@ func (e *Error) Error() string { return fmt.Sprintf("gochat: %s (code %d)", e.Me
 // ErrClosed is returned by calls on a closed client.
 var ErrClosed = errors.New("gochat: client closed")
 
-// errDown fails the calls in flight when the socket drops.
+// ErrLost fails a call whose connection dropped before its result came:
+// the server may have made it, so the client does not make it again.
+var ErrLost = errors.New("gochat: the connection dropped before the call's result")
+
+// errDown fails a call the client could not send, which it sends again
+// once reconnected.
 var errDown = errors.New("gochat: connection lost")
 
 // Client is a connection to a GoChat server that reconnects until closed.
@@ -172,7 +177,8 @@ func (c *Client) Close() error {
 }
 
 // Call makes method, such as "gochat.v1.MessageService/PostMessage",
-// waiting for the connection when it is down.
+// waiting for the connection when it is down. A call the connection drops
+// under fails with ErrLost.
 func (c *Client) Call(ctx context.Context, method string, in, out proto.Message) error {
 	payload, err := proto.Marshal(in)
 	if err != nil {
@@ -232,7 +238,7 @@ func (c *Client) call(ctx context.Context, method string, payload []byte) (*pb.R
 	select {
 	case res, ok := <-wait:
 		if !ok {
-			return nil, errDown
+			return nil, ErrLost
 		}
 		return res, nil
 	case <-ctx.Done():
@@ -449,8 +455,7 @@ func (c *Client) pump() {
 	}
 }
 
-// down fails the calls in flight, which Call makes again once the client
-// reconnected.
+// down fails the calls in flight.
 func (c *Client) down() {
 	c.mu.Lock()
 	defer c.mu.Unlock()

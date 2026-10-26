@@ -33,8 +33,9 @@ type Messages interface {
 // Renderer renders a channel's messages as clients see them.
 type Renderer func(ctx context.Context, channelID gocql.UUID, list []*models.Message) ([]*pb.Message, error)
 
-// Entry is how ev is logged: a post or an edit as a reference to its
-// message, which is read as it is when replayed; anything else as itself.
+// Entry is how ev is logged: a post, an edit or a button press with a
+// reference to its message, which is read as it is when replayed; anything
+// else as itself.
 func Entry(ev *pb.Event) *scylla.LogEntry {
 	var (
 		e     = &scylla.LogEntry{Kind: models.UpdateEvent}
@@ -50,6 +51,10 @@ func Entry(ev *pb.Event) *scylla.LogEntry {
 	case *pb.Event_MessageEdited:
 		e.Kind, m = models.UpdateEdited, p.MessageEdited.GetMessage()
 		shell = &pb.Event{Payload: &pb.Event_MessageEdited{MessageEdited: &pb.MessageEdited{}}}
+	case *pb.Event_CallbackQuery:
+		q := p.CallbackQuery
+		e.Kind, m = models.UpdatePress, q.GetMessage()
+		shell = &pb.Event{Payload: &pb.Event_CallbackQuery{CallbackQuery: &pb.CallbackQuery{Id: q.Id, From: q.From, Data: q.Data}}}
 	default:
 		shell = &pb.Event{Payload: ev.Payload}
 	}
@@ -174,6 +179,8 @@ func (r *Resolver) Resolve(ctx context.Context, entries []*scylla.LogEntry) ([]*
 			p.MessagePosted.Message = m
 		case *pb.Event_MessageEdited:
 			p.MessageEdited.Message = m
+		case *pb.Event_CallbackQuery:
+			p.CallbackQuery.Message = m
 		}
 	}
 	return out, nil

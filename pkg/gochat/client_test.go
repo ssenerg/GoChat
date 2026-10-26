@@ -236,3 +236,48 @@ func TestCloseEndsUpdatesAndCalls(t *testing.T) {
 		t.Fatal("the updates went on")
 	}
 }
+
+func TestACallTheConnectionDropsUnderIsNotMadeAgain(t *testing.T) {
+	calls := make(chan string, 4)
+	url := fakeServer(t,
+		func(f *fakeConn) {
+			f.read()
+			f.send(welcome(1, false))
+			calls <- f.read().GetCall().GetMethod()
+			_ = f.conn.Close(4000, "bye")
+		},
+		func(f *fakeConn) {
+			f.read()
+			f.send(welcome(1, false))
+			// The client closes this one without a call.
+			if _, data, err := f.conn.Read(context.Background()); err == nil {
+				var up pb.Up
+				if proto.Unmarshal(data, &up) == nil && up.GetCall() != nil {
+					calls <- up.GetCall().GetMethod()
+				}
+			}
+		},
+	)
+	c, err := Dial(context.Background(), Options{URL: url, Token: "b_token"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = c.Close() }()
+	err = c.Call(context.Background(), "gochat.v1.MessageService/PostMessage", &pb.PostMessageRequest{}, &pb.PostMessageResponse{})
+	if !errors.Is(err, ErrLost) {
+		t.Fatalf("call: %v", err)
+	}
+	select {
+	case m := <-calls:
+		if m != "gochat.v1.MessageService/PostMessage" {
+			t.Fatalf("first call %q", m)
+		}
+	default:
+		t.Fatal("the server never got the call")
+	}
+	select {
+	case m := <-calls:
+		t.Fatalf("the call was made again: %q", m)
+	case <-time.After(time.Second):
+	}
+}

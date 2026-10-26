@@ -1126,6 +1126,15 @@ func orderAttachments(order []gocql.UUID, atts []*models.Attachment) []*models.A
 }
 
 func (a *channel) canRead(p *models.Principal) error {
+	if err := a.mayRead(p); err != nil {
+		return err
+	}
+	return a.readsHistory(p)
+}
+
+// mayRead checks p may read the channel's messages, though a bot in privacy
+// mode only those it was sent.
+func (a *channel) mayRead(p *models.Principal) error {
 	role, err := a.member(p)
 	if err != nil {
 		return err
@@ -1133,7 +1142,7 @@ func (a *channel) canRead(p *models.Principal) error {
 	if !a.Authz.Can(authz.ObjMessage, authz.ActRead, string(role), string(p.Role)) {
 		return ierrors.PermissionDenied()
 	}
-	return a.readsHistory(p)
+	return nil
 }
 
 // history reads off the actor: the membership check happens here, in order,
@@ -1188,16 +1197,16 @@ func (a *channel) history(c *actor.Context, msg History) error {
 }
 
 func (a *channel) getMessage(c *actor.Context, msg GetMessage) error {
-	if err := a.canRead(msg.P); err != nil {
+	if err := a.mayRead(msg.P); err != nil {
 		return err
 	}
-	cleared := a.cleared[msg.P.UserID]
+	cleared, bot := a.cleared[msg.P.UserID], a.privacyBot(msg.P)
 	a.async(c, func(ctx context.Context) (any, error) {
 		m, err := a.messageOf(ctx, msg.MessageID, msg.RootID)
 		if err != nil {
 			return nil, err
 		}
-		if !shown(m, cleared) {
+		if !shown(m, cleared) || (bot != nil && !a.sentTo(ctx, msg.P.UserID, bot, m)) {
 			return nil, ierrors.NotFound("message not found")
 		}
 		out, err := a.render(ctx, []*models.Message{m})

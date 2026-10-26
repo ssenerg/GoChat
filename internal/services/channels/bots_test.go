@@ -1,6 +1,7 @@
 package channels
 
 import (
+	"context"
 	"sync"
 	"testing"
 	"time"
@@ -162,6 +163,35 @@ func TestBotInPrivacyModeReadsNoHistory(t *testing.T) {
 	a.bots[bot].seesAll = true
 	if err := a.canRead(p); err != nil {
 		t.Fatalf("a bot that sees all: %v", err)
+	}
+}
+
+func TestBotInPrivacyModeReadsWhatItWasSent(t *testing.T) {
+	a, repo, _, person, bot := botChannel(t, models.ChannelPublic, false)
+	b := a.privacyBot(&models.Principal{UserID: bot, Bot: true})
+	if b == nil {
+		t.Fatal("no privacy-mode membership")
+	}
+	root := &models.Message{ChannelID: a.id, ID: ids.NewTime(), UserID: bot, Content: "Pick one"}
+	repo.messages[root.ID] = root
+	ctx := context.Background()
+	for _, tc := range []struct {
+		m    *models.Message
+		sent bool
+	}{
+		{&models.Message{ID: ids.NewTime(), UserID: person, Content: "/weather"}, true},
+		{&models.Message{ID: ids.NewTime(), UserID: person, Content: "hi @helper_bot"}, true},
+		{&models.Message{ID: ids.NewTime(), UserID: person, Content: "just chatting"}, false},
+		{&models.Message{ID: ids.NewTime(), UserID: person, Content: "the second", RootID: root.ID}, true},
+		{root, true},
+	} {
+		if got := a.sentTo(ctx, bot, b, tc.m); got != tc.sent {
+			t.Errorf("%q: sent %v, want %v", tc.m.Content, got, tc.sent)
+		}
+	}
+	a.bots[bot].seesAll = true
+	if a.privacyBot(&models.Principal{UserID: bot, Bot: true}) != nil {
+		t.Fatal("a bot that sees all reads as one in privacy mode")
 	}
 }
 

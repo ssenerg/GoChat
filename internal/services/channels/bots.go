@@ -91,6 +91,12 @@ func (a *channel) toBots(ev *pb.Event, m, root *models.Message) {
 	if len(a.bots) == 0 || a.Updates == nil {
 		return
 	}
+	// A reply speaks to the bots of its thread: its root is read once.
+	if m != nil && root == nil && !ids.IsZero(m.RootID) && a.privacyBots() {
+		ctx, cancel := a.ctx()
+		root, _ = a.Repo.GetMessage(ctx, a.id, m.RootID)
+		cancel()
+	}
 	var to []gocql.UUID
 	for id, b := range a.bots {
 		if a.botSees(id, b, ev, m, root) {
@@ -115,13 +121,26 @@ func (a *channel) botSees(id gocql.UUID, b *botMember, ev *pb.Event, m, root *mo
 	if m == nil {
 		return ev.GetChannelUpdated() != nil
 	}
-	return a.addressed(id, b, m, root)
+	return addressed(id, b, m, root)
 }
 
-// addressed reports whether m speaks to a bot in privacy mode: it is the
-// bot's, a command, mentions the bot, or is in a thread the bot is part
-// of.
-func (a *channel) addressed(id gocql.UUID, b *botMember, m, root *models.Message) bool {
+// privacyBots reports whether the channel has a bot in privacy mode.
+func (a *channel) privacyBots() bool {
+	if a.ch.Kind.Conversation() {
+		return false
+	}
+	for _, b := range a.bots {
+		if !b.seesAll {
+			return true
+		}
+	}
+	return false
+}
+
+// addressed reports whether m, in root's thread when it is a reply,
+// speaks to a bot in privacy mode: it is the bot's, a command, mentions
+// the bot, or is in a thread the bot is part of.
+func addressed(id gocql.UUID, b *botMember, m, root *models.Message) bool {
 	if m.UserID == id || strings.HasPrefix(strings.TrimSpace(m.Content), "/") {
 		return true
 	}
@@ -131,16 +150,26 @@ func (a *channel) addressed(id gocql.UUID, b *botMember, m, root *models.Message
 	if ids.IsZero(m.RootID) {
 		return slices.Contains(m.Participants, id)
 	}
-	if root == nil {
-		ctx, cancel := a.ctx()
-		defer cancel()
-		r, err := a.Repo.GetMessage(ctx, a.id, m.RootID)
-		if err != nil {
-			return false
-		}
-		root = r
+	return root != nil && (root.UserID == id || slices.Contains(root.Participants, id))
+}
+
+// privacyBot is p's membership when p is a bot in privacy mode.
+func (a *channel) privacyBot(p *models.Principal) *botMember {
+	if b := a.bots[p.UserID]; p.Bot && b != nil && !b.seesAll {
+		cp := *b
+		return &cp
 	}
-	return root.UserID == id || slices.Contains(root.Participants, id)
+	return nil
+}
+
+// sentTo reports whether a bot in privacy mode was sent m. It runs off the
+// actor.
+func (a *channel) sentTo(ctx context.Context, id gocql.UUID, b *botMember, m *models.Message) bool {
+	var root *models.Message
+	if !ids.IsZero(m.RootID) {
+		root, _ = a.Repo.GetMessage(ctx, a.id, m.RootID)
+	}
+	return addressed(id, b, m, root)
 }
 
 // readsHistory refuses a bot in privacy mode what it was not sent.

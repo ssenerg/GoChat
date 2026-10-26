@@ -122,11 +122,25 @@ func TestAnswersGoToThePresserOnly(t *testing.T) {
 	}
 }
 
-// memRepo keeps one bot.
+// memRepo keeps one bot, whose account is at pts.
 type memRepo struct {
 	Repo
 	mu  sync.Mutex
 	bot *models.Bot
+	pts int64
+}
+
+func (r *memRepo) AccountPts(context.Context, gocql.UUID) (int64, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return r.pts, nil
+}
+
+func (r *memRepo) SetWebhook(_ context.Context, _ gocql.UUID, url, secret string) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.bot.WebhookURL, r.bot.WebhookSecret = url, secret
+	return nil
 }
 
 func (r *memRepo) GetBot(context.Context, gocql.UUID) (*models.Bot, error) {
@@ -221,14 +235,19 @@ func TestWebhookDeliversInOrderAndRetries(t *testing.T) {
 	}
 	botID := ids.New()
 	repo := &memRepo{bot: &models.Bot{ID: botID, WebhookURL: srv.URL, WebhookSecret: "s3cret"}}
-	// A stand-in sequencer with two updates.
+	// A stand-in sequencer with four updates, the first two about messages
+	// deleted since.
 	upd := engine.SpawnFunc(func(c *actor.Context) {
 		if d, ok := c.Message().(updates.GetDifference); ok {
+			if d.Pts < 2 {
+				actors.Reply(c, &updates.Difference{Pts: 2, More: true})
+				return
+			}
 			var out []*pb.Event
-			for pts := d.Pts + 1; pts <= 2; pts++ {
+			for pts := d.Pts + 1; pts <= 4; pts++ {
 				out = append(out, &pb.Event{Pts: pts, PtsCount: 1, Payload: &pb.Event_ChannelMuted{ChannelMuted: &pb.ChannelMuted{ChannelId: "c"}}})
 			}
-			actors.Reply(c, &updates.Difference{Updates: out, Pts: max(d.Pts, 2)})
+			actors.Reply(c, &updates.Difference{Updates: out, Pts: max(d.Pts, 4)})
 		}
 	}, "updates")
 	d := &WebhookDeps{
@@ -238,14 +257,36 @@ func TestWebhookDeliversInOrderAndRetries(t *testing.T) {
 	hooks := engine.Spawn(Webhooks(d), "webhooks")
 	defer engine.Poison(hooks)
 	engine.Send(hooks, Hooked{BotID: botID})
-	for deadline := time.Now().Add(5 * time.Second); repo.delivered() != 2; time.Sleep(20 * time.Millisecond) {
+	for deadline := time.Now().Add(5 * time.Second); repo.delivered() != 4; time.Sleep(20 * time.Millisecond) {
 		if time.Now().After(deadline) {
 			t.Fatalf("delivered up to %d", repo.delivered())
 		}
 	}
 	mu.Lock()
 	defer mu.Unlock()
-	if len(bodies) != 2 || bodies[0]["pts"] != "1" || bodies[1]["pts"] != "2" || bodies[0]["channel_muted"] == nil {
+	if len(bodies) != 2 || bodies[0]["pts"] != "3" || bodies[1]["pts"] != "4" || bodies[0]["channel_muted"] == nil {
 		t.Fatalf("bodies %v", bodies)
+	}
+}
+
+func TestAWebhookStartsFromNow(t *testing.T) {
+	repo := &memRepo{bot: &models.Bot{ID: ids.New()}, pts: 40}
+	w := &worker{Deps: &Deps{Logger: zap.NewNop(), Repo: repo, Cfg: &Config{AllowPrivateWebhooks: true}}}
+	bot := &models.Principal{UserID: repo.bot.ID, Bot: true}
+	ctx := context.Background()
+	if _, err := w.setWebhook(ctx, SetWebhook{P: bot, URL: "https://example.com/hook"}); err != nil {
+		t.Fatal(err)
+	}
+	if got := repo.delivered(); got != 40 {
+		t.Fatalf("a new webhook starts after %d, want 40", got)
+	}
+	// Changing its address keeps its place.
+	repo.pts = 45
+	if _, err := w.setWebhook(ctx, SetWebhook{P: bot, URL: "https://example.com/other"}); err != nil || repo.delivered() != 40 {
+		t.Fatalf("moved webhook: delivered %d, %v", repo.delivered(), err)
+	}
+	// No one confirms past the latest update.
+	if _, err := w.confirm(ctx, Confirm{P: bot, Pts: 1000}); err != nil || repo.delivered() != 45 {
+		t.Fatalf("confirmed %d, %v", repo.delivered(), err)
 	}
 }

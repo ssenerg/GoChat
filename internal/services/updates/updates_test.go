@@ -3,6 +3,7 @@ package updates
 import (
 	"context"
 	"errors"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -233,5 +234,44 @@ func TestUnloadedAccountStillDelivers(t *testing.T) {
 	repo.mu.Unlock()
 	if pts, err := actors.Ask[int64](ctx, engine, pid, State{UserID: user}); err != nil || pts != 0 {
 		t.Fatalf("state once loaded: %d, %v", pts, err)
+	}
+}
+
+func TestAPressKeepsOnlyAReference(t *testing.T) {
+	repo := newMemRepo()
+	engine, pid, seen := start(t, repo)
+	bot, channel := ids.New(), ids.New()
+	m := &models.Message{ID: ids.NewTime(), ChannelID: channel, Content: "Agree?"}
+	repo.messages[m.ID] = m
+	press := func(id string) {
+		engine.Send(pid, Push{UserIDs: []gocql.UUID{bot}, Event: &pb.Event{Payload: &pb.Event_CallbackQuery{CallbackQuery: &pb.CallbackQuery{
+			Id: id, Data: "yes", Message: &pb.Message{Id: m.ID.String(), ChannelId: channel.String(), Content: m.Content},
+		}}}})
+	}
+	press("q1")
+	seen.take(t, 1)
+	repo.mu.Lock()
+	logged := repo.logs[bot][0]
+	repo.mu.Unlock()
+	if logged.MessageID != m.ID || strings.Contains(string(logged.Event), "Agree?") {
+		t.Fatalf("logged %+v", logged)
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+	d, err := actors.Ask[*Difference](ctx, engine, pid, GetDifference{UserID: bot, Pts: 0})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if q := d.Updates[0].GetCallbackQuery(); q.GetId() != "q1" || q.GetData() != "yes" || q.GetMessage().GetContent() != "Agree?" {
+		t.Fatalf("replayed %v", d.Updates[0])
+	}
+	// A press on a message deleted since is left out.
+	press("q2")
+	seen.take(t, 1)
+	repo.mu.Lock()
+	delete(repo.messages, m.ID)
+	repo.mu.Unlock()
+	if d, err = actors.Ask[*Difference](ctx, engine, pid, GetDifference{UserID: bot, Pts: 1}); err != nil || len(d.Updates) != 0 || d.Pts != 2 {
+		t.Fatalf("a press on a deleted message: %+v, %v", d, err)
 	}
 }
