@@ -188,3 +188,29 @@ func TestHighlight(t *testing.T) {
 		t.Fatalf("long Highlight = %q", got)
 	}
 }
+
+func TestBotMessageShowsItsButtons(t *testing.T) {
+	r, err := New(10)
+	if err != nil {
+		t.Fatal(err)
+	}
+	bot := &pb.User{Id: "b", Username: "helper_bot", DisplayName: "Helper", Bot: true}
+	m := r.Message(&pb.Message{Id: "id1", ChannelId: "c1", Content: "Agree?", Author: bot, Markup: &pb.Markup{Rows: []*pb.ButtonRow{{Buttons: []*pb.Button{
+		{Text: "Yes <b>", Action: &pb.Button_CallbackData{CallbackData: `y"es`}},
+		{Text: "Docs", Action: &pb.Button_Url{Url: "https://example.com/docs"}},
+		{Text: "Bad", Action: &pb.Button_Url{Url: "javascript:alert(1)"}},
+	}}}}}, &pb.User{Id: "u", Username: "u"}, false)
+	b, err := r.MessageBytes("message", m)
+	if err != nil {
+		t.Fatal(err)
+	}
+	out := string(b)
+	for _, want := range []string{`class="badge bot"`, `data-press="y&#34;es"`, `data-message="id1"`, `Yes &lt;b&gt;`, `href="https://example.com/docs"`, `rel="nofollow noopener noreferrer"`} {
+		if !strings.Contains(out, want) {
+			t.Errorf("missing %s in %s", want, out)
+		}
+	}
+	if strings.Contains(out, "javascript:") {
+		t.Error("a javascript: link was rendered")
+	}
+}

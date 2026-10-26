@@ -3,6 +3,7 @@
   {{template "avatar" (dict "User" .Author "Size" "")}}
   <div class="msg-main">
     {{template "msg-content" .}}
+    {{with .Markup}}{{template "buttons" (dict "Msg" $ "Markup" .)}}{{end}}
     {{template "reactions" .Bar}}
     {{if and (not .RootId) .ReplyCount}}
     <button class="thread-link" hx-get="/m/{{.ChannelId}}/{{.Id}}/thread" hx-target="#thread">{{icon "reply"}}<span>{{.ReplyCount}} {{if eq .ReplyCount 1}}reply{{else}}replies{{end}}</span>{{with .LastReplyAt}}<time datetime="{{iso .AsTime}}">{{clock .AsTime}}</time>{{end}}</button>
@@ -22,7 +23,7 @@
 {{define "msg-content"}}
 <header>
   <strong class="author">{{name .Author}}</strong>
-  {{with .Author}}<span class="handle">@{{.Username}}</span>{{end}}
+  {{with .Author}}{{if .Bot}}<span class="badge bot">Bot</span>{{end}}<span class="handle">@{{.Username}}</span>{{end}}
   <time datetime="{{iso .Time}}" title="{{date .Time}}">{{clock .Time}}</time>
   {{if .Edited}}<span class="edited">(edited)</span>{{end}}
   {{if .Pinned}}<span class="flag">{{icon "pin"}}Pinned</span>{{end}}

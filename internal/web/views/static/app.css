@@ -171,6 +171,7 @@ fieldset.choice legend { font-weight: 600; font-size: .92rem; padding: 0 .3rem; 
 .status.error { color: var(--danger); }
 .badge { display: inline-block; padding: .05rem .55rem; border-radius: 99px; font-size: .78rem; font-weight: 700; background: var(--bg-hover); }
 .badge.on { background: color-mix(in srgb, var(--online) 24%, var(--bg)); color: var(--ok); }
+.badge.bot { background: var(--accent-soft); color: var(--accent-soft-ink); font-size: .68rem; letter-spacing: .03em; text-transform: uppercase; padding: 0 .45rem; vertical-align: 1px; }
 
 /* Auth and simple pages */
 .auth {
@@ -508,6 +509,8 @@ kbd {
 .toasts { position: fixed; right: 16px; bottom: 90px; z-index: 60; display: grid; gap: 8px; max-width: calc(100vw - 32px); }
 .toast { padding: .65rem .95rem; border-radius: 12px; background: var(--fg); color: var(--bg); box-shadow: var(--shadow); font-size: .9rem; }
 .toast.error { background: var(--danger-fill); color: var(--danger); border: 1px solid color-mix(in srgb, var(--danger) 25%, transparent); }
+.toast.bot { background: var(--bg); color: var(--fg); border: 1px solid var(--border); }
+.toast.sticky { cursor: pointer; border-color: var(--accent); }
 
 /* Mentions: the name stands out, and so does a message that calls you. */
 .mention { color: var(--accent-soft-ink); background: var(--accent-soft); border-radius: 5px; padding: 0 .2rem; font-weight: 650; }
@@ -865,3 +868,17 @@ label.status-choice:has(input:focus-visible) { outline: 2px solid var(--accent);
 .voice-room-bar .i { width: 18px; height: 18px; }
 /* Voice messages are a setting of text channels only. */
 form:has(input[name=type][value=voice]:checked) .voice-messages-option { display: none; }
+
+/* Bots: the buttons under their messages, the command list and settings. */
+.msg-buttons { display: grid; gap: 6px; margin: 6px 0 2px; max-width: 32rem; }
+.button-row { display: flex; flex-wrap: wrap; gap: 6px; }
+.button-row .btn { flex: 1 1 0; min-width: 6rem; justify-content: center; }
+.button-row .btn.pressed { opacity: .6; }
+.avatar.command { display: inline-grid; place-items: center; font-weight: 800; color: var(--accent-soft-ink); background: var(--accent-soft); }
+.token-once { border: 1px solid var(--accent); border-radius: 12px; padding: .6rem .9rem; margin: .5rem 0; background: var(--accent-soft); }
+.token-once code { word-break: break-all; }
+.bots li { display: grid; gap: .4rem; }
+.bot-manage > summary { list-style: none; width: max-content; cursor: pointer; }
+.bot-manage > summary::-webkit-details-marker { display: none; }
+.bot-manage[open] > summary { margin-bottom: .5rem; }
+.bot-manage form, .bot-manage .row { margin-bottom: .5rem; }

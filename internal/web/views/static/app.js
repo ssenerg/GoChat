@@ -234,6 +234,13 @@
     return m ? m[2].toLowerCase() : null;
   }
 
+  // / completion: the commands of the channel's bots, while the message
+  // starts with the command being typed.
+  function commandQuery(ta) {
+    var m = /^\/([a-z0-9_]{0,32})$/.exec(ta.value.slice(0, ta.selectionStart).toLowerCase());
+    return m ? m[1] : null;
+  }
+
   function suggestBox(ta) {
     var wrap = ta.closest(".composer-wrap");
     if (!wrap) return null;
@@ -256,7 +263,12 @@
 
   function updateSuggest(ta) {
     var box = suggestBox(ta);
+    var kind = "people";
     var q = mentionQuery(ta);
+    if (q === null) {
+      q = commandQuery(ta);
+      kind = "commands";
+    }
     var channel = ta.form.elements.channel_id;
     clearTimeout(suggestTimer);
     if (!box || q === null || !channel) {
@@ -266,7 +278,7 @@
     }
     var seq = ++suggestSeq;
     suggestTimer = setTimeout(function () {
-      fetch("/m/" + channel.value + "/people?q=" + encodeURIComponent(q), { headers: { "HX-Request": "true" }, credentials: "same-origin" })
+      fetch("/m/" + channel.value + "/" + kind + "?q=" + encodeURIComponent(q), { headers: { "HX-Request": "true" }, credentials: "same-origin" })
         .then(function (r) { return r.ok ? r.text() : ""; })
         .then(function (html) {
           if (seq !== suggestSeq) return;
@@ -279,7 +291,8 @@
 
   function acceptSuggest(ta, li) {
     var end = ta.selectionStart;
-    var before = ta.value.slice(0, end).replace(/@[A-Za-z0-9._-]{0,32}$/, li.dataset.insert);
+    var typed = li.dataset.insert.charAt(0) === "/" ? /^\/[A-Za-z0-9_]{0,32}$/ : /@[A-Za-z0-9._-]{0,32}$/;
+    var before = ta.value.slice(0, end).replace(typed, li.dataset.insert);
     ta.value = before + ta.value.slice(end);
     ta.selectionStart = ta.selectionEnd = before.length;
     suggestSeq++;
@@ -716,8 +729,9 @@
     }
   });
 
+  // A sticky toast, a bot's alert, stays until clicked.
   function expireToasts() {
-    document.querySelectorAll(".toast:not([data-expiring])").forEach(function (t) {
+    document.querySelectorAll(".toast:not([data-expiring]):not(.sticky)").forEach(function (t) {
       t.dataset.expiring = "1";
       setTimeout(function () { t.remove(); }, 5000);
     });
@@ -736,6 +750,19 @@
         setNotifyPref(notifyPref() === "off" ? "on" : "off");
         refreshNotifySetting();
       }
+      return;
+    }
+    var sticky = target.closest(".toast.sticky");
+    if (sticky) {
+      sticky.remove();
+      return;
+    }
+    // A bot's button: the bot hears of the press, and answers this tab.
+    var press = target.closest("[data-press]");
+    if (press) {
+      send({ op: "press", channel_id: press.dataset.channel, message_id: press.dataset.message, root_id: press.dataset.root || "", data: press.dataset.press });
+      press.classList.add("pressed");
+      setTimeout(function () { press.classList.remove("pressed"); }, 1500);
       return;
     }
     var option = target.closest(".suggest-box [role=option]");

@@ -1,0 +1,52 @@
+{{define "bots"}}
+<h2>Bots</h2>
+<p class="muted">Accounts you own that a program signs in to with a token, over the GoChat protocol or its HTTP Bot API. Add a bot to a team you may invite people to; people there add it to channels.</p>
+{{with .Error}}<p class="alert" role="alert">{{.}}</p>{{end}}
+{{with .Status}}<p class="status ok" role="status">{{.}}</p>{{end}}
+{{with .Token}}
+<div class="token-once" role="status">
+  <p><strong>The token of @{{.Bot}}</strong>, shown only now. Whoever holds it acts as the bot: keep it secret.</p>
+  <p class="secret"><code>{{.Value}}</code> <button class="btn sm" type="button" data-copy="{{.Value}}">Copy</button></p>
+</div>
+{{end}}
+<ul class="list bots">
+  {{range .List}}
+  <li>
+    <div class="person">{{template "avatar" (dict "User" .User "Size" "sm")}}<span><strong>{{name .User}}</strong> <span class="badge bot">Bot</span> <small class="muted">@{{.User.Username}}{{if .SeesAll}} · sees every message{{end}}</small>{{with .Description}}<br><small class="muted">{{.}}</small>{{end}}</span></div>
+    <details class="bot-manage">
+      <summary class="btn sm">Manage</summary>
+      <form hx-post="/settings/bots/{{.User.Id}}" hx-target="#bots" class="stack">
+        <label>Display name<input name="display_name" maxlength="64" required value="{{.User.DisplayName}}"></label>
+        <label>Description<textarea name="description" maxlength="512" rows="2">{{.Description}}</textarea></label>
+        <label class="inline"><input type="checkbox" name="sees_all" value="1"{{if .SeesAll}} checked{{end}}> Gets every message of the channels it is added to from now on, and reads their history. Otherwise it gets commands, mentions of it, replies in its threads and its direct messages.</label>
+        <div class="row"><button class="btn primary" type="submit">Save</button></div>
+      </form>
+      {{if $.Teams}}
+      <form hx-post="/settings/bots/{{.User.Id}}/team" hx-target="#bots" class="row">
+        <label class="row">Add to <select name="team_id">{{range $.Teams}}<option value="{{.Id}}">{{.DisplayName}}</option>{{end}}</select></label>
+        <button class="btn" type="submit">Add</button>
+      </form>
+      {{end}}
+      {{with .WebhookUrl}}<p class="muted">Its updates go to {{.}}.</p>{{end}}
+      <div class="row">
+        <button class="btn" hx-post="/settings/bots/{{.User.Id}}/token" hx-target="#bots" hx-confirm="Reset the token of @{{.User.Username}}? The old one stops working at once.">Reset token</button>
+        <button class="btn danger" hx-post="/settings/bots/{{.User.Id}}/delete" hx-target="#bots" hx-confirm="Delete @{{.User.Username}}? Its messages stay.">Delete</button>
+      </div>
+    </details>
+  </li>
+  {{else}}
+  <li class="muted">You have no bots yet.</li>
+  {{end}}
+</ul>
+<form hx-post="/settings/bots" hx-target="#bots" class="stack">
+  <h3 class="subhead">New bot</h3>
+  <label>Username, ending in "bot"<input name="username" required maxlength="32" placeholder="weather_bot" autocomplete="off"></label>
+  <label>Display name<input name="display_name" required maxlength="64" placeholder="Weather"></label>
+  <label>Description<textarea name="description" maxlength="512" rows="2"></textarea></label>
+  <div class="row"><button class="btn primary" type="submit">Create bot</button></div>
+</form>
+{{end}}
+
+{{define "buttons"}}<div class="msg-buttons">{{range .Markup.Rows}}<div class="button-row">{{range $b := .Buttons}}{{if $b.GetUrl}}<a class="btn sm" href="{{$b.GetUrl}}" target="_blank" rel="nofollow noopener noreferrer">{{$b.Text}}</a>{{else}}<button type="button" class="btn sm" data-press="{{$b.GetCallbackData}}" data-channel="{{$.Msg.ChannelId}}" data-message="{{$.Msg.Id}}" data-root="{{$.Msg.RootId}}">{{$b.Text}}</button>{{end}}{{end}}</div>{{end}}</div>{{end}}
+
+{{define "suggest-commands"}}{{if .}}<ul class="suggest" role="listbox" aria-label="Commands">{{range $i, $c := .}}<li role="option" data-insert="/{{$c.Command.Name}} " aria-selected="{{if eq $i 0}}true{{else}}false{{end}}"><span class="avatar xs command" aria-hidden="true">/</span><strong>/{{$c.Command.Name}}</strong><span class="muted">{{$c.Command.Description}} · {{name $c.Bot}}</span></li>{{end}}</ul>{{end}}{{end}}

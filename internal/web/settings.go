@@ -20,6 +20,7 @@ type settingsData struct {
 	Email    string
 	Sessions sessionsData
 	Storage  *pb.GetStorageUsageResponse
+	Bots     botsData
 }
 
 type sessionsData struct {
@@ -64,11 +65,17 @@ func (h *Handler) settingsPage(w http.ResponseWriter, r *http.Request) {
 		h.fail(w, r, err)
 		return
 	}
+	bots, err := h.loadBots(r)
+	if err != nil {
+		h.fail(w, r, err)
+		return
+	}
 	h.page(w, r, http.StatusOK, "settings", settingsData{
 		Page:     Page{Title: "Settings", CSRF: h.csrfToken(w, r), User: me.User},
 		Email:    me.Email,
 		Sessions: listed(sessions.Sessions),
 		Storage:  storage,
+		Bots:     bots,
 	})
 }
 
