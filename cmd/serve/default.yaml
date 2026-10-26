@@ -142,6 +142,12 @@ services:
     server_queue_limit: 4096
     members_ttl: 15s
     op_timeout: 10s
+  updates:
+    # How long updates are kept for apps and bots to catch up on.
+    retention: 168h
+    idle_timeout: 10m
+    op_timeout: 10s
+    difference_limit: 100
   hub:
     gateway_queue_limit: 65536
     presence_grace: 10s

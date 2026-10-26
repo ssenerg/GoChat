@@ -46,7 +46,7 @@ func TestJoinUndoneWhenTheTeamLeft(t *testing.T) {
 	}
 	repo := &leavingRepo{}
 	a := &channel{
-		Deps: &Deps{Logger: zap.NewNop(), Cfg: &Config{OpTimeout: time.Second}, Repo: repo, Authz: az},
+		Deps: &Deps{Logger: zap.NewNop(), Cfg: &Config{OpTimeout: time.Second}, Repo: logged(repo), UpdatesCfg: testUpdates, Authz: az},
 		id:   ids.New(), ch: &models.Channel{TeamID: ids.New(), Kind: models.ChannelPublic},
 		members: map[gocql.UUID]models.ChannelRole{}, typing: map[gocql.UUID]time.Time{},
 	}

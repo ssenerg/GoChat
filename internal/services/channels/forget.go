@@ -97,22 +97,22 @@ func (a *channel) erase(ctx context.Context, caller gocql.UUID) error {
 	a.snapshot()
 	people := convert.PeerIDs(a.ch, gocql.UUID{})
 	// The purge outlives the request.
-	go a.purge(context.WithoutCancel(ctx), people)
+	go a.purge(context.WithoutCancel(ctx), people, a.pts)
 	return nil
 }
 
 // purge deletes an erased conversation's messages, threads, reactions,
 // pins, files and search entries, then the conversation. It runs off the
 // actor and touches none of its state.
-func (a *channel) purge(ctx context.Context, people []gocql.UUID) {
+func (a *channel) purge(ctx context.Context, people []gocql.UUID, pts int64) {
 	ctx, cancel := context.WithTimeout(ctx, purgeTimeout)
 	defer cancel()
-	if err := a.purgeAll(ctx, people); err != nil {
+	if err := a.purgeAll(ctx, people, pts); err != nil {
 		a.Logger.Error("failed to delete an erased conversation", zap.String("channel", a.id.String()), zap.Error(err))
 	}
 }
 
-func (a *channel) purgeAll(ctx context.Context, people []gocql.UUID) error {
+func (a *channel) purgeAll(ctx context.Context, people []gocql.UUID, pts int64) error {
 	// A conversation's messages are filed for search under each of its
 	// people.
 	drop := func(m *models.Message) []gocql.UUID {
@@ -173,6 +173,10 @@ func (a *channel) purgeAll(ctx context.Context, people []gocql.UUID) error {
 		if err := a.Repo.ClearMentions(ctx, id, a.id); err != nil {
 			return err
 		}
+	}
+	// The log would replay the conversation's deletions, and its changes.
+	if err := a.Repo.DeleteChannelUpdates(ctx, a.id, pts); err != nil {
+		return err
 	}
 	return a.Repo.DeleteChannel(ctx, a.id)
 }

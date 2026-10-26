@@ -24,6 +24,7 @@ import (
 	"github.com/ssenerg/gochat/internal/services/convert"
 	"github.com/ssenerg/gochat/internal/services/hub"
 	"github.com/ssenerg/gochat/internal/services/index"
+	"github.com/ssenerg/gochat/internal/services/updates"
 )
 
 // DefaultChannel is the channel every team member stays in.
@@ -52,6 +53,10 @@ type channel struct {
 	asked      bool
 	handled    uint64
 	repeater   *actor.SendRepeater
+	// pts numbers the channel's latest update; stamp is when its state was
+	// last written, so a later number always wins.
+	pts   int64
+	stamp int64
 }
 
 func newChannel(d *Deps, id gocql.UUID) actor.Producer {
@@ -142,6 +147,13 @@ func (a *channel) load() {
 		a.loadErr = ierrors.Unavailable("channel is unavailable, try again")
 		return
 	}
+	pts, err := a.Repo.ChannelPts(ctx, a.id)
+	if err != nil {
+		a.Logger.Error("failed to load channel updates", zap.String("channel", a.id.String()), zap.Error(err))
+		a.loadErr = ierrors.Unavailable("channel is unavailable, try again")
+		return
+	}
+	a.pts = pts
 	a.pins = len(pins)
 	a.ch = ch
 	a.bucket, a.hasBucket = bucket, has
@@ -181,10 +193,30 @@ func (a *channel) deliver(userID gocql.UUID, ev *pb.Event) {
 	a.Engine.Send(a.Hub, hub.Deliver{UserIDs: []string{userID.String()}, Event: ev})
 }
 
-// broadcast sends ev to every member.
+// broadcast numbers ev in the channel's updates and sends it to every
+// member.
 func (a *channel) broadcast(ev *pb.Event) {
+	a.number(ev)
 	if len(a.recipients) > 0 {
 		a.Engine.Send(a.Hub, hub.Deliver{Members: a.recipients, Event: ev})
+	}
+}
+
+// number gives ev the channel's next number and logs it, before anyone
+// sees it, so a difference read after it was seen finds it.
+func (a *channel) number(ev *pb.Event) {
+	a.pts++
+	ev.Pts, ev.PtsCount, ev.PtsChannelId = a.pts, 1, a.id.String()
+	if cu := ev.GetChannelUpdated(); cu != nil {
+		cu.Channel.Pts = a.pts
+	}
+	e := updates.Entry(ev)
+	e.Pts, e.ChannelID = a.pts, gocql.UUID{}
+	a.stamp = max(time.Now().UnixMicro(), a.stamp+1)
+	ctx, cancel := a.ctx()
+	defer cancel()
+	if err := a.Repo.AppendChannelUpdate(ctx, a.id, e, a.stamp, a.UpdatesCfg.Retention); err != nil {
+		a.Logger.Warn("failed to log a channel update", zap.String("channel", a.id.String()), zap.Error(err))
 	}
 }
 
@@ -259,6 +291,8 @@ func (a *channel) handle(c *actor.Context, req Request) {
 		out, err = a.move(msg)
 	case DeleteConversation:
 		out, err = a.deleteConversation(msg)
+	case Difference:
+		err = a.difference(c, msg)
 	default:
 		return
 	}
@@ -280,7 +314,7 @@ func (a *channel) voiceRefuses(req Request) error {
 		return nil
 	}
 	switch req.(type) {
-	case Post, Edit, Delete, History, GetMessage, Thread, ThreadRead, Typing, React, Pin, Pins, Save, Follow, Mute, MarkRead, SetVoice:
+	case Post, Edit, Delete, History, GetMessage, Thread, ThreadRead, Typing, React, Pin, Pins, Save, Follow, Mute, MarkRead, SetVoice, Difference:
 		return ierrors.FailedPrecondition("voice channels carry no messages")
 	case Join, AddMember:
 		return ierrors.FailedPrecondition("everyone in the team may talk in a voice channel: join the talk instead")
@@ -392,6 +426,7 @@ func (a *channel) channelFor(userID gocql.UUID, role models.ChannelRole) (*pb.Ch
 	if !a.ch.Kind.Conversation() {
 		out := convert.Channel(a.ch, role, gocql.UUID{}, nil)
 		out.PinnedCount = int32(a.pins) //nolint:gosec // at most maxPins
+		out.Pts = a.pts
 		return out, nil
 	}
 	ctx, cancel := a.ctx()
@@ -402,6 +437,7 @@ func (a *channel) channelFor(userID gocql.UUID, role models.ChannelRole) (*pb.Ch
 	}
 	out := convert.Conversation(a.ch, role, gocql.UUID{}, userID, people)
 	out.PinnedCount = int32(a.pins) //nolint:gosec // at most maxPins
+	out.Pts = a.pts
 	return out, nil
 }
 
@@ -1175,19 +1211,31 @@ func (a *channel) thread(c *actor.Context, msg Thread) error {
 
 // render attaches authors and attachments to stored messages.
 func (a *channel) render(ctx context.Context, list []*models.Message) ([]*pb.Message, error) {
+	return Render(a.Deps)(ctx, a.id, list)
+}
+
+// Render renders a channel's stored messages with their authors,
+// attachments and reactions.
+func Render(d *Deps) updates.Renderer {
+	return func(ctx context.Context, channelID gocql.UUID, list []*models.Message) ([]*pb.Message, error) {
+		return render(ctx, d, channelID, list)
+	}
+}
+
+func render(ctx context.Context, d *Deps, channelID gocql.UUID, list []*models.Message) ([]*pb.Message, error) {
 	userIDs := make([]gocql.UUID, 0, len(list))
 	var attIDs []gocql.UUID
 	for _, m := range list {
 		userIDs = append(userIDs, m.UserID)
 		attIDs = append(attIDs, m.Attachments...)
 	}
-	authors, err := a.Users.GetMany(ctx, userIDs)
+	authors, err := d.Users.GetMany(ctx, userIDs)
 	if err != nil {
 		return nil, err
 	}
 	atts := make(map[gocql.UUID]*models.Attachment, len(attIDs))
 	for start := 0; start < len(attIDs); start += 100 {
-		found, err := a.Repo.GetAttachments(ctx, attIDs[start:min(start+100, len(attIDs))])
+		found, err := d.Repo.GetAttachments(ctx, attIDs[start:min(start+100, len(attIDs))])
 		if err != nil {
 			return nil, err
 		}
@@ -1199,7 +1247,7 @@ func (a *channel) render(ctx context.Context, list []*models.Message) ([]*pb.Mes
 	for i, m := range list {
 		msgIDs[i] = m.ID
 	}
-	rows, err := a.Repo.ListReactions(ctx, a.id, msgIDs)
+	rows, err := d.Repo.ListReactions(ctx, channelID, msgIDs)
 	if err != nil {
 		return nil, err
 	}

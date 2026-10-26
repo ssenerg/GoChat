@@ -186,3 +186,11 @@ type Principal struct {
 	SessionID   string
 	ExpiresAt   time.Time
 }
+
+// The kinds of an update log's entries: a message's post or edit is kept
+// as a reference to it, anything else as its event.
+const (
+	UpdateEvent  = 0
+	UpdatePosted = 1
+	UpdateEdited = 2
+)

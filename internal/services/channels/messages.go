@@ -188,4 +188,12 @@ type Move struct {
 	TeamID gocql.UUID
 }
 
+// Difference replies with *updates.Difference: the channel's updates after
+// Pts, for one of its members.
+type Difference struct {
+	Target
+	Pts   int64
+	Limit int
+}
+
 type Done struct{}

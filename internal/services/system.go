@@ -69,7 +69,7 @@ func Start(logger *zap.Logger, cfg *Config, repo *scylla.Repository, storage *mi
 	}), "voice", actor.WithID("main"), recovered)
 	s.Channels = engine.Spawn(channels.New(&channels.Deps{
 		Logger: logger.Named("channels"), Cfg: cfg.Channels, Repo: repo, Storage: storage,
-		Authz: az, Users: userCache, Engine: engine, Hub: s.Hub, Search: s.filing,
+		Authz: az, Users: userCache, Engine: engine, Hub: s.Hub, Search: s.filing, UpdatesCfg: cfg.Updates,
 	}), "channels", actor.WithID("main"), recovered)
 	fileDeps := &files.Deps{
 		Logger: logger.Named("files"), Cfg: cfg.Files, Repo: repo, Storage: storage,

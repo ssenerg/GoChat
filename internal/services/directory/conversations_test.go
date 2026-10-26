@@ -476,3 +476,7 @@ func TestClearedConversationsWaitForANewMessage(t *testing.T) {
 		t.Fatal("a new message did not bring the conversation back")
 	}
 }
+
+func (r *teamsRepo) ChannelsPts(context.Context, []gocql.UUID) (map[gocql.UUID]int64, error) {
+	return nil, nil
+}

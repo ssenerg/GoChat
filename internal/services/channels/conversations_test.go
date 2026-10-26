@@ -84,7 +84,7 @@ func conversation(t *testing.T, repo *teamRepo, ch *models.Channel, members ...g
 	}
 	a := &channel{
 		Deps: &Deps{
-			Logger: zap.NewNop(), Cfg: &Config{OpTimeout: time.Second}, Repo: repo,
+			Logger: zap.NewNop(), Cfg: &Config{OpTimeout: time.Second}, Repo: logged(repo), UpdatesCfg: testUpdates,
 			Users: users.NewCache(repo, 10, time.Minute), Engine: engine, Hub: engine.SpawnFunc(func(*actor.Context) {}, "hub"),
 		},
 		id: ch.ID, ch: ch, members: map[gocql.UUID]models.ChannelRole{}, typing: map[gocql.UUID]time.Time{},

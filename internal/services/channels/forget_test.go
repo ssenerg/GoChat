@@ -150,7 +150,7 @@ func direct(t *testing.T, repo *forgetRepo, x, y gocql.UUID) (*channel, *events)
 	ch := &models.Channel{ID: ids.New(), TeamID: team, Name: x.String() + ":" + y.String(), Kind: models.ChannelDirect}
 	a := &channel{
 		Deps: &Deps{
-			Logger: zap.NewNop(), Cfg: &Config{OpTimeout: time.Second}, Repo: repo,
+			Logger: zap.NewNop(), Cfg: &Config{OpTimeout: time.Second}, Repo: logged(repo), UpdatesCfg: testUpdates,
 			Users: users.NewCache(repo, 10, time.Minute), Engine: engine, Hub: sink,
 		},
 		id: ch.ID, ch: ch, members: map[gocql.UUID]models.ChannelRole{}, cleared: map[gocql.UUID]gocql.UUID{},
@@ -275,6 +275,9 @@ func TestDeletingForBoth(t *testing.T) {
 	}
 	if len(repo.gone) != 2 || len(repo.threads) != 1 || repo.threads[0] != root {
 		t.Fatalf("deleted messages %v, threads %v", repo.gone, repo.threads)
+	}
+	if log := a.Repo.(*withLog); !log.dropped {
+		t.Fatal("the conversation's updates were kept")
 	}
 	if _, err := a.deleteConversation(DeleteConversation{Target: Target{P: principalOf(me), ChannelID: a.id}}); !ierrors.Is(err, ierrors.CodeNotFound) {
 		t.Fatalf("deleting a deleted conversation: %v", err)
