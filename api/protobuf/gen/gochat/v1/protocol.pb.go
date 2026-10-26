@@ -156,7 +156,7 @@ func (*Up_Watch) isUp_Frame() {}
 
 func (*Up_Ping) isUp_Frame() {}
 
-// Hello opens the session of the socket.
+// SocketHello opens the session of the socket.
 type SocketHello struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	// A session token from AuthService, or a bot token.
@@ -476,9 +476,9 @@ func (*Down_Ephemeral) isDown_Frame() {}
 
 func (*Down_Pong) isDown_Frame() {}
 
-// Welcome says the socket serves the caller from now on. It comes again
-// when the server reconnected the socket; resumed tells whether the
-// updates in between were replayed.
+// SocketWelcome says the socket serves the caller from now on. It comes
+// again when the server reconnected the socket, after which the stream
+// goes on from pts as before, unless reload is set.
 type SocketWelcome struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	User  *User                  `protobuf:"bytes,1,opt,name=user,proto3" json:"user,omitempty"`
@@ -492,10 +492,10 @@ type SocketWelcome struct {
 	Pts int64 `protobuf:"varint,4,opt,name=pts,proto3" json:"pts,omitempty"`
 	// The layer the server speaks.
 	Layer uint32 `protobuf:"varint,5,opt,name=layer,proto3" json:"layer,omitempty"`
-	// Set when the client's SocketHello.pts, or what it got before the server
-	// reconnected the socket, is older than the server keeps: the client
-	// must load what it shows again, and take pts as its state.
-	Reset_        bool `protobuf:"varint,6,opt,name=reset,proto3" json:"reset,omitempty"`
+	// Set when the client's SocketHello.pts, or what it got before the
+	// server reconnected the socket, is older than the server keeps: the
+	// client loads what it shows again and takes pts as its state.
+	Reload        bool `protobuf:"varint,6,opt,name=reload,proto3" json:"reload,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -565,9 +565,9 @@ func (x *SocketWelcome) GetLayer() uint32 {
 	return 0
 }
 
-func (x *SocketWelcome) GetReset_() bool {
+func (x *SocketWelcome) GetReload() bool {
 	if x != nil {
-		return x.Reset_
+		return x.Reload
 	}
 	return false
 }
@@ -785,7 +785,7 @@ const file_gochat_v1_protocol_proto_rawDesc = "" +
 	"\aupdates\x18\x03 \x01(\v2\x12.gochat.v1.UpdatesH\x00R\aupdates\x120\n" +
 	"\tephemeral\x18\x04 \x01(\v2\x10.gochat.v1.EventH\x00R\tephemeral\x12%\n" +
 	"\x04pong\x18\x05 \x01(\v2\x0f.gochat.v1.PongH\x00R\x04pongB\a\n" +
-	"\x05frame\"\xcc\x01\n" +
+	"\x05frame\"\xce\x01\n" +
 	"\rSocketWelcome\x12#\n" +
 	"\x04user\x18\x01 \x01(\v2\x0f.gochat.v1.UserR\x04user\x12\x1d\n" +
 	"\n" +
@@ -793,8 +793,8 @@ const file_gochat_v1_protocol_proto_rawDesc = "" +
 	"\n" +
 	"expires_at\x18\x03 \x01(\v2\x1a.google.protobuf.TimestampR\texpiresAt\x12\x10\n" +
 	"\x03pts\x18\x04 \x01(\x03R\x03pts\x12\x14\n" +
-	"\x05layer\x18\x05 \x01(\rR\x05layer\x12\x14\n" +
-	"\x05reset\x18\x06 \x01(\bR\x05reset\"l\n" +
+	"\x05layer\x18\x05 \x01(\rR\x05layer\x12\x16\n" +
+	"\x06reload\x18\x06 \x01(\bR\x06reload\"l\n" +
 	"\x06Result\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\x04R\x02id\x12\x1a\n" +
 	"\apayload\x18\x02 \x01(\fH\x00R\apayload\x12+\n" +

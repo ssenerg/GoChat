@@ -234,6 +234,9 @@ func (h *Handler) Routes() http.Handler {
 	mux.HandleFunc("GET /api/v1/files/{id}", h.apiDownload)
 	mux.HandleFunc("GET /api/v1/photos/{kind}/{id}/{version}", h.apiPhoto)
 	mux.HandleFunc("POST /api/v1/photo", h.apiSetPhoto)
+	mux.HandleFunc("GET /api/v2/socket", h.apiSocket)
+	mux.HandleFunc("POST /api/v2/files", h.apiUpload)
+	mux.HandleFunc("GET /api/v2/files/{id}", h.apiDownload)
 
 	return h.recover(h.headers(h.throttle(mux)))
 }

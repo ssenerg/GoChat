@@ -96,10 +96,10 @@ func (h *Handler) allow(r *http.Request) (bool, time.Duration) {
 	return h.reqs.Allow(ip)
 }
 
-// isAPI reports whether r is a call of the client API, which answers
-// ApiErrors.
+// isAPI reports whether r is a call of the client API or of the GoChat
+// protocol, which answer ApiErrors.
 func isAPI(r *http.Request) bool {
-	return strings.HasPrefix(r.URL.Path, "/api/v1/")
+	return strings.HasPrefix(r.URL.Path, "/api/v1/") || strings.HasPrefix(r.URL.Path, "/api/v2/")
 }
 
 func retryAfter(w http.ResponseWriter, wait time.Duration) {

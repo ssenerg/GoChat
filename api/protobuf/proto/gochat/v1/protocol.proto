@@ -77,7 +77,7 @@ message Down {
 
 // SocketWelcome says the socket serves the caller from now on. It comes
 // again when the server reconnected the socket, after which the stream
-// goes on from pts as before, unless reset is set.
+// goes on from pts as before, unless reload is set.
 message SocketWelcome {
   User user = 1;
   // The session's public id; a bot's names its token.
@@ -93,7 +93,7 @@ message SocketWelcome {
   // Set when the client's SocketHello.pts, or what it got before the
   // server reconnected the socket, is older than the server keeps: the
   // client loads what it shows again and takes pts as its state.
-  bool reset = 6;
+  bool reload = 6;
 }
 
 // Result is the outcome of a Call.

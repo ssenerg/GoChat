@@ -176,42 +176,49 @@ func (s *clientSession) close(code websocket.StatusCode) {
 }
 
 // write owns the socket's sending side.
-func (s *clientSession) write() {
+func (s *clientSession) write() { writeBinary(s.ws, s.out, s.Cfg) }
+
+func (s *clientSession) ping(ctx context.Context) { pingLoop(ctx, s.ws, s.Cfg) }
+
+// writeBinary writes what out holds to ws, as binary messages, until out
+// closes.
+func writeBinary(ws *websocket.Conn, out *outbox, cfg *Config) {
 	for {
-		items, done, code := s.out.take()
+		items, done, code := out.take()
 		for _, b := range items {
-			ctx, cancel := context.WithTimeout(context.Background(), s.Cfg.WriteTimeout)
-			err := s.ws.Write(ctx, websocket.MessageBinary, b)
+			ctx, cancel := context.WithTimeout(context.Background(), cfg.WriteTimeout)
+			err := ws.Write(ctx, websocket.MessageBinary, b)
 			cancel()
-			s.out.sent(len(b))
+			out.sent(len(b))
 			if err != nil {
-				s.out.close(0)
-				_ = s.ws.CloseNow()
+				out.close(0)
+				_ = ws.CloseNow()
 				return
 			}
 		}
 		if done {
 			if code != 0 {
-				_ = s.ws.Close(code, "")
+				_ = ws.Close(code, "")
 			}
 			return
 		}
 	}
 }
 
-func (s *clientSession) ping(ctx context.Context) {
-	t := time.NewTicker(s.Cfg.PingInterval)
+// pingLoop pings ws until ctx ends, closing a socket that stops answering.
+func pingLoop(ctx context.Context, ws *websocket.Conn, cfg *Config) {
+	t := time.NewTicker(cfg.PingInterval)
 	defer t.Stop()
 	for {
 		select {
 		case <-ctx.Done():
 			return
 		case <-t.C:
-			pctx, cancel := context.WithTimeout(ctx, s.Cfg.WriteTimeout)
-			err := s.ws.Ping(pctx)
+			pctx, cancel := context.WithTimeout(ctx, cfg.WriteTimeout)
+			err := ws.Ping(pctx)
 			cancel()
 			if err != nil {
-				_ = s.ws.CloseNow()
+				_ = ws.CloseNow()
 				return
 			}
 		}

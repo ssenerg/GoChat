@@ -49,11 +49,16 @@ The server answers `Down.welcome` once the token checks out:
 | `expires_at` | When the session ends, and the socket with it. A bot's renews every day; it reconnects then. |
 | `pts` | The account update number the stream continues from. |
 | `layer` | The layer the server speaks. |
-| `reset` | The client's `pts` is older than the server keeps: reload, then take `pts` as the state. |
+| `reload` | The client's `pts` is older than the server keeps: reload what it shows, then take `pts` as the state. |
 
-A client may send calls right after its hello; they wait for the welcome.
-The server sends WebSocket pings; a client may also send `Up.ping` and gets
-`Down.pong` with the same id.
+Calls may follow the hello at once. The server sends WebSocket pings; a
+client may also send `Up.ping` and gets `Down.pong` with the same id.
+
+A hello without a token opens an anonymous socket, to sign in over: its
+welcome names no user, and it may only call `AuthService.GetSignupInfo`,
+`SignUp`, `Login` and `VerifyMFA`, and `TeamService.GetInvite`. Once signed
+in, the client says hello again on the same socket, with the session's
+token.
 
 A socket the server closes with a code of 4000 or more says why:
 
@@ -157,7 +162,7 @@ changes only to sockets that said they show the person (`Up.watch`).
 welcome's `pts` is the hello's: the client applies what follows as usual.
 When the server reconnects the socket on its side, it sends a welcome again
 and replays what the client missed meanwhile. When the replay would be too
-long, the welcome has `reset` set: the client loads what it shows again
+long, the welcome has `reload` set: the client loads what it shows again
 (teams, channels, the open channel's messages) and takes the welcome's
 `pts` as its number.
 
