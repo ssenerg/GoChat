@@ -18,6 +18,7 @@ import (
 	"github.com/ssenerg/gochat/internal/services/files"
 	"github.com/ssenerg/gochat/internal/services/hub"
 	"github.com/ssenerg/gochat/internal/services/index"
+	"github.com/ssenerg/gochat/internal/services/updates"
 	"github.com/ssenerg/gochat/internal/services/users"
 	"github.com/ssenerg/gochat/internal/services/voice"
 )
@@ -35,13 +36,15 @@ type System struct {
 	Files     *actor.PID
 	Search    *actor.PID
 	Voice     *actor.PID
-	Sessions  *accounts.Deps
-	Users     *users.Cache
-	janitor   *actor.PID
-	filing    *actor.PID
-	backfill  *actor.PID
-	adopter   *actor.PID
-	events    *actor.PID
+	// Updates numbers what happens to each account.
+	Updates  *actor.PID
+	Sessions *accounts.Deps
+	Users    *users.Cache
+	janitor  *actor.PID
+	filing   *actor.PID
+	backfill *actor.PID
+	adopter  *actor.PID
+	events   *actor.PID
 }
 
 func Start(logger *zap.Logger, cfg *Config, repo *scylla.Repository, storage *minio.Storage, az *authz.Authorizer) (*System, error) {
@@ -67,10 +70,16 @@ func Start(logger *zap.Logger, cfg *Config, repo *scylla.Repository, storage *mi
 	s.Voice = engine.Spawn(voice.New(&voice.Deps{
 		Logger: logger.Named("voice"), Cfg: cfg.Voice, Repo: repo, Engine: engine, Hub: s.Hub,
 	}), "voice", actor.WithID("main"), recovered)
-	s.Channels = engine.Spawn(channels.New(&channels.Deps{
+	channelDeps := &channels.Deps{
 		Logger: logger.Named("channels"), Cfg: cfg.Channels, Repo: repo, Storage: storage,
 		Authz: az, Users: userCache, Engine: engine, Hub: s.Hub, Search: s.filing, UpdatesCfg: cfg.Updates,
-	}), "channels", actor.WithID("main"), recovered)
+	}
+	s.Updates = engine.Spawn(updates.New(&updates.Deps{
+		Logger: logger.Named("updates"), Cfg: cfg.Updates, Repo: repo, Engine: engine, Hub: s.Hub,
+		Render: channels.Render(channelDeps),
+	}), "updates", actor.WithID("main"), recovered)
+	channelDeps.Updates = s.Updates
+	s.Channels = engine.Spawn(channels.New(channelDeps), "channels", actor.WithID("main"), recovered)
 	fileDeps := &files.Deps{
 		Logger: logger.Named("files"), Cfg: cfg.Files, Repo: repo, Storage: storage,
 		Authz: az, Engine: engine, Channels: s.Channels,
@@ -79,7 +88,7 @@ func Start(logger *zap.Logger, cfg *Config, repo *scylla.Repository, storage *mi
 	s.janitor = engine.Spawn(files.Janitor(fileDeps), "janitor", actor.WithID("main"), recovered)
 	directoryDeps := &directory.Deps{
 		Logger: logger.Named("directory"), Cfg: cfg.Directory, Repo: repo, Storage: storage, Authz: az,
-		Users: userCache, Engine: engine, Hub: s.Hub, Channels: s.Channels, Voice: s.Voice,
+		Users: userCache, Engine: engine, Hub: s.Hub, Channels: s.Channels, Voice: s.Voice, Updates: s.Updates,
 	}
 	s.Directory = engine.Spawn(directory.Pool(directoryDeps), "directory", actor.WithID("main"))
 	s.adopter = engine.Spawn(directory.Adopt(directoryDeps), "directory", actor.WithID("adopt"), recovered)
@@ -105,7 +114,7 @@ func (s *System) Stop(timeout time.Duration) {
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
-	for _, pid := range []*actor.PID{s.Accounts, s.Auth, s.Directory, s.Files, s.Search, s.backfill, s.adopter, s.janitor, s.Channels, s.Voice, s.filing, s.Hub, s.events} {
+	for _, pid := range []*actor.PID{s.Accounts, s.Auth, s.Directory, s.Files, s.Search, s.backfill, s.adopter, s.janitor, s.Channels, s.Voice, s.Updates, s.filing, s.Hub, s.events} {
 		if pid == nil {
 			continue
 		}

@@ -188,9 +188,13 @@ func (a *channel) snapshot() {
 	a.recipients = out
 }
 
-// deliver sends ev to one user.
+// deliver numbers ev in one user's updates and sends it to them.
 func (a *channel) deliver(userID gocql.UUID, ev *pb.Event) {
-	a.Engine.Send(a.Hub, hub.Deliver{UserIDs: []string{userID.String()}, Event: ev})
+	if a.Updates == nil {
+		a.Engine.Send(a.Hub, hub.Deliver{UserIDs: []string{userID.String()}, Event: ev})
+		return
+	}
+	a.Engine.Send(a.Updates, updates.Push{UserIDs: []gocql.UUID{userID}, Event: ev})
 }
 
 // broadcast numbers ev in the channel's updates and sends it to every

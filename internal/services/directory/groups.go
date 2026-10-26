@@ -103,9 +103,9 @@ func (w *worker) openGroup(ctx context.Context, msg OpenGroup) (*pb.Channel, err
 	if chID == ch.ID {
 		if people, err := w.Users.GetMany(ctx, members); err == nil {
 			for _, id := range members {
-				w.deliver(id, &pb.Event{Payload: &pb.Event_ChannelJoined{ChannelJoined: &pb.ChannelJoined{
+				w.deliver(&pb.Event{Payload: &pb.Event_ChannelJoined{ChannelJoined: &pb.ChannelJoined{
 					Channel: convert.Conversation(ch, models.ChannelRoleMember, gocql.UUID{}, id, people),
-				}}})
+				}}}, id)
 			}
 		}
 	}
