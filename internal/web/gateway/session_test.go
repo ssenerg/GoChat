@@ -24,7 +24,7 @@ func quietSession(t *testing.T) *session {
 		channelID: "here", sidebar: map[string]bool{"here": true, "there": true},
 		mentions: map[string]int{}, unread: map[string]bool{}, muted: map[string]bool{},
 		directs: map[string]bool{}, names: map[string]string{}, peers: map[string]bool{}, peerOf: map[string]string{},
-		saved: map[string]bool{}, reads: map[string]string{},
+		saved: map[string]bool{}, reads: map[string]string{}, presses: map[string]*press{},
 	}
 }
 
@@ -35,6 +35,13 @@ func (s *session) frames() []string {
 		out[i] = string(b)
 	}
 	return out
+}
+
+// quiet reports whether the session queued no frame, without waiting.
+func (s *session) quiet() bool {
+	s.out.mu.Lock()
+	defer s.out.mu.Unlock()
+	return len(s.out.items) == 0
 }
 
 func posted(id, channel string) *pb.Event {
@@ -97,5 +104,36 @@ func TestOtherTeamsConversationsStayThere(t *testing.T) {
 			t.Errorf("%s: notified %v, marked the threads %v", c.name, notify, inbox)
 		}
 		s.out = newOutbox(1 << 20)
+	}
+}
+
+func answer(id, text string) *pb.Event {
+	return &pb.Event{Payload: &pb.Event_CallbackAnswer{CallbackAnswer: &pb.CallbackAnswer{
+		QueryId: id, Text: text, Bot: &pb.User{Id: "bot", DisplayName: "Echo"},
+	}}}
+}
+
+func TestAnswersShowOnlyInThePressingTab(t *testing.T) {
+	s := quietSession(t)
+	s.pressed("q1")
+	s.event(nil, answer("q1", "thanks"))
+	if got := s.frames(); len(got) != 1 || !strings.Contains(got[0], "Echo: thanks") {
+		t.Fatalf("the answer: %q", got)
+	}
+	// An answer can beat the tab's own word of its press.
+	s.event(nil, answer("q2", "fast"))
+	if !s.quiet() {
+		t.Fatalf("an answer shown before its press: %q", s.frames())
+	}
+	s.pressed("q2")
+	if got := s.frames(); len(got) != 1 || !strings.Contains(got[0], "Echo: fast") {
+		t.Fatalf("the early answer: %q", got)
+	}
+	// Another tab's press never shows here, and the held answers are few.
+	for i := range 2 * maxPresses {
+		s.event(nil, answer(strings.Repeat("x", i+1), "theirs"))
+	}
+	if !s.quiet() || len(s.presses) > maxPresses {
+		t.Fatalf("another tab's answers shown, or %d held", len(s.presses))
 	}
 }

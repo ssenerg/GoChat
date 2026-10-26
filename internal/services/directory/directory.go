@@ -146,6 +146,8 @@ func (w *worker) Receive(c *actor.Context) {
 		out, err = w.removeTeamMember(ctx, msg)
 	case AddBot:
 		out, err = w.addBot(ctx, msg)
+	case RemoveBot:
+		out, err = w.removeBot(ctx, msg)
 	case UpdateTeamMemberRole:
 		out, err = w.updateTeamMemberRole(ctx, msg)
 	case CreateInvite:

@@ -269,6 +269,9 @@ func (w *worker) delete(ctx context.Context, msg Delete) (Done, error) {
 	if err != nil {
 		return Done{}, err
 	}
+	if _, err := actors.Ask[directory.Done](ctx, w.Engine, w.Directory, directory.RemoveBot{P: msg.P, BotID: b.ID}); err != nil {
+		return Done{}, err
+	}
 	if err := w.Repo.DeleteBot(ctx, b); err != nil {
 		return Done{}, err
 	}

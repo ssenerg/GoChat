@@ -53,6 +53,36 @@ func TestBotsLeaveTheTeamWithTheirOwner(t *testing.T) {
 	}
 }
 
+// botTeams lists the one team's memberships.
+type botTeams struct{ *fakeRepo }
+
+func (f botTeams) ListUserTeams(_ context.Context, userID gocql.UUID) ([]*models.TeamMember, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if _, in := f.members[userID]; !in {
+		return nil, nil
+	}
+	return []*models.TeamMember{{TeamID: f.team, UserID: userID}}, nil
+}
+
+func TestADeletedBotLeavesItsTeams(t *testing.T) {
+	repo := newFakeRepo()
+	bob := repo.addMember("bob", models.TeamRoleMember)
+	bot := repo.addBot("bob_bot", bob)
+	repo.channels[bot] = []gocql.UUID{ids.New(), ids.New()}
+	w := newWorker(t, repo)
+	w.Repo = botTeams{repo}
+	if _, err := w.removeBot(context.Background(), RemoveBot{P: principal(bob), BotID: bot}); err != nil {
+		t.Fatal(err)
+	}
+	if _, in := repo.members[bot]; in {
+		t.Fatal("the bot stayed in the team")
+	}
+	if n := len(slices.DeleteFunc(slices.Clone(repo.log), func(s string) bool { return s != "leave channel" })); n != 2 {
+		t.Fatalf("the bot left %d channels, want 2: %q", n, repo.log)
+	}
+}
+
 func TestOnlyTheOwnerAddsTheirBot(t *testing.T) {
 	repo := newFakeRepo()
 	admin := repo.addMember("admin", models.TeamRoleAdmin)

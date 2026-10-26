@@ -58,6 +58,29 @@ func (w *worker) addBot(ctx context.Context, msg AddBot) (Done, error) {
 	return Done{}, nil
 }
 
+// RemoveBot takes a bot being deleted out of its teams and their
+// channels, so no channel keeps writing it updates.
+type RemoveBot struct {
+	P     *models.Principal
+	BotID gocql.UUID
+}
+
+func (w *worker) removeBot(ctx context.Context, msg RemoveBot) (Done, error) {
+	teams, err := w.Repo.ListUserTeams(ctx, msg.BotID)
+	if err != nil {
+		return Done{}, err
+	}
+	for _, m := range teams {
+		if err := w.Repo.RemoveTeamMember(ctx, m.TeamID, msg.BotID); err != nil {
+			return Done{}, err
+		}
+		if err := w.leaveChannels(ctx, msg.P, m.TeamID, msg.BotID); err != nil {
+			return Done{}, err
+		}
+	}
+	return Done{}, nil
+}
+
 // dropBots takes the bots of someone who left a team out of it with them:
 // their owner no longer reads it through them.
 func (w *worker) dropBots(ctx context.Context, p *models.Principal, teamID, owner gocql.UUID) error {

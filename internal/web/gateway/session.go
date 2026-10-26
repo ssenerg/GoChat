@@ -133,8 +133,15 @@ type session struct {
 	expiry    *time.Timer
 	// early holds what the browser sent before the server attached it.
 	early [][]byte
-	// presses holds the buttons this tab pressed, by query, until answered.
-	presses map[string]time.Time
+	// presses holds the buttons this tab pressed, by query, until answered,
+	// and answers that came before the tab knew the press was its own.
+	presses map[string]*press
+}
+
+type press struct {
+	at     time.Time
+	mine   bool
+	answer *pb.CallbackAnswer
 }
 
 func NewSession(d *Deps, connID uint64, call drpc.Call, ws *websocket.Conn, in *Inflow) actor.Producer {
@@ -156,7 +163,7 @@ func NewSession(d *Deps, connID uint64, call drpc.Call, ws *websocket.Conn, in *
 			peers:    make(map[string]bool),
 			reads:    make(map[string]string),
 			posts:    make(chan *pb.PostMessageRequest, queuedPosts),
-			presses:  make(map[string]time.Time),
+			presses:  make(map[string]*press),
 		}
 	}
 }
@@ -302,13 +309,7 @@ func (s *session) Receive(c *actor.Context) {
 	case failed:
 		s.toast("error", msg.text)
 	case pressed:
-		now := time.Now()
-		for id, at := range s.presses {
-			if now.Sub(at) > pressTTL {
-				delete(s.presses, id)
-			}
-		}
-		s.presses[msg.queryID] = now
+		s.pressed(msg.queryID)
 	}
 }
 
@@ -605,8 +606,60 @@ func (s *session) frame(c *actor.Context, data []byte) {
 	}
 }
 
-// pressTTL is how long a press waits for its bot's answer.
-const pressTTL = 2 * time.Minute
+const (
+	// pressTTL is how long a press waits for its bot's answer.
+	pressTTL = 2 * time.Minute
+	// A bot may answer before the tab hears its press went through: the
+	// answer waits that long, among that many.
+	earlyTTL   = 10 * time.Second
+	maxPresses = 64
+)
+
+// pressed notes the tab's press, showing its answer if it came first.
+func (s *session) pressed(queryID string) {
+	s.sweepPresses()
+	if p := s.presses[queryID]; p != nil && p.answer != nil {
+		delete(s.presses, queryID)
+		s.showAnswer(p.answer)
+		return
+	}
+	s.presses[queryID] = &press{at: time.Now(), mine: true}
+}
+
+// answered shows the answer to a press of this tab's, or holds it a while
+// in case the press is one the tab has not heard of yet.
+func (s *session) answered(a *pb.CallbackAnswer) {
+	p := s.presses[a.QueryId]
+	if p != nil && p.mine {
+		delete(s.presses, a.QueryId)
+		s.showAnswer(a)
+		return
+	}
+	s.sweepPresses()
+	if p == nil && len(s.presses) < maxPresses {
+		s.presses[a.QueryId] = &press{at: time.Now(), answer: a}
+	}
+}
+
+func (s *session) sweepPresses() {
+	now := time.Now()
+	for id, p := range s.presses {
+		if (p.mine && now.Sub(p.at) > pressTTL) || (!p.mine && now.Sub(p.at) > earlyTTL) {
+			delete(s.presses, id)
+		}
+	}
+}
+
+func (s *session) showAnswer(a *pb.CallbackAnswer) {
+	if a.Text == "" {
+		return
+	}
+	kind := "bot"
+	if a.Alert {
+		kind = "bot sticky"
+	}
+	s.toast(kind, render.DisplayName(a.Bot)+": "+a.Text)
+}
 
 // press presses a bot's button for the tab, which alone shows the answer.
 func (s *session) press(c *actor.Context, f *clientFrame) {
@@ -946,18 +999,7 @@ func (s *session) event(c *actor.Context, ev *pb.Event) {
 			s.fragment("head-presence", d)
 		}
 	case *pb.Event_CallbackAnswer:
-		a := p.CallbackAnswer
-		if _, mine := s.presses[a.QueryId]; !mine {
-			return
-		}
-		delete(s.presses, a.QueryId)
-		if a.Text != "" {
-			kind := "bot"
-			if a.Alert {
-				kind = "bot sticky"
-			}
-			s.toast(kind, render.DisplayName(a.Bot)+": "+a.Text)
-		}
+		s.answered(p.CallbackAnswer)
 	case *pb.Event_ProfileChanged:
 		u := p.ProfileChanged.User
 		if u.GetId() == me {
