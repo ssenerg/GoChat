@@ -6,6 +6,7 @@ import gochat.v1.GetDifferenceResponse
 import gochat.v1.MessageDeleted
 import gochat.v1.SavedChanged
 import io.github.ssenerg.gochat.core.state.Updates
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.runCurrent
@@ -15,6 +16,7 @@ import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 
 /** Numbered updates apply in order and once, as docs/protocol.md says. */
+@OptIn(ExperimentalCoroutinesApi::class)
 class UpdatesTest {
     private class Seen(val seq: String, val pts: Long, val quiet: Boolean)
 
