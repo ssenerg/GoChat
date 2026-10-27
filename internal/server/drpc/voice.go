@@ -141,6 +141,9 @@ func (s *voiceServerService) Connect(stream pb.DRPCVoiceServerService_ConnectStr
 		case *pb.VoiceServerServiceConnectRequest_PeerLeft:
 			l := f.PeerLeft
 			s.sys.Engine.Send(s.sys.Voice, voice.PeerLeft{Key: key, UserID: l.UserId, ChannelID: l.ChannelId, Session: l.Session})
+		case *pb.VoiceServerServiceConnectRequest_PeerMedia:
+			m := f.PeerMedia
+			s.sys.Engine.Send(s.sys.Voice, voice.PeerMedia{Key: key, UserID: m.UserId, ChannelID: m.ChannelId, Session: m.Session, Video: m.Video, Stream: m.Stream})
 		}
 	}
 }

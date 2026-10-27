@@ -145,6 +145,13 @@ type (
 		Key                        string
 		UserID, ChannelID, Session string
 	}
+	// PeerMedia says whether a voice server forwards a peer's camera, and
+	// its screen.
+	PeerMedia struct {
+		Key                        string
+		UserID, ChannelID, Session string
+		Video, Stream              bool
+	}
 )
 
 type sweep struct{}
@@ -174,6 +181,8 @@ type state struct {
 	gwExpires  time.Time
 	server     string
 	mute, deaf bool
+	// video and stream say they send their camera, and their screen.
+	video, stream bool
 }
 
 type room struct {
@@ -273,6 +282,8 @@ func (v *voice) Receive(c *actor.Context) {
 		v.claim(c, msg)
 	case PeerLeft:
 		v.peerLeft(msg)
+	case PeerMedia:
+		v.peerMedia(msg)
 	}
 }
 
@@ -339,9 +350,10 @@ func (v *voice) update(msg Update) (Done, error) {
 	if st == nil {
 		return Done{}, ierrors.FailedPrecondition("you are not in a voice channel")
 	}
-	if st.mute != msg.Mute || st.deaf != msg.Deaf {
-		// Deafened people cannot be heard either, as in Discord.
-		st.mute, st.deaf = msg.Mute || msg.Deaf, msg.Deaf
+	// Deafened people cannot be heard either, as in Discord.
+	mute := msg.Mute || msg.Deaf
+	if st.mute != mute || st.deaf != msg.Deaf {
+		st.mute, st.deaf = mute, msg.Deaf
 		v.changed(st.channelID)
 	}
 	return Done{}, nil
@@ -388,7 +400,9 @@ func (v *voice) snapshot(id gocql.UUID, rm *room) *pb.VoiceChannelState {
 	out := &pb.VoiceChannelState{ChannelId: id.String(), Version: rm.version}
 	for _, uid := range rm.users {
 		st := v.states[uid]
-		out.States = append(out.States, &pb.VoiceState{User: st.user, ChannelId: out.ChannelId, SelfMute: st.mute, SelfDeaf: st.deaf})
+		out.States = append(out.States, &pb.VoiceState{
+			User: st.user, ChannelId: out.ChannelId, SelfMute: st.mute, SelfDeaf: st.deaf, SelfVideo: st.video, SelfStream: st.stream,
+		})
 	}
 	return out
 }
@@ -517,6 +531,20 @@ func (v *voice) peerLeft(msg PeerLeft) {
 	for _, st := range v.states {
 		if st.server == msg.Key && st.session == msg.Session && st.userID.String() == msg.UserID && st.channelID.String() == msg.ChannelID {
 			v.remove(st, "")
+			return
+		}
+	}
+}
+
+// peerMedia shows a camera and a screen as the voice server forwards
+// them: what a client says of itself shows nobody anything.
+func (v *voice) peerMedia(msg PeerMedia) {
+	for _, st := range v.states {
+		if st.server == msg.Key && st.session == msg.Session && st.userID.String() == msg.UserID && st.channelID.String() == msg.ChannelID {
+			if st.video != msg.Video || st.stream != msg.Stream {
+				st.video, st.stream = msg.Video, msg.Stream
+				v.changed(st.channelID)
+			}
 			return
 		}
 	}

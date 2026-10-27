@@ -58,8 +58,8 @@ message ListVoiceStatesResponse {
 }
 
 // VoiceServerService is the link of a voice server to the chat server: the
-// voice server claims the tokens its peers present and reports who left;
-// the chat server tells it whom to disconnect.
+// voice server claims the tokens its peers present and reports who left
+// and what each sends; the chat server tells it whom to disconnect.
 service VoiceServerService {
   rpc Connect(stream VoiceServerServiceConnectRequest) returns (stream VoiceServerServiceConnectResponse);
 }
@@ -69,6 +69,7 @@ message VoiceServerServiceConnectRequest {
     VoiceServerHello hello = 1;
     ClaimVoiceToken claim = 2;
     VoicePeerLeft peer_left = 3;
+    VoicePeerMedia peer_media = 4;
   }
 }
 
@@ -87,6 +88,16 @@ message VoicePeerLeft {
   string user_id = 1;
   string channel_id = 2;
   string session = 3;
+}
+
+// VoicePeerMedia says whether the room forwards a peer's camera, and its
+// screen, as it starts or stops.
+message VoicePeerMedia {
+  string user_id = 1;
+  string channel_id = 2;
+  string session = 3;
+  bool video = 4;
+  bool stream = 5;
 }
 
 message VoiceServerServiceConnectResponse {

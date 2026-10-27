@@ -2,8 +2,10 @@ package io.github.ssenerg.gochat.ui
 
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.staticCompositionLocalOf
+import androidx.compose.ui.Modifier
 import io.github.ssenerg.gochat.core.api.AppInfo
 import io.github.ssenerg.gochat.core.state.KeyValueStore
+import io.github.ssenerg.gochat.core.voice.CallVideo
 import io.github.ssenerg.gochat.core.voice.RtcEngine
 import kotlinx.coroutines.flow.StateFlow
 
@@ -96,6 +98,26 @@ expect fun rememberMicrophoneAccess(): suspend () -> Boolean
  */
 @Composable
 expect fun rememberCallAccess(): suspend () -> Boolean
+
+/** Returns what asks for the camera when it is not allowed yet; it answers whether it is. */
+@Composable
+expect fun rememberCameraAccess(): suspend () -> Boolean
+
+/**
+ * Returns what starts capturing the screen for a call: Android asks the
+ * person whether to share it, iOS opens the system's broadcast picker. It
+ * answers whether the screen is captured now, for the call to send it; on
+ * iOS the broadcast starts later, and turns the call's screen on itself.
+ */
+@Composable
+expect fun rememberScreenShare(): suspend () -> Boolean
+
+/**
+ * Draws a camera or screen of a call: [fill] crops it to the space, as a
+ * tile shows a camera, or else fits it whole, as a shared screen shows.
+ */
+@Composable
+expect fun VideoView(video: CallVideo, modifier: Modifier = Modifier, fill: Boolean = true)
 
 /** Returns what opens the system's file picker; [onPicked] gets the file. */
 @Composable

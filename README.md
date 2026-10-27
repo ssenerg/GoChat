@@ -1,7 +1,8 @@
 # GoChat
 
 A self-hosted team chat in the spirit of Mattermost: teams, public and private
-channels, voice channels to talk in as in Discord, direct messages, one-time
+channels, voice channels to talk, show a camera and share a screen in as in
+Discord, direct messages, one-time
 invite links, attachments, voice messages, presence and typing indicators,
 all delivered in real time. The whole application runs on
 the [hollywood](https://github.com/anthdm/hollywood) actor engine, on both the
@@ -49,8 +50,9 @@ can run as many gateways as you like behind a load balancer.
 
 **`gochat voice`** is a voice server, an SFU in the manner of Discord's. It
 keeps one actor per voice channel with talk, which receives each person's
-Opus track over WebRTC ([Pion](https://github.com/pion/webrtc)) and forwards
-it to the others, neither mixed nor decoded.
+voice (Opus), camera and screen (VP8) over WebRTC
+([Pion](https://github.com/pion/webrtc)) and forwards them to the others,
+neither mixed nor decoded.
 
 The server is designed as a single node: channel actors and the hub live in
 one process. Scylla and MinIO scale independently, and so do voice servers:
@@ -72,10 +74,22 @@ carry the voice:
    everyone else's voices flow over WebRTC. The voice server only ever offers,
    renegotiating as people come and go. The page tells it when the microphone
    hears speech, and it tells the others.
+4. A page or app that does video gets two more transceivers in the first
+   offer, which it answers sendonly: its camera's and its screen's. Turning
+   either on puts the track on its transceiver and says so in a `video`
+   message, with no new offer; the voice server then forwards it to the
+   others that do video, as a stream named after the sender and the source,
+   and passes their requests for a keyframe back to the sender, one a second
+   from each at most. A room forwards 8 cameras and screens at most
+   (`max_videos_per_room`); past them, the voice server refuses one with a
+   `video` message of its own, and the page or app turns it off.
 
 Each person talks in one channel at a time: joining elsewhere, or from another
 tab, disconnects the earlier connection. Mute and deafen are the person's own
-and show to the others. A channel's admins and the team's can disconnect
+and show to the others. A camera and a screen show too, as a camera mark and
+a LIVE mark under the channel, once the voice server forwards them: it tells
+the chat server, and no client can claim one. A channel's admins and the
+team's can disconnect
 anyone. Leaving the team, signing out or the sign-in expiring ends the talk.
 A channel takes at most 25 people.
 
@@ -206,7 +220,8 @@ photos there; [retiring-api-v1.md](docs/retiring-api-v1.md) plans the rest.
   filter), CSRF double-submit token plus
   `Origin` and `Sec-Fetch-Site` checks, `__Host-` `Secure` cookies and HSTS on
   https, `X-Frame-Options: DENY`, `nosniff`, per-IP rate limits. The page may
-  use the microphone, for voice messages, and no other device.
+  use the microphone, the camera and screen capture, for voice messages and
+  voice channels, and no other device.
 - Content: messages are rendered as Markdown with raw HTML disabled; images
   become links so a message cannot make readers fetch outside URLs; links open
   with `rel="nofollow noopener noreferrer"`. Attachments are served with
@@ -215,8 +230,10 @@ photos there; [retiring-api-v1.md](docs/retiring-api-v1.md) plans the rest.
 - Voice: join tokens are single-use, short-lived, stored hashed and bound to
   one voice server; its websocket takes the web gateway's pages and no other
   site's (the apps, which are not pages, send no origin). Only
-  Opus is negotiated, and each voice is capped at 512 kbit/s so the room
-  cannot be made to repeat a flood. Connections that have not identified and
+  Opus and VP8 are negotiated, and each voice is capped at 512 kbit/s, each
+  camera at 2.5 Mbit/s and each screen at 5 Mbit/s, so the room cannot be
+  made to repeat a flood; with at most 8 cameras and screens in a room of
+  25, what one room sends stays bounded. Connections that have not identified and
   signaling messages are bounded. The voice server is ICE lite: it answers
   browsers and never sends to an address a browser names. Voice is
   encrypted in transit between each browser and the voice server

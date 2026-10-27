@@ -47,14 +47,19 @@ data class VoiceCallState(
     val connected: Boolean = false,
     /** Whom the person hears talk now, themselves included. */
     val speaking: Set<String> = emptySet(),
+    /** Whether the person wants their camera, and their screen, to go out. */
+    val camera: Boolean = false,
+    val screen: Boolean = false,
 )
 
 /**
  * Talking in voice channels, as the web's voice client does: the chat
  * server hands out a token for the channel's voice server, whose signaling
  * websocket takes it; the voice server offers, the platform's WebRTC
- * answers, and the voices flow. One call at a time; joining another
- * channel leaves the first. Use it from the main thread.
+ * answers, and the voices flow. Where the platform's WebRTC has video, the
+ * camera and the screen go out too, and the others' come in. One call at a
+ * time; joining another channel leaves the first. Use it from the main
+ * thread.
  */
 class VoiceCall internal constructor(
     private val api: GoChatApi,
@@ -66,6 +71,9 @@ class VoiceCall internal constructor(
     /** Whether this platform can talk in voice channels. */
     val available: Boolean get() = engine != null
 
+    /** Whether this platform sends and shows cameras and screens. */
+    val video: Boolean get() = engine?.video == true
+
     private val _state = MutableStateFlow<VoiceCallState?>(null)
     val state: StateFlow<VoiceCallState?> = _state.asStateFlow()
 
@@ -74,6 +82,11 @@ class VoiceCall internal constructor(
     val muted: StateFlow<Boolean> = _muted.asStateFlow()
     private val _deafened = MutableStateFlow(store.get(KEY_DEAFENED) == "1")
     val deafened: StateFlow<Boolean> = _deafened.asStateFlow()
+
+    private val _videos = MutableStateFlow<List<CallVideo>>(emptyList())
+
+    /** The cameras and screens in the call: the others' that come in, and the person's own. */
+    val videos: StateFlow<List<CallVideo>> = _videos.asStateFlow()
 
     private val _errors = MutableSharedFlow<String>(extraBufferCapacity = 8)
 
@@ -86,6 +99,12 @@ class VoiceCall internal constructor(
     /** Set while the voice server counts the person in, whose state is then theirs to report. */
     private var identified = false
     private val reporting = Mutex()
+
+    /** What goes out now, besides the voice, as the others are told. */
+    private var sending = emptySet<VideoSource>()
+
+    /** The connection's own events, which a camera or screen turned on or off joins. */
+    private var signals: Queue<Signal>? = null
 
     fun join(channel: Channel) {
         val engine = engine ?: run {
@@ -111,6 +130,27 @@ class VoiceCall internal constructor(
 
     fun toggleDeafen() = set(_muted.value, !_deafened.value)
 
+    fun toggleCamera() {
+        val st = _state.value ?: return
+        setVideo(VideoSource.Camera, !st.camera)
+    }
+
+    /**
+     * Starts or stops sending the camera or the screen; it goes out once the
+     * voice connects. The screen must be captured first: Android asks the
+     * person, iOS starts the broadcast.
+     */
+    fun setVideo(source: VideoSource, on: Boolean) {
+        if (!video) return
+        _state.update {
+            when (source) {
+                VideoSource.Camera -> it?.copy(camera = on)
+                VideoSource.Screen -> it?.copy(screen = on)
+            }
+        }
+        signals?.trySend(Signal.Video)
+    }
+
     /** Hangs up without a word to the chat server, for signing out. */
     internal fun close() = hangUp()
 
@@ -126,7 +166,11 @@ class VoiceCall internal constructor(
         report()
     }
 
-    /** Tells the others whether the person is muted or deafened; the last call carries the latest. */
+    /**
+     * Tells the others whether the person is muted or deafened; the last
+     * call carries the latest. The voice server tells them of the camera
+     * and the screen, which it forwards.
+     */
     private fun report() {
         if (!identified) return
         scope.launch {
@@ -139,17 +183,24 @@ class VoiceCall internal constructor(
     private fun hangUp() {
         job?.cancel()
         job = null
-        // The microphone goes now, not when the cancelled call next runs.
+        // The microphone and the camera go now, not when the cancelled call
+        // next runs.
         peer?.close()
         peer = null
+        engine?.stopVideo()
         identified = false
+        sending = emptySet()
+        _videos.value = emptyList()
         _state.value = null
     }
 
     private fun end(message: String?) {
         job = null
         peer = null
+        engine?.stopVideo()
         identified = false
+        sending = emptySet()
+        _videos.value = emptyList()
         _state.value = null
         message?.let { _errors.tryEmit(it) }
     }
@@ -199,6 +250,16 @@ class VoiceCall internal constructor(
 
         data class Level(val level: Float) : Signal
 
+        /** Someone else's camera or screen came, or went when [track] is null. */
+        data class RemoteVideo(val streamId: String, val track: Any?) : Signal
+
+        /** The person turned the camera or screen on or off. */
+        data object Video : Signal
+
+        data object ScreenEnded : Signal
+
+        data object CameraEnded : Signal
+
         data object TimedOut : Signal
 
         data object Closed : Signal
@@ -213,6 +274,7 @@ class VoiceCall internal constructor(
         // Everything that happens, handled in order on this coroutine: the
         // voice server's messages and the platform's WebRTC events.
         val signals = Queue<Signal>(Queue.UNLIMITED)
+        this.signals = signals
         val listener = object : RtcListener {
             override fun onCandidate(candidate: IceCandidate) {
                 signals.trySend(Signal.Candidate(candidate))
@@ -225,6 +287,18 @@ class VoiceCall internal constructor(
             override fun onLevel(level: Float) {
                 signals.trySend(Signal.Level(level))
             }
+
+            override fun onVideo(streamId: String, track: Any?) {
+                signals.trySend(Signal.RemoteVideo(streamId, track))
+            }
+
+            override fun onScreenEnded() {
+                signals.trySend(Signal.ScreenEnded)
+            }
+
+            override fun onCameraEnded() {
+                signals.trySend(Signal.CameraEnded)
+            }
         }
         var p: RtcPeer? = null
         var connected = false
@@ -235,10 +309,12 @@ class VoiceCall internal constructor(
                     for (frame in incoming) if (frame is Frame.Text) signals.send(Signal.Message(frame.readText()))
                     signals.send(Signal.Closed)
                 }
-                send(Frame.Text(buildJsonObject { put("op", "identify"); put("token", ticket.token) }.toString()))
+                send(Frame.Text(buildJsonObject { put("op", "identify"); put("token", ticket.token); put("video", engine.video) }.toString()))
                 var timer: Job? = null
                 val early = mutableListOf<IceCandidate>()
                 var offered = false
+                // Set once an answer took the camera's and the screen's slots.
+                var slotted = false
                 var speaking = false
                 var loudAt: TimeSource.Monotonic.ValueTimeMark? = null
 
@@ -273,8 +349,9 @@ class VoiceCall internal constructor(
                                 "offer" -> {
                                     val current = p ?: continue@loop
                                     val sdp = msg.string("sdp") ?: continue@loop
+                                    val slots = (msg["slots"] as? JsonObject)?.let(::slots)
                                     val answer = try {
-                                        current.answer(sdp)
+                                        current.answer(sdp, slots)
                                     } catch (e: CancellationException) {
                                         throw e
                                     } catch (_: Exception) {
@@ -287,6 +364,11 @@ class VoiceCall internal constructor(
                                         early.clear()
                                     }
                                     emit(buildJsonObject { put("op", "answer"); put("sdp", answer) })
+                                    if (slots != null && !slotted) {
+                                        slotted = true
+                                        // A camera or screen turned on early, or before a reconnect, goes out now.
+                                        signals.trySend(Signal.Video)
+                                    }
                                 }
                                 "candidate" -> {
                                     val c = (msg["candidate"] as? JsonObject)?.let(::candidate) ?: continue@loop
@@ -296,6 +378,14 @@ class VoiceCall internal constructor(
                                 "speaking" -> {
                                     val user = msg.string("user_id") ?: continue@loop
                                     setSpeaking(user, msg["speaking"]?.jsonPrimitive?.booleanOrNull == true)
+                                }
+                                // The room forwards no more cameras and screens: this one goes off.
+                                "video" -> {
+                                    val source = VideoSource.entries.firstOrNull { it.wire == msg.string("source") } ?: continue@loop
+                                    if (msg["on"]?.jsonPrimitive?.booleanOrNull == false && source in sending) {
+                                        setVideo(source, false)
+                                        _errors.tryEmit("Your ${source.wire} is off: ${msg.string("reason") ?: "the voice channel refused it"}.")
+                                    }
                                 }
                             }
                         }
@@ -340,6 +430,48 @@ class VoiceCall internal constructor(
                                 setSpeaking(myId, on)
                             }
                         }
+                        is Signal.RemoteVideo -> {
+                            val at = s.streamId.lastIndexOf(':')
+                            val source = VideoSource.entries.firstOrNull { it.wire == s.streamId.substring(at + 1) }
+                            if (at <= 0 || source == null) continue@loop
+                            val user = s.streamId.substring(0, at)
+                            _videos.update { list ->
+                                list.filterNot { !it.local && it.userId == user && it.source == source } +
+                                    listOfNotNull(s.track?.let { CallVideo(user, source, it) })
+                            }
+                        }
+                        Signal.Video -> {
+                            val current = p
+                            if (current == null || !slotted) continue@loop
+                            for (source in VideoSource.entries) {
+                                val want = _state.value?.let { if (source == VideoSource.Camera) it.camera else it.screen } == true
+                                if (want == source in sending) continue
+                                val track = try {
+                                    if (source == VideoSource.Camera) current.setCamera(want) else current.setScreen(want)
+                                } catch (e: CancellationException) {
+                                    throw e
+                                } catch (_: Exception) {
+                                    null
+                                }
+                                if (want && track == null) {
+                                    // Nothing could go out: the switch goes back off.
+                                    setVideo(source, false)
+                                    _errors.tryEmit(if (source == VideoSource.Camera) "Could not turn the camera on." else "Could not share the screen.")
+                                    continue
+                                }
+                                sending = if (want) sending + source else sending - source
+                                emit(buildJsonObject { put("op", "video"); put("source", source.wire); put("on", want) })
+                                _videos.update { list ->
+                                    list.filterNot { it.local && it.source == source } +
+                                        listOfNotNull(track?.let { CallVideo(myId, source, it, local = true) })
+                                }
+                            }
+                        }
+                        Signal.ScreenEnded -> setVideo(VideoSource.Screen, false)
+                        Signal.CameraEnded -> if (_state.value?.camera == true) {
+                            setVideo(VideoSource.Camera, false)
+                            _errors.tryEmit("The camera stopped.")
+                        }
                         Signal.TimedOut -> if (!connected) {
                             outcome = Outcome.Failed(NETWORK)
                             break@loop
@@ -356,10 +488,14 @@ class VoiceCall internal constructor(
             }
         } finally {
             p?.close()
+            if (this.signals === signals) this.signals = null
             // A call joined since is not this one's to reset.
             if (peer === p) {
                 peer = null
                 identified = false
+                // A connection that comes back sends again what the person wants out.
+                sending = emptySet()
+                _videos.value = emptyList()
             }
         }
         return outcome ?: Outcome.Lost(connected)
@@ -413,6 +549,12 @@ class VoiceCall internal constructor(
                 val urls = runCatching { o["urls"]!!.jsonArray.mapNotNull { it.jsonPrimitive.contentOrNull } }.getOrNull() ?: return@mapNotNull null
                 IceServer(urls, o.string("username").orEmpty(), o.string("credential").orEmpty())
             }.orEmpty()
+
+        private fun slots(o: JsonObject): VideoSlots? {
+            val camera = o.string("camera") ?: return null
+            val screen = o.string("screen") ?: return null
+            return VideoSlots(camera, screen)
+        }
 
         private fun candidate(o: JsonObject): IceCandidate? {
             val c = o.string("candidate") ?: return null

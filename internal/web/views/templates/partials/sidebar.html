@@ -78,7 +78,7 @@
 </li>
 {{end}}
 
-{{define "voice-members"}}<ul class="voice-members" id="voice-members-{{.ChannelID}}" data-version="{{.State.GetVersion}}" aria-label="In the voice channel"{{if .OOB}} hx-swap-oob="outerHTML"{{end}}>{{range .State.GetStates}}<li class="voice-member" data-user="{{.User.Id}}">{{template "avatar" (dict "User" .User "Size" "xs")}}<span class="vm-name">{{name .User}}</span>{{if .SelfDeaf}}<span class="vm-flag" title="Deafened">{{icon "headphones-off"}}</span>{{else if .SelfMute}}<span class="vm-flag" title="Muted">{{icon "mic-off"}}</span>{{end}}</li>{{end}}</ul>{{end}}
+{{define "voice-members"}}<ul class="voice-members" id="voice-members-{{.ChannelID}}" data-version="{{.State.GetVersion}}" aria-label="In the voice channel"{{if .OOB}} hx-swap-oob="outerHTML"{{end}}>{{range .State.GetStates}}<li class="voice-member" data-user="{{.User.Id}}">{{template "avatar" (dict "User" .User "Size" "xs")}}<span class="vm-name">{{name .User}}</span>{{if .SelfStream}}<span class="vm-live" title="Sharing their screen">Live</span>{{end}}{{if .SelfVideo}}<span class="vm-cam" title="Camera on">{{icon "video"}}</span>{{end}}{{if .SelfDeaf}}<span class="vm-flag" title="Deafened">{{icon "headphones-off"}}</span>{{else if .SelfMute}}<span class="vm-flag" title="Muted">{{icon "mic-off"}}</span>{{end}}</li>{{end}}</ul>{{end}}
 
 {{define "badge"}}<span id="unread-{{.ID}}" class="mentions" title="{{.Count}} unread {{if eq .Count 1}}mention{{else}}mentions{{end}}"{{if .OOB}} hx-swap-oob="outerHTML"{{end}}>{{if gt .Count 99}}99+{{else}}{{.Count}}{{end}}</span>{{end}}
 

@@ -25,7 +25,7 @@ func TestVoiceTemplates(t *testing.T) {
 		t.Fatal(err)
 	}
 	state := &pb.VoiceChannelState{ChannelId: "c1", Version: 7, States: []*pb.VoiceState{
-		{User: &pb.User{Id: "u1", Username: "ada", DisplayName: "<Ada>"}, ChannelId: "c1"},
+		{User: &pb.User{Id: "u1", Username: "ada", DisplayName: "<Ada>"}, ChannelId: "c1", SelfVideo: true, SelfStream: true},
 		{User: &pb.User{Id: "u2", Username: "bob"}, ChannelId: "c1", SelfMute: true},
 		{User: &pb.User{Id: "u3", Username: "cy"}, ChannelId: "c1", SelfMute: true, SelfDeaf: true},
 	}}
@@ -49,6 +49,10 @@ func TestVoiceTemplates(t *testing.T) {
 	if strings.Count(out, "Deafened") != 1 || strings.Count(out, "Muted") != 1 {
 		t.Errorf("a deafened person shows as deafened only: %s", out)
 	}
+	// Who sends a camera or a screen shows so to everyone, in the room or not.
+	if strings.Count(out, `title="Camera on"`) != 1 || strings.Count(out, `class="vm-live"`) != 1 {
+		t.Errorf("ada's camera and screen do not show: %s", out)
+	}
 
 	// Nobody talking renders an empty, versionless list.
 	empty := render("voice-members", map[string]any{"ChannelID": "c2", "State": (*pb.VoiceChannelState)(nil), "OOB": false})
@@ -59,6 +63,9 @@ func TestVoiceTemplates(t *testing.T) {
 	tiles := render("voice-tiles", VoiceRoom{TeamName: "acme", ChannelID: "c1", State: state, Moderator: true, MeID: "u1"})
 	if strings.Count(tiles, "vt-kick") != 2 || strings.Contains(tiles, "/voice/u1/disconnect") || !strings.Contains(tiles, "/t/acme/ch/c1/voice/u2/disconnect") {
 		t.Errorf("a moderator disconnects the others only: %s", tiles)
+	}
+	if strings.Count(tiles, `title="Camera on"`) != 1 || strings.Count(tiles, `class="vt-live"`) != 1 || !strings.Contains(tiles, `data-name="&lt;Ada&gt;"`) {
+		t.Errorf("tiles lack ada's camera, screen or name: %s", tiles)
 	}
 	if plain := render("voice-tiles", VoiceRoom{ChannelID: "c1", State: state, MeID: "u2"}); strings.Contains(plain, "vt-kick") {
 		t.Errorf("a member may disconnect others: %s", plain)
@@ -74,5 +81,10 @@ func TestVoiceTemplates(t *testing.T) {
 	})
 	if !strings.Contains(page, `data-voice-room="c1"`) || strings.Contains(page, `id="composer"`) || !strings.Contains(page, "data-voice-join") {
 		t.Errorf("voice page: %s", page)
+	}
+	for _, want := range []string{"data-voice-camera", "data-voice-screen", "data-voice-screens", "data-voice-screen-template"} {
+		if !strings.Contains(page, want) {
+			t.Errorf("voice page lacks %s: %s", want, page)
+		}
 	}
 }

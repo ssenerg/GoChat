@@ -1492,11 +1492,15 @@ func (*Button_Url) isButton_Action() {}
 
 // VoiceState is one person talking in a voice channel.
 type VoiceState struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	User          *User                  `protobuf:"bytes,1,opt,name=user,proto3" json:"user,omitempty"`
-	ChannelId     string                 `protobuf:"bytes,2,opt,name=channel_id,json=channelId,proto3" json:"channel_id,omitempty"`
-	SelfMute      bool                   `protobuf:"varint,3,opt,name=self_mute,json=selfMute,proto3" json:"self_mute,omitempty"`
-	SelfDeaf      bool                   `protobuf:"varint,4,opt,name=self_deaf,json=selfDeaf,proto3" json:"self_deaf,omitempty"`
+	state     protoimpl.MessageState `protogen:"open.v1"`
+	User      *User                  `protobuf:"bytes,1,opt,name=user,proto3" json:"user,omitempty"`
+	ChannelId string                 `protobuf:"bytes,2,opt,name=channel_id,json=channelId,proto3" json:"channel_id,omitempty"`
+	SelfMute  bool                   `protobuf:"varint,3,opt,name=self_mute,json=selfMute,proto3" json:"self_mute,omitempty"`
+	SelfDeaf  bool                   `protobuf:"varint,4,opt,name=self_deaf,json=selfDeaf,proto3" json:"self_deaf,omitempty"`
+	// Whether the others get their camera, and their screen, as the voice
+	// server reports it.
+	SelfVideo     bool `protobuf:"varint,5,opt,name=self_video,json=selfVideo,proto3" json:"self_video,omitempty"`
+	SelfStream    bool `protobuf:"varint,6,opt,name=self_stream,json=selfStream,proto3" json:"self_stream,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -1555,6 +1559,20 @@ func (x *VoiceState) GetSelfMute() bool {
 func (x *VoiceState) GetSelfDeaf() bool {
 	if x != nil {
 		return x.SelfDeaf
+	}
+	return false
+}
+
+func (x *VoiceState) GetSelfVideo() bool {
+	if x != nil {
+		return x.SelfVideo
+	}
+	return false
+}
+
+func (x *VoiceState) GetSelfStream() bool {
+	if x != nil {
+		return x.SelfStream
 	}
 	return false
 }
@@ -1797,14 +1815,18 @@ const file_gochat_v1_types_proto_rawDesc = "" +
 	"\x04text\x18\x01 \x01(\tR\x04text\x12%\n" +
 	"\rcallback_data\x18\x02 \x01(\tH\x00R\fcallbackData\x12\x12\n" +
 	"\x03url\x18\x03 \x01(\tH\x00R\x03urlB\b\n" +
-	"\x06action\"\x8a\x01\n" +
+	"\x06action\"\xca\x01\n" +
 	"\n" +
 	"VoiceState\x12#\n" +
 	"\x04user\x18\x01 \x01(\v2\x0f.gochat.v1.UserR\x04user\x12\x1d\n" +
 	"\n" +
 	"channel_id\x18\x02 \x01(\tR\tchannelId\x12\x1b\n" +
 	"\tself_mute\x18\x03 \x01(\bR\bselfMute\x12\x1b\n" +
-	"\tself_deaf\x18\x04 \x01(\bR\bselfDeaf\"{\n" +
+	"\tself_deaf\x18\x04 \x01(\bR\bselfDeaf\x12\x1d\n" +
+	"\n" +
+	"self_video\x18\x05 \x01(\bR\tselfVideo\x12\x1f\n" +
+	"\vself_stream\x18\x06 \x01(\bR\n" +
+	"selfStream\"{\n" +
 	"\x11VoiceChannelState\x12\x1d\n" +
 	"\n" +
 	"channel_id\x18\x01 \x01(\tR\tchannelId\x12-\n" +

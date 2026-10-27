@@ -35,6 +35,9 @@ import platform.AVFAudio.AVFormatIDKey
 import platform.AVFAudio.AVNumberOfChannelsKey
 import platform.AVFAudio.AVSampleRateKey
 import platform.AVFAudio.setActive
+import platform.AVFoundation.AVCaptureDevice
+import platform.AVFoundation.AVMediaTypeVideo
+import platform.AVFoundation.requestAccessForMediaType
 import platform.CoreAudioTypes.kAudioFormatMPEG4AAC
 import platform.Foundation.CFBridgingRetain
 import platform.Foundation.NSBundle
@@ -308,6 +311,24 @@ actual fun rememberCallAccess(): suspend () -> Boolean = rememberMicrophoneAcces
 @Composable
 actual fun rememberMicrophoneAccess(): suspend () -> Boolean = remember {
     suspend { suspendCancellableCoroutine<Boolean> { c -> AVAudioSession.sharedInstance().requestRecordPermission { ok -> c.resume(ok) } } }
+}
+
+@Composable
+actual fun rememberCameraAccess(): suspend () -> Boolean = remember {
+    suspend { suspendCancellableCoroutine<Boolean> { c -> AVCaptureDevice.requestAccessForMediaType(AVMediaTypeVideo) { ok -> c.resume(ok) } } }
+}
+
+@Composable
+actual fun rememberScreenShare(): suspend () -> Boolean {
+    val engine = (LocalPlatform.current.rtc as? SwiftRtc)?.native
+    return remember(engine) {
+        suspend {
+            // The broadcast starts in the system's picker, and turns the
+            // call's screen on itself once it does.
+            engine?.pickBroadcast()
+            false
+        }
+    }
 }
 
 private class PickerDelegate(private val onPicked: (NSURL) -> Unit) : NSObject(), UIDocumentPickerDelegateProtocol {

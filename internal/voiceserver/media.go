@@ -23,12 +23,24 @@ type Media struct {
 	turn    *TURNConfig
 }
 
-// opus is the only codec the server takes: voice, as Discord sends it.
+// opus is the codec voices come in: as Discord sends them.
 var opus = webrtc.RTPCodecParameters{
 	RTPCodecCapability: webrtc.RTPCodecCapability{
 		MimeType: webrtc.MimeTypeOpus, ClockRate: 48000, Channels: 2, SDPFmtpLine: "minptime=10;useinbandfec=1",
 	},
 	PayloadType: 111,
+}
+
+// vp8 is the codec cameras and screens come in: every browser and both
+// apps' WebRTC encode and decode it, so a forwarded stream plays wherever
+// it goes. Receivers ask for a keyframe with a PLI or a FIR, and the
+// interceptors add NACK and transport-wide congestion control.
+var vp8 = webrtc.RTPCodecParameters{
+	RTPCodecCapability: webrtc.RTPCodecCapability{
+		MimeType: webrtc.MimeTypeVP8, ClockRate: 90000,
+		RTCPFeedback: []webrtc.RTCPFeedback{{Type: "ccm", Parameter: "fir"}},
+	},
+	PayloadType: 96,
 }
 
 // NewMedia opens the ICE ports. A server with a public address answers
@@ -38,8 +50,23 @@ func NewMedia(cfg *ICEConfig) (*Media, error) {
 	if err := m.RegisterCodec(opus, webrtc.RTPCodecTypeAudio); err != nil {
 		return nil, err
 	}
+	if err := m.RegisterCodec(vp8, webrtc.RTPCodecTypeVideo); err != nil {
+		return nil, err
+	}
+	// Pion's default interceptors but the simulcast header extensions: the
+	// server forwards packets as they come, and a sender's mid in them would
+	// steer the receivers' browsers to the wrong transceiver.
 	registry := &interceptor.Registry{}
-	if err := webrtc.RegisterDefaultInterceptors(m, registry); err != nil {
+	if err := webrtc.ConfigureNack(m, registry); err != nil {
+		return nil, err
+	}
+	if err := webrtc.ConfigureRTCPReports(registry); err != nil {
+		return nil, err
+	}
+	if err := webrtc.ConfigureStatsInterceptor(registry); err != nil {
+		return nil, err
+	}
+	if err := webrtc.ConfigureTWCCSender(m, registry); err != nil {
 		return nil, err
 	}
 	media := &Media{turn: cfg.TURN}

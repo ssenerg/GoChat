@@ -41,6 +41,11 @@ iosApp/      the Xcode project: a SwiftUI shell that shows the shared screens
   with the screen off. On iOS, WebRTC comes from [stasel/WebRTC](https://github.com/stasel/WebRTC),
   a Swift package the Xcode project links: `VoiceRtc.swift` implements the
   small protocols of `IosRtc.kt`, which adapt it to the core's `RtcEngine`.
+- **iosApp/GoChatBroadcast** is the broadcast upload extension that shares
+  the iPhone's screen: ReplayKit hands it the screen, and it writes each
+  frame as a JPEG to a Unix socket the app listens on in the container of
+  the app group they share (`Broadcast.swift`, in both), where
+  `ScreenBroadcast.swift` hands it to WebRTC.
 
 ## What the apps do
 
@@ -52,6 +57,11 @@ iosApp/      the Xcode project: a SwiftUI shell that shows the shared screens
   and, as a moderator, disconnect people. The call goes on in the
   background, on the loudspeaker or a headset, and rejoins after a network
   change; on Android it can be left from its notification.
+- Cameras and screens in voice channels: turn the front camera on, share
+  the screen (Android asks which; iOS starts a broadcast from the system's
+  picker or the Control Center), see the others' cameras in their tiles and
+  their screens above them, full screen at a tap. The sidebar marks who has
+  their camera on and who is live, as the web does.
 - Messages with Markdown, mentions, emoji, images, files, reactions,
   threads, edits, deletes, pins and saves; typing indicators; search;
   followed threads; saved messages.
@@ -88,10 +98,18 @@ cd mobile
 ```
 
 **iOS**: a Mac with Xcode 16 or later. Open `iosApp/iosApp.xcodeproj`, choose
-your team under Signing & Capabilities, and run. The project's first build
-phase builds the Kotlin framework with Gradle; Xcode fetches the WebRTC
-package itself. Voice channels need a device or a simulator with a
-microphone, and the server's voice settings as for Android below.
+your team under Signing & Capabilities for both targets, `iosApp` and
+`GoChatBroadcast`, and run. The project's first build phase builds the
+Kotlin framework with Gradle; Xcode fetches the WebRTC package itself. Voice
+channels need a device or a simulator with a microphone, and the server's
+voice settings as for Android below.
+
+The app, its broadcast extension and the app group they share take their
+identifiers from one build setting, `GOCHAT_BUNDLE_ID` at the project's
+level (`io.github.ssenerg.gochat`): under another team, set it to an
+identifier of yours, and both targets keep the App Groups capability with
+`group.` and it. Sharing the screen needs an iPhone or iPad: simulators
+have no broadcasts, and no camera.
 
 **Tests**: the core's tests run anywhere:
 

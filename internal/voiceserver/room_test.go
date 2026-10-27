@@ -5,12 +5,15 @@ import (
 	"encoding/json"
 	"errors"
 	"net"
+	"strings"
 	"sync"
 	"testing"
 	"time"
 
 	"github.com/anthdm/hollywood/actor"
 	"github.com/pion/ice/v4"
+	"github.com/pion/rtcp"
+	"github.com/pion/sdp/v3"
 	"github.com/pion/webrtc/v4"
 	"github.com/pion/webrtc/v4/pkg/media"
 	"go.uber.org/zap"
@@ -18,18 +21,34 @@ import (
 	"github.com/ssenerg/gochat/internal/actors"
 )
 
-// fakeLink records who the rooms say left.
+// fakeLink records who the rooms say left, and what they say each sends.
 type fakeLink struct {
-	mu   sync.Mutex
-	left []peerLeft
+	mu    sync.Mutex
+	left  []peerLeft
+	media map[string]peerMedia
 }
 
 func (l *fakeLink) Receive(c *actor.Context) {
-	if m, ok := c.Message().(peerLeft); ok {
-		l.mu.Lock()
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	switch m := c.Message().(type) {
+	case peerLeft:
 		l.left = append(l.left, m)
-		l.mu.Unlock()
+	case peerMedia:
+		if l.media == nil {
+			l.media = map[string]peerMedia{}
+		}
+		l.media[m.session] = m
 	}
+}
+
+// sends reports whether the rooms last said a session's camera and screen
+// go out as given.
+func (l *fakeLink) sends(session string, video, stream bool) bool {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	m, ok := l.media[session]
+	return ok && m.video == video && m.stream == stream
 }
 
 func (l *fakeLink) has(session string) bool {
@@ -71,7 +90,7 @@ func newSFU(t *testing.T, maxPeers int) *sfu {
 	}
 	link := &fakeLink{}
 	linkPID := engine.Spawn(func() actor.Receiver { return link }, "link")
-	cfg := &Config{MaxPeersPerRoom: maxPeers}
+	cfg := &Config{MaxPeersPerRoom: maxPeers, MaxVideosPerRoom: 2}
 	s := &sfu{t: t, engine: engine, link: link}
 	s.rooms = engine.Spawn(newRooms(zap.NewNop(), cfg, m, linkPID), "rooms")
 	t.Cleanup(func() { <-engine.Poison(s.rooms).Done() })
@@ -84,27 +103,54 @@ type client struct {
 	s       *sfu
 	session string
 	userID  string
+	api     *webrtc.API
 	pc      *webrtc.PeerConnection
 	out     *sender
 	mu      sync.Mutex
 	got     map[string]int // packets received by the stream id that sent them
+	reports map[string]int // sender reports, by stream id
+	remotes map[string]*webrtc.TrackRemote
 	speak   []outbound
+	refused []string // the sources the server would not forward
 	offers  int
 	closed  *closeFrame
 	// early is set when a candidate came before any offer, which a browser
 	// would drop.
 	early bool
+	// slots are those of every offer, and beforeAnswer runs on each once
+	// it is set, as a browser puts its camera and screen on the slots.
+	slots        []*slots
+	beforeAnswer func(*client, *slots)
+	// slotSends are the offers that sent something on a slot, which a
+	// browser takes for its own.
+	slotSends []string
+	// sending is the stream each mid sends, as the offers so far have it;
+	// swaps are the mids an offer gave another stream without a stop in
+	// between, which browsers never take for a new track.
+	sending map[string]string
+	swaps   []string
 }
 
 func (s *sfu) join(session, userID string, send bool) (*client, error) {
+	return s.joinWith(session, userID, send, false, nil)
+}
+
+// joinWith joins a client that says it sends and shows video when video is
+// set.
+func (s *sfu) joinWith(session, userID string, send, video bool, beforeAnswer func(*client, *slots)) (*client, error) {
 	se := webrtc.SettingEngine{}
 	se.SetICEMulticastDNSMode(ice.MulticastDNSModeDisabled)
-	pc, err := webrtc.NewAPI(webrtc.WithSettingEngine(se)).NewPeerConnection(webrtc.Configuration{})
+	api := webrtc.NewAPI(webrtc.WithSettingEngine(se))
+	pc, err := api.NewPeerConnection(webrtc.Configuration{})
 	if err != nil {
 		s.t.Fatal(err)
 	}
 	s.t.Cleanup(func() { _ = pc.Close() })
-	c := &client{t: s.t, s: s, session: session, userID: userID, pc: pc, out: newSender(256), got: map[string]int{}}
+	c := &client{
+		t: s.t, s: s, session: session, userID: userID, api: api, pc: pc, out: newSender(256),
+		got: map[string]int{}, reports: map[string]int{}, remotes: map[string]*webrtc.TrackRemote{}, beforeAnswer: beforeAnswer,
+		sending: map[string]string{},
+	}
 	if send {
 		track, err := webrtc.NewTrackLocalStaticSample(webrtc.RTPCodecCapability{MimeType: webrtc.MimeTypeOpus, ClockRate: 48000, Channels: 2}, "mic", "local")
 		if err != nil {
@@ -125,7 +171,25 @@ func (s *sfu) join(session, userID string, send bool) (*client, error) {
 			}
 		}()
 	}
-	pc.OnTrack(func(remote *webrtc.TrackRemote, _ *webrtc.RTPReceiver) {
+	pc.OnTrack(func(remote *webrtc.TrackRemote, recv *webrtc.RTPReceiver) {
+		c.mu.Lock()
+		c.remotes[remote.StreamID()] = remote
+		c.mu.Unlock()
+		go func() {
+			for {
+				pkts, _, err := recv.ReadRTCP()
+				if err != nil {
+					return
+				}
+				for _, pkt := range pkts {
+					if _, ok := pkt.(*rtcp.SenderReport); ok {
+						c.mu.Lock()
+						c.reports[remote.StreamID()]++
+						c.mu.Unlock()
+					}
+				}
+			}
+		}()
 		for {
 			if _, _, err := remote.ReadRTP(); err != nil {
 				return
@@ -144,7 +208,7 @@ func (s *sfu) join(session, userID string, send bool) (*client, error) {
 	go c.pump()
 	ctx, cancel := context.WithTimeout(context.Background(), patience)
 	defer cancel()
-	_, err = actors.Ask[joined](ctx, s.engine, s.rooms, addPeer{session: session, userID: userID, channelID: "room", out: c.out})
+	_, err = actors.Ask[joined](ctx, s.engine, s.rooms, addPeer{session: session, userID: userID, channelID: "room", video: video, out: c.out})
 	return c, err
 }
 
@@ -161,6 +225,18 @@ func (c *client) pump() {
 			case opOffer:
 				if err := c.pc.SetRemoteDescription(webrtc.SessionDescription{Type: webrtc.SDPTypeOffer, SDP: m.SDP}); err != nil {
 					continue
+				}
+				c.mu.Lock()
+				c.slots = append(c.slots, m.Slots)
+				c.track(m.SDP)
+				if m.Slots != nil {
+					if bad := sendsOnSlots(m.SDP, m.Slots); bad != "" {
+						c.slotSends = append(c.slotSends, bad)
+					}
+				}
+				c.mu.Unlock()
+				if c.beforeAnswer != nil && m.Slots != nil {
+					c.beforeAnswer(c, m.Slots)
 				}
 				ans, err := c.pc.CreateAnswer(nil)
 				if err != nil || c.pc.SetLocalDescription(ans) != nil {
@@ -180,6 +256,12 @@ func (c *client) pump() {
 			case opSpeaking:
 				c.mu.Lock()
 				c.speak = append(c.speak, m)
+				c.mu.Unlock()
+			case opVideo:
+				c.mu.Lock()
+				if m.On != nil && !*m.On && m.Reason != "" {
+					c.refused = append(c.refused, m.Source)
+				}
 				c.mu.Unlock()
 			}
 		case f := <-c.out.closed:
@@ -204,6 +286,48 @@ func eventually(t *testing.T, what string, ok func() bool) {
 		time.Sleep(20 * time.Millisecond)
 	}
 	t.Fatalf("timed out waiting: %s", what)
+}
+
+// track follows what each mid of an offer sends.
+func (c *client) track(offer string) {
+	var d sdp.SessionDescription
+	if err := d.UnmarshalString(offer); err != nil {
+		c.t.Error(err)
+		return
+	}
+	for _, m := range d.MediaDescriptions {
+		mid, _ := m.Attribute("mid")
+		_, sendonly := m.Attribute("sendonly")
+		_, sendrecv := m.Attribute("sendrecv")
+		msid, _ := m.Attribute("msid")
+		stream, _, _ := strings.Cut(msid, " ")
+		if !sendonly && !sendrecv || stream == "" {
+			delete(c.sending, mid)
+			continue
+		}
+		if was, ok := c.sending[mid]; ok && was != stream {
+			c.swaps = append(c.swaps, mid+": "+was+" to "+stream)
+		}
+		c.sending[mid] = stream
+	}
+}
+
+// offered reports whether an offer sends streamID.
+func (c *client) offered(streamID string) bool {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	for _, s := range c.sending {
+		if s == streamID {
+			return true
+		}
+	}
+	return false
+}
+
+func (c *client) reported(streamID string) int {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.reports[streamID]
 }
 
 func (c *client) heard(streamID string) int {

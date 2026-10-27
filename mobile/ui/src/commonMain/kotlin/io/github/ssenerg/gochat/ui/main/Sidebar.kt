@@ -30,6 +30,7 @@ import androidx.compose.material.icons.filled.Forum
 import androidx.compose.material.icons.filled.Group
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.MicOff
+import androidx.compose.material.icons.filled.Videocam
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Settings
@@ -78,6 +79,7 @@ import io.github.ssenerg.gochat.ui.Loading
 import io.github.ssenerg.gochat.ui.MentionBadge
 import io.github.ssenerg.gochat.ui.ServerImage
 import io.github.ssenerg.gochat.ui.ErrorState
+import io.github.ssenerg.gochat.ui.voice.LiveBadge
 import io.github.ssenerg.gochat.ui.voice.VoicePanel
 import kotlinx.coroutines.launch
 
@@ -352,6 +354,15 @@ private fun VoiceRow(ch: Channel, state: VoiceChannelState?, active: Boolean, co
                     Avatar(vs.user, size = 22.dp, modifier = Modifier.border(2.dp, ring, CircleShape))
                     Spacer(Modifier.width(8.dp))
                     Text(vs.user.displayName(), color = colors.sidebarText, fontSize = 13.sp, modifier = Modifier.weight(1f, fill = false))
+                    // Who is live or has their camera on shows to everyone, as on the web.
+                    if (vs.self_stream) {
+                        Spacer(Modifier.width(6.dp))
+                        LiveBadge()
+                    }
+                    if (vs.self_video) {
+                        Spacer(Modifier.width(6.dp))
+                        Icon(Icons.Filled.Videocam, contentDescription = "Camera on", tint = colors.sidebarMuted, modifier = Modifier.size(14.dp))
+                    }
                     if (vs.self_mute || vs.self_deaf) {
                         Spacer(Modifier.width(6.dp))
                         Icon(Icons.Filled.MicOff, contentDescription = "Muted", tint = colors.sidebarMuted, modifier = Modifier.size(14.dp))

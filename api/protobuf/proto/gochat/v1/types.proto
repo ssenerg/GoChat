@@ -208,6 +208,10 @@ message VoiceState {
   string channel_id = 2;
   bool self_mute = 3;
   bool self_deaf = 4;
+  // Whether the others get their camera, and their screen, as the voice
+  // server reports it.
+  bool self_video = 5;
+  bool self_stream = 6;
 }
 
 // VoiceChannelState is everyone talking in a voice channel. Version grows

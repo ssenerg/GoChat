@@ -1,6 +1,7 @@
 package io.github.ssenerg.gochat.ui
 
 import android.Manifest
+import android.app.Activity
 import android.content.ActivityNotFoundException
 import android.content.ClipData
 import android.content.ClipboardManager
@@ -10,6 +11,7 @@ import android.content.pm.PackageManager
 import android.media.AudioAttributes
 import android.media.MediaPlayer
 import android.media.MediaRecorder
+import android.media.projection.MediaProjectionManager
 import android.net.Uri
 import android.os.Build
 import android.os.SystemClock
@@ -320,6 +322,60 @@ actual fun rememberCallAccess(): suspend () -> Boolean {
                 pending[0] = d
                 currentLauncher.launch(wanted.toTypedArray())
                 d.await()
+            }
+        }
+    }
+}
+
+@Composable
+actual fun rememberCameraAccess(): suspend () -> Boolean {
+    val context = LocalContext.current
+    val pending = remember { arrayOfNulls<CompletableDeferred<Boolean>>(1) }
+    val launcher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+        pending[0]?.complete(granted)
+        pending[0] = null
+    }
+    val currentLauncher by rememberUpdatedState(launcher)
+    return remember(context) {
+        suspend {
+            context.checkSelfPermission(Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED || run {
+                val d = CompletableDeferred<Boolean>()
+                pending[0] = d
+                currentLauncher.launch(Manifest.permission.CAMERA)
+                d.await()
+            }
+        }
+    }
+}
+
+@Composable
+actual fun rememberScreenShare(): suspend () -> Boolean {
+    val context = LocalContext.current
+    val engine = LocalPlatform.current.rtc as? AndroidRtcEngine
+    val pending = remember { arrayOfNulls<CompletableDeferred<Intent?>>(1) }
+    val launcher = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
+        pending[0]?.complete(result.data.takeIf { result.resultCode == Activity.RESULT_OK })
+        pending[0] = null
+    }
+    val currentLauncher by rememberUpdatedState(launcher)
+    return remember(context, engine) {
+        suspend {
+            val projection = context.getSystemService(MediaProjectionManager::class.java)
+            if (engine == null || projection == null) {
+                false
+            } else {
+                val d = CompletableDeferred<Intent?>()
+                pending[0] = d
+                currentLauncher.launch(projection.createScreenCaptureIntent())
+                // Android lets a capture start only once the call's service
+                // runs for the screen, which it lets only after the consent.
+                val consent = d.await()
+                if (consent != null && VoiceCallService.allowScreen(context)) {
+                    engine.grantScreen(consent)
+                    true
+                } else {
+                    false
+                }
             }
         }
     }

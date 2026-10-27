@@ -470,6 +470,7 @@ type VoiceServerServiceConnectRequest struct {
 	//	*VoiceServerServiceConnectRequest_Hello
 	//	*VoiceServerServiceConnectRequest_Claim
 	//	*VoiceServerServiceConnectRequest_PeerLeft
+	//	*VoiceServerServiceConnectRequest_PeerMedia
 	Frame         isVoiceServerServiceConnectRequest_Frame `protobuf_oneof:"frame"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
@@ -539,6 +540,15 @@ func (x *VoiceServerServiceConnectRequest) GetPeerLeft() *VoicePeerLeft {
 	return nil
 }
 
+func (x *VoiceServerServiceConnectRequest) GetPeerMedia() *VoicePeerMedia {
+	if x != nil {
+		if x, ok := x.Frame.(*VoiceServerServiceConnectRequest_PeerMedia); ok {
+			return x.PeerMedia
+		}
+	}
+	return nil
+}
+
 type isVoiceServerServiceConnectRequest_Frame interface {
 	isVoiceServerServiceConnectRequest_Frame()
 }
@@ -555,11 +565,17 @@ type VoiceServerServiceConnectRequest_PeerLeft struct {
 	PeerLeft *VoicePeerLeft `protobuf:"bytes,3,opt,name=peer_left,json=peerLeft,proto3,oneof"`
 }
 
+type VoiceServerServiceConnectRequest_PeerMedia struct {
+	PeerMedia *VoicePeerMedia `protobuf:"bytes,4,opt,name=peer_media,json=peerMedia,proto3,oneof"`
+}
+
 func (*VoiceServerServiceConnectRequest_Hello) isVoiceServerServiceConnectRequest_Frame() {}
 
 func (*VoiceServerServiceConnectRequest_Claim) isVoiceServerServiceConnectRequest_Frame() {}
 
 func (*VoiceServerServiceConnectRequest_PeerLeft) isVoiceServerServiceConnectRequest_Frame() {}
+
+func (*VoiceServerServiceConnectRequest_PeerMedia) isVoiceServerServiceConnectRequest_Frame() {}
 
 type VoiceServerHello struct {
 	state    protoimpl.MessageState `protogen:"open.v1"`
@@ -726,6 +742,84 @@ func (x *VoicePeerLeft) GetSession() string {
 	return ""
 }
 
+// VoicePeerMedia says whether the room forwards a peer's camera, and its
+// screen, as it starts or stops.
+type VoicePeerMedia struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	UserId        string                 `protobuf:"bytes,1,opt,name=user_id,json=userId,proto3" json:"user_id,omitempty"`
+	ChannelId     string                 `protobuf:"bytes,2,opt,name=channel_id,json=channelId,proto3" json:"channel_id,omitempty"`
+	Session       string                 `protobuf:"bytes,3,opt,name=session,proto3" json:"session,omitempty"`
+	Video         bool                   `protobuf:"varint,4,opt,name=video,proto3" json:"video,omitempty"`
+	Stream        bool                   `protobuf:"varint,5,opt,name=stream,proto3" json:"stream,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *VoicePeerMedia) Reset() {
+	*x = VoicePeerMedia{}
+	mi := &file_gochat_v1_voice_proto_msgTypes[14]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *VoicePeerMedia) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*VoicePeerMedia) ProtoMessage() {}
+
+func (x *VoicePeerMedia) ProtoReflect() protoreflect.Message {
+	mi := &file_gochat_v1_voice_proto_msgTypes[14]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use VoicePeerMedia.ProtoReflect.Descriptor instead.
+func (*VoicePeerMedia) Descriptor() ([]byte, []int) {
+	return file_gochat_v1_voice_proto_rawDescGZIP(), []int{14}
+}
+
+func (x *VoicePeerMedia) GetUserId() string {
+	if x != nil {
+		return x.UserId
+	}
+	return ""
+}
+
+func (x *VoicePeerMedia) GetChannelId() string {
+	if x != nil {
+		return x.ChannelId
+	}
+	return ""
+}
+
+func (x *VoicePeerMedia) GetSession() string {
+	if x != nil {
+		return x.Session
+	}
+	return ""
+}
+
+func (x *VoicePeerMedia) GetVideo() bool {
+	if x != nil {
+		return x.Video
+	}
+	return false
+}
+
+func (x *VoicePeerMedia) GetStream() bool {
+	if x != nil {
+		return x.Stream
+	}
+	return false
+}
+
 type VoiceServerServiceConnectResponse struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	// Types that are valid to be assigned to Frame:
@@ -740,7 +834,7 @@ type VoiceServerServiceConnectResponse struct {
 
 func (x *VoiceServerServiceConnectResponse) Reset() {
 	*x = VoiceServerServiceConnectResponse{}
-	mi := &file_gochat_v1_voice_proto_msgTypes[14]
+	mi := &file_gochat_v1_voice_proto_msgTypes[15]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -752,7 +846,7 @@ func (x *VoiceServerServiceConnectResponse) String() string {
 func (*VoiceServerServiceConnectResponse) ProtoMessage() {}
 
 func (x *VoiceServerServiceConnectResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_gochat_v1_voice_proto_msgTypes[14]
+	mi := &file_gochat_v1_voice_proto_msgTypes[15]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -765,7 +859,7 @@ func (x *VoiceServerServiceConnectResponse) ProtoReflect() protoreflect.Message 
 
 // Deprecated: Use VoiceServerServiceConnectResponse.ProtoReflect.Descriptor instead.
 func (*VoiceServerServiceConnectResponse) Descriptor() ([]byte, []int) {
-	return file_gochat_v1_voice_proto_rawDescGZIP(), []int{14}
+	return file_gochat_v1_voice_proto_rawDescGZIP(), []int{15}
 }
 
 func (x *VoiceServerServiceConnectResponse) GetFrame() isVoiceServerServiceConnectResponse_Frame {
@@ -832,7 +926,7 @@ type VoiceServerWelcome struct {
 
 func (x *VoiceServerWelcome) Reset() {
 	*x = VoiceServerWelcome{}
-	mi := &file_gochat_v1_voice_proto_msgTypes[15]
+	mi := &file_gochat_v1_voice_proto_msgTypes[16]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -844,7 +938,7 @@ func (x *VoiceServerWelcome) String() string {
 func (*VoiceServerWelcome) ProtoMessage() {}
 
 func (x *VoiceServerWelcome) ProtoReflect() protoreflect.Message {
-	mi := &file_gochat_v1_voice_proto_msgTypes[15]
+	mi := &file_gochat_v1_voice_proto_msgTypes[16]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -857,7 +951,7 @@ func (x *VoiceServerWelcome) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use VoiceServerWelcome.ProtoReflect.Descriptor instead.
 func (*VoiceServerWelcome) Descriptor() ([]byte, []int) {
-	return file_gochat_v1_voice_proto_rawDescGZIP(), []int{15}
+	return file_gochat_v1_voice_proto_rawDescGZIP(), []int{16}
 }
 
 type VoiceTokenClaimed struct {
@@ -875,7 +969,7 @@ type VoiceTokenClaimed struct {
 
 func (x *VoiceTokenClaimed) Reset() {
 	*x = VoiceTokenClaimed{}
-	mi := &file_gochat_v1_voice_proto_msgTypes[16]
+	mi := &file_gochat_v1_voice_proto_msgTypes[17]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -887,7 +981,7 @@ func (x *VoiceTokenClaimed) String() string {
 func (*VoiceTokenClaimed) ProtoMessage() {}
 
 func (x *VoiceTokenClaimed) ProtoReflect() protoreflect.Message {
-	mi := &file_gochat_v1_voice_proto_msgTypes[16]
+	mi := &file_gochat_v1_voice_proto_msgTypes[17]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -900,7 +994,7 @@ func (x *VoiceTokenClaimed) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use VoiceTokenClaimed.ProtoReflect.Descriptor instead.
 func (*VoiceTokenClaimed) Descriptor() ([]byte, []int) {
-	return file_gochat_v1_voice_proto_rawDescGZIP(), []int{16}
+	return file_gochat_v1_voice_proto_rawDescGZIP(), []int{17}
 }
 
 func (x *VoiceTokenClaimed) GetRequestId() uint64 {
@@ -950,7 +1044,7 @@ type VoiceDisconnect struct {
 
 func (x *VoiceDisconnect) Reset() {
 	*x = VoiceDisconnect{}
-	mi := &file_gochat_v1_voice_proto_msgTypes[17]
+	mi := &file_gochat_v1_voice_proto_msgTypes[18]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -962,7 +1056,7 @@ func (x *VoiceDisconnect) String() string {
 func (*VoiceDisconnect) ProtoMessage() {}
 
 func (x *VoiceDisconnect) ProtoReflect() protoreflect.Message {
-	mi := &file_gochat_v1_voice_proto_msgTypes[17]
+	mi := &file_gochat_v1_voice_proto_msgTypes[18]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -975,7 +1069,7 @@ func (x *VoiceDisconnect) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use VoiceDisconnect.ProtoReflect.Descriptor instead.
 func (*VoiceDisconnect) Descriptor() ([]byte, []int) {
-	return file_gochat_v1_voice_proto_rawDescGZIP(), []int{17}
+	return file_gochat_v1_voice_proto_rawDescGZIP(), []int{18}
 }
 
 func (x *VoiceDisconnect) GetUserId() string {
@@ -1032,11 +1126,13 @@ const file_gochat_v1_voice_proto_rawDesc = "" +
 	"\x16ListVoiceStatesRequest\x12\x17\n" +
 	"\ateam_id\x18\x01 \x01(\tR\x06teamId\"S\n" +
 	"\x17ListVoiceStatesResponse\x128\n" +
-	"\bchannels\x18\x01 \x03(\v2\x1c.gochat.v1.VoiceChannelStateR\bchannels\"\xcd\x01\n" +
+	"\bchannels\x18\x01 \x03(\v2\x1c.gochat.v1.VoiceChannelStateR\bchannels\"\x89\x02\n" +
 	" VoiceServerServiceConnectRequest\x123\n" +
 	"\x05hello\x18\x01 \x01(\v2\x1b.gochat.v1.VoiceServerHelloH\x00R\x05hello\x122\n" +
 	"\x05claim\x18\x02 \x01(\v2\x1a.gochat.v1.ClaimVoiceTokenH\x00R\x05claim\x127\n" +
-	"\tpeer_left\x18\x03 \x01(\v2\x18.gochat.v1.VoicePeerLeftH\x00R\bpeerLeftB\a\n" +
+	"\tpeer_left\x18\x03 \x01(\v2\x18.gochat.v1.VoicePeerLeftH\x00R\bpeerLeft\x12:\n" +
+	"\n" +
+	"peer_media\x18\x04 \x01(\v2\x19.gochat.v1.VoicePeerMediaH\x00R\tpeerMediaB\a\n" +
 	"\x05frame\"K\n" +
 	"\x10VoiceServerHello\x12\x1b\n" +
 	"\tserver_id\x18\x01 \x01(\tR\bserverId\x12\x1a\n" +
@@ -1049,7 +1145,14 @@ const file_gochat_v1_voice_proto_rawDesc = "" +
 	"\auser_id\x18\x01 \x01(\tR\x06userId\x12\x1d\n" +
 	"\n" +
 	"channel_id\x18\x02 \x01(\tR\tchannelId\x12\x18\n" +
-	"\asession\x18\x03 \x01(\tR\asession\"\xdf\x01\n" +
+	"\asession\x18\x03 \x01(\tR\asession\"\x90\x01\n" +
+	"\x0eVoicePeerMedia\x12\x17\n" +
+	"\auser_id\x18\x01 \x01(\tR\x06userId\x12\x1d\n" +
+	"\n" +
+	"channel_id\x18\x02 \x01(\tR\tchannelId\x12\x18\n" +
+	"\asession\x18\x03 \x01(\tR\asession\x12\x14\n" +
+	"\x05video\x18\x04 \x01(\bR\x05video\x12\x16\n" +
+	"\x06stream\x18\x05 \x01(\bR\x06stream\"\xdf\x01\n" +
 	"!VoiceServerServiceConnectResponse\x129\n" +
 	"\awelcome\x18\x01 \x01(\v2\x1d.gochat.v1.VoiceServerWelcomeH\x00R\awelcome\x128\n" +
 	"\aclaimed\x18\x02 \x01(\v2\x1c.gochat.v1.VoiceTokenClaimedH\x00R\aclaimed\x12<\n" +
@@ -1097,7 +1200,7 @@ func file_gochat_v1_voice_proto_rawDescGZIP() []byte {
 	return file_gochat_v1_voice_proto_rawDescData
 }
 
-var file_gochat_v1_voice_proto_msgTypes = make([]protoimpl.MessageInfo, 18)
+var file_gochat_v1_voice_proto_msgTypes = make([]protoimpl.MessageInfo, 19)
 var file_gochat_v1_voice_proto_goTypes = []any{
 	(*JoinVoiceRequest)(nil),                  // 0: gochat.v1.JoinVoiceRequest
 	(*JoinVoiceResponse)(nil),                 // 1: gochat.v1.JoinVoiceResponse
@@ -1113,41 +1216,43 @@ var file_gochat_v1_voice_proto_goTypes = []any{
 	(*VoiceServerHello)(nil),                  // 11: gochat.v1.VoiceServerHello
 	(*ClaimVoiceToken)(nil),                   // 12: gochat.v1.ClaimVoiceToken
 	(*VoicePeerLeft)(nil),                     // 13: gochat.v1.VoicePeerLeft
-	(*VoiceServerServiceConnectResponse)(nil), // 14: gochat.v1.VoiceServerServiceConnectResponse
-	(*VoiceServerWelcome)(nil),                // 15: gochat.v1.VoiceServerWelcome
-	(*VoiceTokenClaimed)(nil),                 // 16: gochat.v1.VoiceTokenClaimed
-	(*VoiceDisconnect)(nil),                   // 17: gochat.v1.VoiceDisconnect
-	(*Channel)(nil),                           // 18: gochat.v1.Channel
-	(*VoiceChannelState)(nil),                 // 19: gochat.v1.VoiceChannelState
-	(*User)(nil),                              // 20: gochat.v1.User
+	(*VoicePeerMedia)(nil),                    // 14: gochat.v1.VoicePeerMedia
+	(*VoiceServerServiceConnectResponse)(nil), // 15: gochat.v1.VoiceServerServiceConnectResponse
+	(*VoiceServerWelcome)(nil),                // 16: gochat.v1.VoiceServerWelcome
+	(*VoiceTokenClaimed)(nil),                 // 17: gochat.v1.VoiceTokenClaimed
+	(*VoiceDisconnect)(nil),                   // 18: gochat.v1.VoiceDisconnect
+	(*Channel)(nil),                           // 19: gochat.v1.Channel
+	(*VoiceChannelState)(nil),                 // 20: gochat.v1.VoiceChannelState
+	(*User)(nil),                              // 21: gochat.v1.User
 }
 var file_gochat_v1_voice_proto_depIdxs = []int32{
-	18, // 0: gochat.v1.JoinVoiceResponse.channel:type_name -> gochat.v1.Channel
-	19, // 1: gochat.v1.ListVoiceStatesResponse.channels:type_name -> gochat.v1.VoiceChannelState
+	19, // 0: gochat.v1.JoinVoiceResponse.channel:type_name -> gochat.v1.Channel
+	20, // 1: gochat.v1.ListVoiceStatesResponse.channels:type_name -> gochat.v1.VoiceChannelState
 	11, // 2: gochat.v1.VoiceServerServiceConnectRequest.hello:type_name -> gochat.v1.VoiceServerHello
 	12, // 3: gochat.v1.VoiceServerServiceConnectRequest.claim:type_name -> gochat.v1.ClaimVoiceToken
 	13, // 4: gochat.v1.VoiceServerServiceConnectRequest.peer_left:type_name -> gochat.v1.VoicePeerLeft
-	15, // 5: gochat.v1.VoiceServerServiceConnectResponse.welcome:type_name -> gochat.v1.VoiceServerWelcome
-	16, // 6: gochat.v1.VoiceServerServiceConnectResponse.claimed:type_name -> gochat.v1.VoiceTokenClaimed
-	17, // 7: gochat.v1.VoiceServerServiceConnectResponse.disconnect:type_name -> gochat.v1.VoiceDisconnect
-	20, // 8: gochat.v1.VoiceTokenClaimed.user:type_name -> gochat.v1.User
-	0,  // 9: gochat.v1.VoiceService.JoinVoice:input_type -> gochat.v1.JoinVoiceRequest
-	2,  // 10: gochat.v1.VoiceService.LeaveVoice:input_type -> gochat.v1.LeaveVoiceRequest
-	4,  // 11: gochat.v1.VoiceService.UpdateVoiceState:input_type -> gochat.v1.UpdateVoiceStateRequest
-	6,  // 12: gochat.v1.VoiceService.DisconnectVoiceMember:input_type -> gochat.v1.DisconnectVoiceMemberRequest
-	8,  // 13: gochat.v1.VoiceService.ListVoiceStates:input_type -> gochat.v1.ListVoiceStatesRequest
-	10, // 14: gochat.v1.VoiceServerService.Connect:input_type -> gochat.v1.VoiceServerServiceConnectRequest
-	1,  // 15: gochat.v1.VoiceService.JoinVoice:output_type -> gochat.v1.JoinVoiceResponse
-	3,  // 16: gochat.v1.VoiceService.LeaveVoice:output_type -> gochat.v1.LeaveVoiceResponse
-	5,  // 17: gochat.v1.VoiceService.UpdateVoiceState:output_type -> gochat.v1.UpdateVoiceStateResponse
-	7,  // 18: gochat.v1.VoiceService.DisconnectVoiceMember:output_type -> gochat.v1.DisconnectVoiceMemberResponse
-	9,  // 19: gochat.v1.VoiceService.ListVoiceStates:output_type -> gochat.v1.ListVoiceStatesResponse
-	14, // 20: gochat.v1.VoiceServerService.Connect:output_type -> gochat.v1.VoiceServerServiceConnectResponse
-	15, // [15:21] is the sub-list for method output_type
-	9,  // [9:15] is the sub-list for method input_type
-	9,  // [9:9] is the sub-list for extension type_name
-	9,  // [9:9] is the sub-list for extension extendee
-	0,  // [0:9] is the sub-list for field type_name
+	14, // 5: gochat.v1.VoiceServerServiceConnectRequest.peer_media:type_name -> gochat.v1.VoicePeerMedia
+	16, // 6: gochat.v1.VoiceServerServiceConnectResponse.welcome:type_name -> gochat.v1.VoiceServerWelcome
+	17, // 7: gochat.v1.VoiceServerServiceConnectResponse.claimed:type_name -> gochat.v1.VoiceTokenClaimed
+	18, // 8: gochat.v1.VoiceServerServiceConnectResponse.disconnect:type_name -> gochat.v1.VoiceDisconnect
+	21, // 9: gochat.v1.VoiceTokenClaimed.user:type_name -> gochat.v1.User
+	0,  // 10: gochat.v1.VoiceService.JoinVoice:input_type -> gochat.v1.JoinVoiceRequest
+	2,  // 11: gochat.v1.VoiceService.LeaveVoice:input_type -> gochat.v1.LeaveVoiceRequest
+	4,  // 12: gochat.v1.VoiceService.UpdateVoiceState:input_type -> gochat.v1.UpdateVoiceStateRequest
+	6,  // 13: gochat.v1.VoiceService.DisconnectVoiceMember:input_type -> gochat.v1.DisconnectVoiceMemberRequest
+	8,  // 14: gochat.v1.VoiceService.ListVoiceStates:input_type -> gochat.v1.ListVoiceStatesRequest
+	10, // 15: gochat.v1.VoiceServerService.Connect:input_type -> gochat.v1.VoiceServerServiceConnectRequest
+	1,  // 16: gochat.v1.VoiceService.JoinVoice:output_type -> gochat.v1.JoinVoiceResponse
+	3,  // 17: gochat.v1.VoiceService.LeaveVoice:output_type -> gochat.v1.LeaveVoiceResponse
+	5,  // 18: gochat.v1.VoiceService.UpdateVoiceState:output_type -> gochat.v1.UpdateVoiceStateResponse
+	7,  // 19: gochat.v1.VoiceService.DisconnectVoiceMember:output_type -> gochat.v1.DisconnectVoiceMemberResponse
+	9,  // 20: gochat.v1.VoiceService.ListVoiceStates:output_type -> gochat.v1.ListVoiceStatesResponse
+	15, // 21: gochat.v1.VoiceServerService.Connect:output_type -> gochat.v1.VoiceServerServiceConnectResponse
+	16, // [16:22] is the sub-list for method output_type
+	10, // [10:16] is the sub-list for method input_type
+	10, // [10:10] is the sub-list for extension type_name
+	10, // [10:10] is the sub-list for extension extendee
+	0,  // [0:10] is the sub-list for field type_name
 }
 
 func init() { file_gochat_v1_voice_proto_init() }
@@ -1160,8 +1265,9 @@ func file_gochat_v1_voice_proto_init() {
 		(*VoiceServerServiceConnectRequest_Hello)(nil),
 		(*VoiceServerServiceConnectRequest_Claim)(nil),
 		(*VoiceServerServiceConnectRequest_PeerLeft)(nil),
+		(*VoiceServerServiceConnectRequest_PeerMedia)(nil),
 	}
-	file_gochat_v1_voice_proto_msgTypes[14].OneofWrappers = []any{
+	file_gochat_v1_voice_proto_msgTypes[15].OneofWrappers = []any{
 		(*VoiceServerServiceConnectResponse_Welcome)(nil),
 		(*VoiceServerServiceConnectResponse_Claimed)(nil),
 		(*VoiceServerServiceConnectResponse_Disconnect)(nil),
@@ -1172,7 +1278,7 @@ func file_gochat_v1_voice_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_gochat_v1_voice_proto_rawDesc), len(file_gochat_v1_voice_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   18,
+			NumMessages:   19,
 			NumExtensions: 0,
 			NumServices:   2,
 		},

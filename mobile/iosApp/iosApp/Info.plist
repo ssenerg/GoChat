@@ -26,6 +26,13 @@
 	<true/>
 	<key>NSMicrophoneUsageDescription</key>
 	<string>GoChat records the voice messages you send and carries your voice in voice channels.</string>
+	<key>NSCameraUsageDescription</key>
+	<string>GoChat shows your camera to the others in a voice channel when you turn it on.</string>
+	<!-- The app group and the broadcast extension that share the screen in voice channels. -->
+	<key>GoChatAppGroup</key>
+	<string>group.$(GOCHAT_BUNDLE_ID)</string>
+	<key>GoChatBroadcastExtension</key>
+	<string>$(GOCHAT_BUNDLE_ID).broadcast</string>
 	<key>NSLocalNetworkUsageDescription</key>
 	<string>GoChat connects to a GoChat server on your local network.</string>
 	<!-- A voice channel's call goes on with the screen locked or another app open. -->

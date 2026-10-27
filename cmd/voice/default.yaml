@@ -36,6 +36,8 @@ voice:
       secret: ""
       ttl: 12h
   max_peers_per_room: 25
+  # Cameras and screens a room forwards, each to everyone in it.
+  max_videos_per_room: 8
   identify_timeout: 10s
   ping_interval: 15s
   write_timeout: 10s

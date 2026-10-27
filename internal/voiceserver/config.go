@@ -22,11 +22,14 @@ type Config struct {
 	AllowedOrigins []string    `mapstructure:"allowed_origins"`
 	HTTP           *HTTPConfig `mapstructure:"http"`
 	ICE            *ICEConfig  `mapstructure:"ice"`
-	// MaxPeersPerRoom bounds one voice channel's talk on this server.
-	MaxPeersPerRoom int           `mapstructure:"max_peers_per_room"`
-	IdentifyTimeout time.Duration `mapstructure:"identify_timeout"`
-	PingInterval    time.Duration `mapstructure:"ping_interval"`
-	WriteTimeout    time.Duration `mapstructure:"write_timeout"`
+	// MaxPeersPerRoom bounds one voice channel's talk on this server, and
+	// MaxVideosPerRoom the cameras and screens it forwards, each to every
+	// other peer.
+	MaxPeersPerRoom  int           `mapstructure:"max_peers_per_room"`
+	MaxVideosPerRoom int           `mapstructure:"max_videos_per_room"`
+	IdentifyTimeout  time.Duration `mapstructure:"identify_timeout"`
+	PingInterval     time.Duration `mapstructure:"ping_interval"`
+	WriteTimeout     time.Duration `mapstructure:"write_timeout"`
 	// ReadLimit bounds one signaling message, SendQueue how many may wait
 	// for a slow browser.
 	ReadLimit int64 `mapstructure:"read_limit"`
@@ -112,6 +115,9 @@ func (c *Config) Validate() error {
 	}
 	if c.MaxPeersPerRoom < 2 {
 		return errors.New("max_peers_per_room must be at least 2")
+	}
+	if c.MaxVideosPerRoom < 0 {
+		return errors.New("max_videos_per_room must be 0, for no video, or more")
 	}
 	if c.IdentifyTimeout <= 0 || c.PingInterval <= 0 || c.WriteTimeout <= 0 || c.ReconnectMin <= 0 || c.ReconnectMax < c.ReconnectMin {
 		return errors.New("timeouts must be positive, and reconnect_max at least reconnect_min")

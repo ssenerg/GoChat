@@ -13,7 +13,36 @@
 		C7561F8115B108AEC313FA56 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 13594525FD9FAC4BFD20A110 /* ContentView.swift */; };
 		DD0BFB3B8DF5229F268768F2 /* Foundation.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 97266CEFE7B147F9F00B1854 /* Foundation.framework */; };
 		E73B2D9216BDE1F0BAE89337 /* iOSApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = DCE6F8288756490DF767E337 /* iOSApp.swift */; };
+		0E4A6ED385755486EF2EB2F8 /* Broadcast.swift in Sources */ = {isa = PBXBuildFile; fileRef = A5EE3E92B81A504E598F01E9 /* Broadcast.swift */; };
+		50510492118F791476C0967A /* ScreenBroadcast.swift in Sources */ = {isa = PBXBuildFile; fileRef = ACBD9F005EA7C12386800BF8 /* ScreenBroadcast.swift */; };
+		E42D3C0466DD2473EC8C4532 /* Broadcast.swift in Sources */ = {isa = PBXBuildFile; fileRef = A5EE3E92B81A504E598F01E9 /* Broadcast.swift */; };
+		10D0BEBE0972A3C69D516E6E /* SampleHandler.swift in Sources */ = {isa = PBXBuildFile; fileRef = 973F9A91B2F97AA45FFFB745 /* SampleHandler.swift */; };
+		13C0218CE4FE59A39D89F72F /* GoChatBroadcast.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 80892250ADB9FDA35EB44AD7 /* GoChatBroadcast.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 /* End PBXBuildFile section */
+
+/* Begin PBXContainerItemProxy section */
+		88BB4582739F17A36041CC0B /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 4397AB553FDBD346481578AC /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 3F7993FCFD18F62F71E6B18E;
+			remoteInfo = GoChatBroadcast;
+		};
+/* End PBXContainerItemProxy section */
+
+/* Begin PBXCopyFilesBuildPhase section */
+		27DF3C955CD78A3DBE717110 /* Embed Foundation Extensions */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "";
+			dstSubfolderSpec = 13;
+			files = (
+				13C0218CE4FE59A39D89F72F /* GoChatBroadcast.appex in Embed Foundation Extensions */,
+			);
+			name = "Embed Foundation Extensions";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
 		0968D3B03250344309B7C47F /* Assets.xcassets */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
@@ -23,6 +52,13 @@
 		85B06E93B562B49B7246AA6F /* Info.plist */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		97266CEFE7B147F9F00B1854 /* Foundation.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = Foundation.framework; path = Platforms/iPhoneOS.platform/Developer/SDKs/iPhoneOS26.0.sdk/System/Library/Frameworks/Foundation.framework; sourceTree = DEVELOPER_DIR; };
 		DCE6F8288756490DF767E337 /* iOSApp.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = iOSApp.swift; sourceTree = "<group>"; };
+		A5EE3E92B81A504E598F01E9 /* Broadcast.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = Broadcast.swift; sourceTree = "<group>"; };
+		ACBD9F005EA7C12386800BF8 /* ScreenBroadcast.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = ScreenBroadcast.swift; sourceTree = "<group>"; };
+		458A3DCEEF4A2198685EA294 /* iosApp.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = iosApp.entitlements; sourceTree = "<group>"; };
+		973F9A91B2F97AA45FFFB745 /* SampleHandler.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = SampleHandler.swift; sourceTree = "<group>"; };
+		414A37C30669CC2231EC2C84 /* Info.plist */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
+		2E0E09AE56144287D390AD89 /* GoChatBroadcast.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = GoChatBroadcast.entitlements; sourceTree = "<group>"; };
+		80892250ADB9FDA35EB44AD7 /* GoChatBroadcast.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = GoChatBroadcast.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -32,6 +68,13 @@
 			files = (
 				DD0BFB3B8DF5229F268768F2 /* Foundation.framework in Frameworks */,
 				3D6BB364D880B602C25C914E /* WebRTC in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		F6D562ED636B41178C94D265 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -53,7 +96,10 @@
 				13594525FD9FAC4BFD20A110 /* ContentView.swift */,
 				0968D3B03250344309B7C47F /* Assets.xcassets */,
 				85B06E93B562B49B7246AA6F /* Info.plist */,
+				458A3DCEEF4A2198685EA294 /* iosApp.entitlements */,
 				4B14BF9DD6BEC24B385DD0AF /* VoiceRtc.swift */,
+				ACBD9F005EA7C12386800BF8 /* ScreenBroadcast.swift */,
+				A5EE3E92B81A504E598F01E9 /* Broadcast.swift */,
 			);
 			name = iosApp;
 			path = iosApp;
@@ -65,7 +111,18 @@
 				CAD198F93DCDF186FAFE4B95 /* Products */,
 				ACEFC440518200B1667101FA /* Frameworks */,
 				11AC39D9D02758E446D56601 /* iosApp */,
+				2F143CFCA1CF12319F172DC4 /* GoChatBroadcast */,
 			);
+			sourceTree = "<group>";
+		};
+		2F143CFCA1CF12319F172DC4 /* GoChatBroadcast */ = {
+			isa = PBXGroup;
+			children = (
+				973F9A91B2F97AA45FFFB745 /* SampleHandler.swift */,
+				414A37C30669CC2231EC2C84 /* Info.plist */,
+				2E0E09AE56144287D390AD89 /* GoChatBroadcast.entitlements */,
+			);
+			path = GoChatBroadcast;
 			sourceTree = "<group>";
 		};
 		ACEFC440518200B1667101FA /* Frameworks */ = {
@@ -80,6 +137,7 @@
 			isa = PBXGroup;
 			children = (
 				1AF4B9342599A52A407A3245 /* iosApp.app */,
+				80892250ADB9FDA35EB44AD7 /* GoChatBroadcast.appex */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -95,10 +153,12 @@
 				FB6849FA9D00517B77A8FDE3 /* Sources */,
 				66D9C3957D1D328D1FA219F0 /* Frameworks */,
 				DA9AEC6B37265BB480449BA4 /* Resources */,
+				27DF3C955CD78A3DBE717110 /* Embed Foundation Extensions */,
 			);
 			buildRules = (
 			);
 			dependencies = (
+				80E69FBE9AC9D1AE17837C8A /* PBXTargetDependency */,
 			);
 			name = iosApp;
 			packageProductDependencies = (
@@ -107,6 +167,23 @@
 			productName = iosApp;
 			productReference = 1AF4B9342599A52A407A3245 /* iosApp.app */;
 			productType = "com.apple.product-type.application";
+		};
+		3F7993FCFD18F62F71E6B18E /* GoChatBroadcast */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = DCD7138510F708B0F9B8E233 /* Build configuration list for PBXNativeTarget "GoChatBroadcast" */;
+			buildPhases = (
+				D193548DA0118DD95A8A1549 /* Sources */,
+				F6D562ED636B41178C94D265 /* Frameworks */,
+				84849B0E61BB6C41449EFCC7 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = GoChatBroadcast;
+			productName = GoChatBroadcast;
+			productReference = 80892250ADB9FDA35EB44AD7 /* GoChatBroadcast.appex */;
+			productType = "com.apple.product-type.app-extension";
 		};
 /* End PBXNativeTarget section */
 
@@ -136,6 +213,7 @@
 			projectRoot = "";
 			targets = (
 				FE81157000DA4995D75E79B5 /* iosApp */,
+				3F7993FCFD18F62F71E6B18E /* GoChatBroadcast */,
 			);
 		};
 /* End PBXProject section */
@@ -146,6 +224,13 @@
 			buildActionMask = 2147483647;
 			files = (
 				2160942AD84B06FCBD9D1C73 /* Assets.xcassets in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		84849B0E61BB6C41449EFCC7 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -181,10 +266,29 @@
 				E73B2D9216BDE1F0BAE89337 /* iOSApp.swift in Sources */,
 				C7561F8115B108AEC313FA56 /* ContentView.swift in Sources */,
 				44330DABCE1B873CB0ADA4EC /* VoiceRtc.swift in Sources */,
+				50510492118F791476C0967A /* ScreenBroadcast.swift in Sources */,
+				0E4A6ED385755486EF2EB2F8 /* Broadcast.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		D193548DA0118DD95A8A1549 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				10D0BEBE0972A3C69D516E6E /* SampleHandler.swift in Sources */,
+				E42D3C0466DD2473EC8C4532 /* Broadcast.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 /* End PBXSourcesBuildPhase section */
+
+/* Begin PBXTargetDependency section */
+		80E69FBE9AC9D1AE17837C8A /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 3F7993FCFD18F62F71E6B18E /* GoChatBroadcast */;
+			targetProxy = 88BB4582739F17A36041CC0B /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
 
 /* Begin XCBuildConfiguration section */
 		07B7B977875591780F367CDE /* Debug */ = {
@@ -194,7 +298,7 @@
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CLANG_ENABLE_OBJC_WEAK = NO;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 3;
+				CODE_SIGN_ENTITLEMENTS = iosApp/iosApp.entitlements;
 				DEVELOPMENT_TEAM = "";
 				ENABLE_USER_SCRIPT_SANDBOXING = NO;
 				"EXCLUDED_ARCHS[sdk=iphonesimulator*]" = x86_64;
@@ -206,13 +310,12 @@
 				INFOPLIST_FILE = iosApp/Info.plist;
 				IPHONEOS_DEPLOYMENT_TARGET = 16.0;
 				LD_RUNPATH_SEARCH_PATHS = "$(inherited) @executable_path/Frameworks";
-				MARKETING_VERSION = 0.3.0;
 				OTHER_LDFLAGS = (
 					"$(inherited)",
 					"-framework",
 					GoChatUI,
 				);
-				PRODUCT_BUNDLE_IDENTIFIER = io.github.ssenerg.gochat;
+				PRODUCT_BUNDLE_IDENTIFIER = "$(GOCHAT_BUNDLE_ID)";
 				PRODUCT_NAME = GoChat;
 				SDKROOT = iphoneos;
 				SWIFT_VERSION = 5.0;
@@ -253,6 +356,9 @@
 				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
 				CLANG_WARN_UNREACHABLE_CODE = YES;
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				CURRENT_PROJECT_VERSION = 3;
+				GOCHAT_BUNDLE_ID = io.github.ssenerg.gochat;
+				MARKETING_VERSION = 0.3.0;
 				COPY_PHASE_STRIP = NO;
 				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
 				ENABLE_NS_ASSERTIONS = NO;
@@ -281,7 +387,7 @@
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CLANG_ENABLE_OBJC_WEAK = NO;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 3;
+				CODE_SIGN_ENTITLEMENTS = iosApp/iosApp.entitlements;
 				DEVELOPMENT_TEAM = "";
 				ENABLE_USER_SCRIPT_SANDBOXING = NO;
 				"EXCLUDED_ARCHS[sdk=iphonesimulator*]" = x86_64;
@@ -293,13 +399,12 @@
 				INFOPLIST_FILE = iosApp/Info.plist;
 				IPHONEOS_DEPLOYMENT_TARGET = 16.0;
 				LD_RUNPATH_SEARCH_PATHS = "$(inherited) @executable_path/Frameworks";
-				MARKETING_VERSION = 0.3.0;
 				OTHER_LDFLAGS = (
 					"$(inherited)",
 					"-framework",
 					GoChatUI,
 				);
-				PRODUCT_BUNDLE_IDENTIFIER = io.github.ssenerg.gochat;
+				PRODUCT_BUNDLE_IDENTIFIER = "$(GOCHAT_BUNDLE_ID)";
 				PRODUCT_NAME = GoChat;
 				SDKROOT = iphoneos;
 				SWIFT_VERSION = 5.0;
@@ -341,6 +446,9 @@
 				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
 				CLANG_WARN_UNREACHABLE_CODE = YES;
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				CURRENT_PROJECT_VERSION = 3;
+				GOCHAT_BUNDLE_ID = io.github.ssenerg.gochat;
+				MARKETING_VERSION = 0.3.0;
 				COPY_PHASE_STRIP = NO;
 				DEBUG_INFORMATION_FORMAT = dwarf;
 				ENABLE_STRICT_OBJC_MSGSEND = YES;
@@ -369,6 +477,49 @@
 			};
 			name = Debug;
 		};
+		B83762971BA640E7EF0022A6 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				APPLICATION_EXTENSION_API_ONLY = YES;
+				CODE_SIGN_ENTITLEMENTS = GoChatBroadcast/GoChatBroadcast.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				DEVELOPMENT_TEAM = "";
+				"EXCLUDED_ARCHS[sdk=iphonesimulator*]" = x86_64;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = GoChatBroadcast/Info.plist;
+				IPHONEOS_DEPLOYMENT_TARGET = 16.0;
+				LD_RUNPATH_SEARCH_PATHS = "$(inherited) @executable_path/Frameworks @executable_path/../../Frameworks";
+				PRODUCT_BUNDLE_IDENTIFIER = "$(GOCHAT_BUNDLE_ID).broadcast";
+				PRODUCT_NAME = GoChatBroadcast;
+				SDKROOT = iphoneos;
+				SKIP_INSTALL = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Debug;
+		};
+		B06D4696ECED04DB6B15E02F /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				APPLICATION_EXTENSION_API_ONLY = YES;
+				CODE_SIGN_ENTITLEMENTS = GoChatBroadcast/GoChatBroadcast.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				DEVELOPMENT_TEAM = "";
+				"EXCLUDED_ARCHS[sdk=iphonesimulator*]" = x86_64;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = GoChatBroadcast/Info.plist;
+				IPHONEOS_DEPLOYMENT_TARGET = 16.0;
+				LD_RUNPATH_SEARCH_PATHS = "$(inherited) @executable_path/Frameworks @executable_path/../../Frameworks";
+				PRODUCT_BUNDLE_IDENTIFIER = "$(GOCHAT_BUNDLE_ID).broadcast";
+				PRODUCT_NAME = GoChatBroadcast;
+				SDKROOT = iphoneos;
+				SKIP_INSTALL = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				VALIDATE_PRODUCT = YES;
+			};
+			name = Release;
+		};
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
@@ -386,6 +537,15 @@
 			buildConfigurations = (
 				586448B445D0443CCAE2A335 /* Debug */,
 				13D3EB1AEFA7E253DE20CB53 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		DCD7138510F708B0F9B8E233 /* Build configuration list for PBXNativeTarget "GoChatBroadcast" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				B06D4696ECED04DB6B15E02F /* Release */,
+				B83762971BA640E7EF0022A6 /* Debug */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;

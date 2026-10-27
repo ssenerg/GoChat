@@ -1,8 +1,9 @@
 // GoChat's voice client, which joins voice channels the way Discord's does:
 // the chat server hands out a voice server and a token, and the page connects
 // to that server's signaling websocket, sends the microphone over WebRTC and
-// plays everyone else in the channel. No inline handlers: the page runs under
-// a strict Content-Security-Policy.
+// plays everyone else in the channel. It also sends the camera and the
+// screen, and shows the others'. No inline handlers: the page runs under a
+// strict Content-Security-Policy.
 (function () {
   "use strict";
 
@@ -11,6 +12,12 @@
   var deafened = load("deafened");
   // Who speaks, by user id, so redrawn lists keep showing it.
   var speakers = {};
+  // The elements showing cameras and screens, by stream id: they outlive
+  // the tiles htmx redraws, and go back in once it has.
+  var videoEls = {};
+  // What a camera and a screen may send, in bits per second: the voice
+  // server drops a source that sends much more.
+  var bitrates = { camera: 1000000, screen: 2500000 };
   // The page's other files sit beside this one, versioned alike.
   var staticBase = document.currentScript ? document.currentScript.src.replace(/[^/]*$/, "") : "";
   var noiseModes = ["off", "standard", "strong"];
@@ -50,6 +57,17 @@
 
   function canDenoise() {
     return !!(window.AudioWorkletNode && window.WebAssembly && staticBase);
+  }
+
+  // canVideo says the browser can put a camera or screen on a transceiver
+  // the voice server offered, which video in voice channels takes.
+  function canVideo() {
+    return !!(window.RTCRtpSender && RTCRtpSender.prototype.replaceTrack && window.RTCRtpTransceiver);
+  }
+
+  // Phones' browsers cannot share their screen.
+  function canShareScreen() {
+    return canVideo() && !!(navigator.mediaDevices && navigator.mediaDevices.getDisplayMedia);
   }
 
   // showNoiseSetting marks this browser's choice on the settings page.
@@ -185,7 +203,12 @@
     // The chat server moves whoever joins elsewhere: only the page's own
     // connection has to go.
     if (call) hangUp(call);
-    var state = { channel: channelID, name: "", remote: {}, early: [], queue: Promise.resolve(), connected: false, closing: false };
+    // videos are the others' cameras and screens, by stream id; camera and
+    // screen are the page's own, while it sends them.
+    var state = {
+      channel: channelID, name: "", remote: {}, videos: {}, camera: null, screen: null,
+      early: [], queue: Promise.resolve(), connected: false, closing: false
+    };
     call = state;
     render();
     microphone(noiseMode())
@@ -214,7 +237,7 @@
   function connect(state, ticket) {
     var ws = new WebSocket(ticket.endpoint);
     state.ws = ws;
-    ws.onopen = function () { send(state, { op: "identify", token: ticket.token }); };
+    ws.onopen = function () { send(state, { op: "identify", token: ticket.token, video: canVideo() }); };
     ws.onmessage = function (e) {
       var msg;
       try {
@@ -247,9 +270,18 @@
             var early = state.early.splice(0);
             return Promise.all(early.map(function (c) { return state.pc.addIceCandidate(c).catch(function () {}); }));
           })
+          .then(function () { return useSlots(state, msg.slots); })
           .then(function () { return state.pc.createAnswer(); })
           .then(function (answer) { return state.pc.setLocalDescription(answer); })
-          .then(function () { send(state, { op: "answer", sdp: state.pc.localDescription.sdp }); });
+          .then(function () {
+            send(state, { op: "answer", sdp: state.pc.localDescription.sdp });
+            if (msg.slots && !state.slots) {
+              state.slots = msg.slots;
+              render();
+            }
+            limit(state, "camera");
+            limit(state, "screen");
+          });
       case "candidate":
         if (!msg.candidate || !state.pc) return null;
         // A candidate before the offer it belongs to waits for it.
@@ -260,6 +292,13 @@
         return state.pc.addIceCandidate(msg.candidate);
       case "speaking":
         setSpeaking(msg.user_id, !!msg.speaking);
+        return null;
+      case "video":
+        // The room forwards no more cameras and screens.
+        if (msg.on === false && (msg.source === "camera" || msg.source === "screen") && state[msg.source]) {
+          stopVideo(state, msg.source);
+          toast("Your " + msg.source + " is off: " + (msg.reason || "the voice channel refused it") + ".");
+        }
         return null;
     }
     return null;
@@ -272,9 +311,12 @@
     pc.onicecandidate = function (e) {
       if (e.candidate) send(state, { op: "candidate", candidate: e.candidate.toJSON() });
     };
-    // Each voice arrives as its own stream, named after whose it is.
+    // Each voice arrives as its own stream, named after whose it is; each
+    // camera and screen too, named after whose and which.
     pc.ontrack = function (e) {
-      if (e.streams[0]) play(state, e.streams[0]);
+      if (!e.streams[0]) return;
+      if (e.track.kind === "video") watch(state, e.streams[0]);
+      else play(state, e.streams[0]);
     };
     pc.onconnectionstatechange = function () {
       if (call !== state) return;
@@ -318,6 +360,224 @@
       delete state.remote[id];
       setSpeaking(id, false);
     };
+  }
+
+  // slot finds the transceiver the voice server takes a camera or the
+  // screen on.
+  function slot(state, source, mids) {
+    var mid = (mids || state.slots || {})[source];
+    if (!mid || !state.pc) return null;
+    var found = null;
+    state.pc.getTransceivers().forEach(function (t) {
+      if (t.mid === mid) found = t;
+    });
+    return found;
+  }
+
+  // useSlots answers the camera's and the screen's transceivers sendonly,
+  // with what the page sends on them, so turning either on or off later
+  // needs no new offer.
+  function useSlots(state, mids) {
+    if (!mids) return null;
+    return Promise.all(["camera", "screen"].map(function (source) {
+      var t = slot(state, source, mids);
+      if (!t) return null;
+      if (t.direction !== "sendonly") t.direction = "sendonly";
+      var track = state[source] ? state[source].getVideoTracks()[0] : null;
+      return t.sender.track === track ? null : t.sender.replaceTrack(track);
+    }));
+  }
+
+  // limit caps what a camera or the screen sends; a screen keeps its
+  // sharpness and gives up frames when the network is short.
+  function limit(state, source) {
+    var t = slot(state, source);
+    if (!t || !t.sender.getParameters) return;
+    var p = t.sender.getParameters();
+    if (!p.encodings || !p.encodings.length) return;
+    p.encodings[0].maxBitrate = bitrates[source];
+    if (source === "screen") p.degradationPreference = "maintain-resolution";
+    t.sender.setParameters(p).catch(function () {});
+  }
+
+  // watch keeps a camera or screen of someone else while it comes.
+  function watch(state, stream) {
+    state.videos[stream.id] = stream;
+    stream.onremovetrack = function () {
+      if (stream.getVideoTracks().length || state.videos[stream.id] !== stream) return;
+      delete state.videos[stream.id];
+      showVideos();
+    };
+    showVideos();
+  }
+
+  // startVideo sends a camera or the screen, and tells the others.
+  function startVideo(state, source, stream) {
+    var t = slot(state, source);
+    if (!t) {
+      stopTracks(stream);
+      return;
+    }
+    state[source] = stream;
+    t.sender.replaceTrack(stream.getVideoTracks()[0])
+      .then(function () { limit(state, source); })
+      .catch(function () {
+        if (state[source] === stream) stopVideo(state, source);
+        toast("Could not send the " + source + ".");
+      });
+    send(state, { op: "video", source: source, on: true });
+    render();
+  }
+
+  function stopVideo(state, source) {
+    var stream = state[source];
+    if (!stream) return;
+    state[source] = null;
+    var t = slot(state, source);
+    if (t) t.sender.replaceTrack(null).catch(function () {});
+    stopTracks(stream);
+    send(state, { op: "video", source: source, on: false });
+    render();
+  }
+
+  function toggleCamera() {
+    var state = call;
+    if (!state || !state.slots) return;
+    if (state.camera) {
+      stopVideo(state, "camera");
+      return;
+    }
+    navigator.mediaDevices.getUserMedia({ video: { width: { ideal: 1280 }, height: { ideal: 720 }, frameRate: { ideal: 24, max: 30 } } })
+      .then(function (stream) {
+        if (call !== state || state.camera) {
+          stopTracks(stream);
+          return;
+        }
+        startVideo(state, "camera", stream);
+      })
+      .catch(function (err) {
+        toast(err && err.name === "NotAllowedError" ? "Allow this site to use the camera to turn it on." : "Could not turn the camera on.");
+      });
+  }
+
+  function toggleScreen() {
+    var state = call;
+    if (!state || !state.slots) return;
+    if (state.screen) {
+      stopVideo(state, "screen");
+      return;
+    }
+    navigator.mediaDevices.getDisplayMedia({ video: { frameRate: { ideal: 15, max: 30 } }, audio: false })
+      .then(function (stream) {
+        if (call !== state || state.screen) {
+          stopTracks(stream);
+          return;
+        }
+        var track = stream.getVideoTracks()[0];
+        // Text and lines matter more than motion on a shared screen.
+        if ("contentHint" in track) track.contentHint = "detail";
+        // The browser's own "Stop sharing" ends the track.
+        track.onended = function () {
+          if (call === state && state.screen === stream) stopVideo(state, "screen");
+        };
+        startVideo(state, "screen", stream);
+      })
+      .catch(function (err) {
+        // Closing the browser's picker is a choice, not a failure.
+        if (!err || err.name !== "NotAllowedError") toast("Could not share the screen.");
+      });
+  }
+
+  // videoEl is the element that shows a stream, made once per stream id.
+  function videoEl(id, stream, make) {
+    var el = videoEls[id];
+    if (!el) {
+      el = make();
+      videoEls[id] = el;
+    }
+    var video = el.tagName === "VIDEO" ? el : el.querySelector("video");
+    if (video.srcObject !== stream) video.srcObject = stream;
+    return el;
+  }
+
+  // resume plays a video again once it is back on the page.
+  function resume(el) {
+    var video = el.tagName === "VIDEO" ? el : el.querySelector("video");
+    var playing = video && video.play();
+    if (playing && playing.catch) playing.catch(function () {});
+  }
+
+  // showVideos puts each camera in its owner's tile and each screen above
+  // the tiles, on the page of the channel the page talks in.
+  function showVideos() {
+    var room = document.querySelector("[data-voice-room]");
+    var here = !!call && !!room && room.dataset.voiceRoom === call.channel;
+    var cameras = {};
+    var screens = [];
+    if (here) {
+      Object.keys(call.videos).forEach(function (id) {
+        var at = id.lastIndexOf(":");
+        var user = id.slice(0, at);
+        if (id.slice(at + 1) === "camera") cameras[user] = { id: id, stream: call.videos[id] };
+        else screens.push({ id: id, user: user, stream: call.videos[id] });
+      });
+      // The page's own camera and screen show too, the camera mirrored.
+      if (call.camera && call.userID) cameras[call.userID] = { id: "self:camera", stream: call.camera, mirror: true };
+      if (call.screen && call.userID) screens.unshift({ id: "self:screen", user: call.userID, stream: call.screen });
+    }
+    var shown = {};
+    document.querySelectorAll(".voice-tile[data-user]").forEach(function (tile) {
+      var cam = cameras[tile.dataset.user];
+      var old = tile.querySelector(".vt-video");
+      if (!cam) {
+        if (old) old.remove();
+        tile.classList.remove("has-video");
+        return;
+      }
+      var el = videoEl(cam.id, cam.stream, function () {
+        var v = document.createElement("video");
+        v.className = "vt-video";
+        v.autoplay = true;
+        v.playsInline = true;
+        v.muted = true;
+        return v;
+      });
+      el.classList.toggle("mirror", !!cam.mirror);
+      if (old && old !== el) old.remove();
+      if (el.parentNode !== tile) tile.insertBefore(el, tile.firstChild);
+      tile.classList.add("has-video");
+      resume(el);
+      shown[cam.id] = true;
+    });
+    var box = room && room.querySelector("[data-voice-screens]");
+    var tpl = room && room.querySelector("[data-voice-screen-template]");
+    if (box && tpl) {
+      screens.forEach(function (s) {
+        var el = videoEl(s.id, s.stream, function () { return tpl.content.firstElementChild.cloneNode(true); });
+        var tile = room.querySelector('.voice-tile[data-user="' + cssEscape(s.user) + '"]');
+        var name = s.id === "self:screen" ? "Your screen" : (tile && tile.dataset.name ? tile.dataset.name + "'s screen" : "A screen");
+        el.querySelector(".vs-name").textContent = name;
+        el.dataset.user = s.user;
+        box.appendChild(el);
+        resume(el);
+        shown[s.id] = true;
+      });
+      Array.prototype.slice.call(box.children).forEach(function (el) {
+        if (screens.every(function (s) { return videoEls[s.id] !== el; })) el.remove();
+      });
+      box.hidden = screens.length === 0;
+    }
+    // Elements of streams that went are dropped; those merely not on this
+    // page are kept for when it comes back.
+    Object.keys(videoEls).forEach(function (id) {
+      var gone = !call || (id === "self:camera" ? !call.camera : id === "self:screen" ? !call.screen : !call.videos[id]);
+      if (gone) {
+        videoEls[id].remove();
+        delete videoEls[id];
+      } else if (!shown[id]) {
+        videoEls[id].remove();
+      }
+    });
   }
 
   // listen tells the others when the microphone hears a voice, as
@@ -379,6 +639,10 @@
     if (state.ws) state.ws.close(1000);
     if (state.pc) state.pc.close();
     if (state.mic) release(state.mic);
+    stopTracks(state.camera);
+    stopTracks(state.screen);
+    state.camera = state.screen = null;
+    state.videos = {};
     Object.keys(state.remote).forEach(function (id) { state.remote[id].remove(); });
     speakers = {};
     showSpeakers();
@@ -409,6 +673,8 @@
     });
   }
 
+  // report tells the chat server of a mute; the voice server tells it of
+  // the camera and the screen, which it forwards.
   function report() {
     if (call && call.ws) post("/voice/state", { self_mute: muted || deafened ? "1" : "0", self_deaf: deafened ? "1" : "0" }).catch(function () {});
   }
@@ -454,8 +720,19 @@
       var here = !!call && call.channel === room.dataset.voiceRoom;
       room.querySelectorAll(".voice-room-bar [data-voice-join]").forEach(function (b) { b.hidden = here; });
       room.querySelectorAll(".voice-room-bar [data-voice-leave]").forEach(function (b) { b.hidden = !here; });
+      // The camera and the screen go out once the connection is up.
+      var live = here && call.connected && !!call.slots;
+      room.querySelectorAll(".voice-room-bar [data-voice-camera]").forEach(function (b) {
+        b.hidden = !live;
+        b.setAttribute("aria-pressed", live && call.camera ? "true" : "false");
+      });
+      room.querySelectorAll(".voice-room-bar [data-voice-screen]").forEach(function (b) {
+        b.hidden = !live || !canShareScreen();
+        b.setAttribute("aria-pressed", live && call.screen ? "true" : "false");
+      });
     }
     document.body.classList.toggle("in-voice", !!call);
+    showVideos();
   }
 
   document.addEventListener("click", function (e) {
@@ -473,6 +750,20 @@
     }
     if (t.closest("[data-voice-mute]")) {
       toggleMute();
+      return;
+    }
+    if (t.closest("[data-voice-camera]")) {
+      toggleCamera();
+      return;
+    }
+    if (t.closest("[data-voice-screen]")) {
+      toggleScreen();
+      return;
+    }
+    var expand = t.closest(".vs-expand");
+    if (expand) {
+      var screen = expand.closest(".voice-screen");
+      if (screen && screen.requestFullscreen) screen.requestFullscreen().catch(function () {});
       return;
     }
     if (t.closest("[data-voice-deaf]")) toggleDeaf();
@@ -500,7 +791,9 @@
   });
 
   document.body.addEventListener("htmx:oobAfterSwap", function (e) {
-    if (isVoiceList(e.target)) showSpeakers();
+    if (!isVoiceList(e.target)) return;
+    showSpeakers();
+    showVideos();
   });
 
   document.body.addEventListener("htmx:afterSwap", function () {

@@ -26,6 +26,12 @@ type (
 	peerLeft struct {
 		userID, channelID, session string
 	}
+	// peerMedia says whether a room forwards a peer's camera, and its
+	// screen.
+	peerMedia struct {
+		userID, channelID, session string
+		video, stream              bool
+	}
 	setRooms struct{ pid *actor.PID }
 )
 
@@ -92,6 +98,10 @@ func (l *link) Receive(c *actor.Context) {
 	case peerLeft:
 		l.write(&pb.VoiceServerServiceConnectRequest{Frame: &pb.VoiceServerServiceConnectRequest_PeerLeft{PeerLeft: &pb.VoicePeerLeft{
 			UserId: msg.userID, ChannelId: msg.channelID, Session: msg.session,
+		}}})
+	case peerMedia:
+		l.write(&pb.VoiceServerServiceConnectRequest{Frame: &pb.VoiceServerServiceConnectRequest_PeerMedia{PeerMedia: &pb.VoicePeerMedia{
+			UserId: msg.userID, ChannelId: msg.channelID, Session: msg.session, Video: msg.video, Stream: msg.stream,
 		}}})
 	case linkUp:
 		l.gen, l.stream = msg.gen, msg.stream

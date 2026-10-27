@@ -44,6 +44,11 @@ var icons = map[string]string{
 	"headphones-off": `<path d="M4.5 15v-3a7.5 7.5 0 0 1 15 0v3"/><rect x="3.5" y="14" width="4" height="6" rx="1.5"/><rect x="16.5" y="14" width="4" height="6" rx="1.5"/><path d="M3 3l18 18"/>`,
 	"phone-off":      `<path d="M3.5 13.5c4.6-4 12.4-4 17 0l-2 2.6-3.2-1.2v-2.4a10.5 10.5 0 0 0-6.6 0v2.4l-3.2 1.2z"/>`,
 	"signal":         `<path d="M5 19v-2.5M9.5 19v-5.5M14 19v-8.5M18.5 19V6"/>`,
+	"video":          `<rect x="3" y="6.5" width="12.5" height="11" rx="2.5"/><path d="M15.5 10.5l5-3v9l-5-3"/>`,
+	"video-off":      `<rect x="3" y="6.5" width="12.5" height="11" rx="2.5"/><path d="M15.5 10.5l5-3v9l-5-3M3 3l18 18"/>`,
+	"screen":         `<rect x="3" y="4" width="18" height="12.5" rx="2"/><path d="M8 20.5h8M12 16.5v4M12 13V7.5M9.5 10l2.5-2.5 2.5 2.5"/>`,
+	"screen-off":     `<rect x="3" y="4" width="18" height="12.5" rx="2"/><path d="M8 20.5h8M12 16.5v4M3 3l18 18"/>`,
+	"expand":         `<path d="M4 9V5a1 1 0 0 1 1-1h4M15 4h4a1 1 0 0 1 1 1v4M20 15v4a1 1 0 0 1-1 1h-4M9 20H5a1 1 0 0 1-1-1v-4"/>`,
 	"browse":         `<path d="M4 6h16M4 12h10M4 18h7"/><circle cx="17.5" cy="16.5" r="2.5"/><path d="M19.5 18.5L21 20"/>`,
 }
 

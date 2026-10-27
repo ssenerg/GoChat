@@ -272,6 +272,33 @@ func TestPeerLeftNeedsTheSameSession(t *testing.T) {
 	}
 }
 
+func TestPeerMediaShowsWhatTheVoiceServerForwards(t *testing.T) {
+	r := newRig(t, 10, gocql.UUID{})
+	r.serverUp("vs1")
+	room, p := ids.New(), r.user()
+	got := r.connect(p, room, "vs1")
+	media := func(key, session string, video, stream bool) PeerMedia {
+		return PeerMedia{Key: key, UserID: p.UserID.String(), ChannelID: room.String(), Session: session, Video: video, Stream: stream}
+	}
+	r.engine.Send(r.voice, media("vs1", "stale", true, true))
+	r.engine.Send(r.voice, media("vs2", got.Session, true, true))
+	r.engine.Send(r.voice, media("vs1", got.Session, true, false))
+	if s := r.hub.last(t, room, 2); !s.States[0].SelfVideo || s.States[0].SelfStream {
+		t.Fatalf("the camera does not show alone: %+v", s.States[0])
+	}
+	r.engine.Send(r.voice, media("vs1", got.Session, false, true))
+	if s := r.hub.last(t, room, 3); s.States[0].SelfVideo || !s.States[0].SelfStream {
+		t.Fatalf("the screen does not show alone: %+v", s.States[0])
+	}
+	// Muting keeps them.
+	if _, err := r.ask(Update{UserID: p.UserID, Mute: true}); err != nil {
+		t.Fatal(err)
+	}
+	if s := r.hub.last(t, room, 4); !s.States[0].SelfMute || !s.States[0].SelfStream {
+		t.Fatalf("muting lost the screen: %+v", s.States[0])
+	}
+}
+
 // A channel whose talk ended and started again keeps counting up: pages
 // drop any state older than the one they show.
 func TestVersionsOutliveTheRoom(t *testing.T) {

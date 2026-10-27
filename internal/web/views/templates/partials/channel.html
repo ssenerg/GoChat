@@ -185,19 +185,23 @@
     </div>
   </header>
   <div class="voice-stage">
+    <div class="voice-screens" data-voice-screens hidden></div>
     {{template "voice-tiles" (dict "TeamName" .Team.Name "ChannelID" .Channel.Id "State" .Voice "Moderator" .Moderator "MeID" .MeID "OOB" false)}}
   </div>
   <div class="voice-room-bar">
     <button class="btn primary" type="button" data-voice-join="{{.Channel.Id}}">{{icon "speaker"}} Join voice</button>
+    <button class="btn video-toggle" type="button" data-voice-camera aria-pressed="false" hidden><span class="when-idle">{{icon "video"}} Camera</span><span class="when-live">{{icon "video-off"}} Stop camera</span></button>
+    <button class="btn video-toggle" type="button" data-voice-screen aria-pressed="false" hidden><span class="when-idle">{{icon "screen"}} Share screen</span><span class="when-live">{{icon "screen-off"}} Stop sharing</span></button>
     <button class="btn danger" type="button" data-voice-leave hidden>{{icon "phone-off"}} Disconnect</button>
   </div>
+  <template data-voice-screen-template><figure class="voice-screen"><video autoplay playsinline muted></video><figcaption class="vs-name"></figcaption><button class="icon-btn sm vs-expand" type="button" aria-label="Full screen" title="Full screen">{{icon "expand"}}</button></figure></template>
 </section>
 {{end}}
 
 {{define "voice-tiles"}}<div class="voice-tiles" id="voice-tiles-{{.ChannelID}}" data-version="{{.State.GetVersion}}"{{if .OOB}} hx-swap-oob="outerHTML"{{end}}>{{range .State.GetStates}}
-  <div class="voice-tile" data-user="{{.User.Id}}">
+  <div class="voice-tile" data-user="{{.User.Id}}" data-name="{{name .User}}">
     {{template "avatar" (dict "User" .User "Size" "lg")}}
-    <span class="vt-name">{{name .User}}{{if .SelfDeaf}}<span class="vt-flag" title="Deafened">{{icon "headphones-off"}}</span>{{else if .SelfMute}}<span class="vt-flag" title="Muted">{{icon "mic-off"}}</span>{{end}}</span>
+    <span class="vt-name">{{name .User}}{{if .SelfStream}}<span class="vt-live" title="Sharing their screen">Live</span>{{end}}{{if .SelfVideo}}<span class="vt-cam" title="Camera on">{{icon "video"}}</span>{{end}}{{if .SelfDeaf}}<span class="vt-flag" title="Deafened">{{icon "headphones-off"}}</span>{{else if .SelfMute}}<span class="vt-flag" title="Muted">{{icon "mic-off"}}</span>{{end}}</span>
     {{if and $.Moderator (ne .User.Id $.MeID)}}<button class="icon-btn sm vt-kick" type="button" hx-post="/t/{{$.TeamName}}/ch/{{$.ChannelID}}/voice/{{.User.Id}}/disconnect" hx-swap="none" hx-confirm="Disconnect {{name .User}} from the voice channel?" aria-label="Disconnect {{name .User}}" title="Disconnect">{{icon "phone-off"}}</button>{{end}}
   </div>{{else}}
   <p class="voice-empty">Nobody is talking here yet.</p>{{end}}

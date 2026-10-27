@@ -158,7 +158,7 @@ func (s *Server) rtc(w http.ResponseWriter, r *http.Request) {
 		defer close(written)
 		s.write(wctx, ws, out)
 	}()
-	if _, err := actors.Ask[joined](ctx, s.engine, s.rooms, addPeer{session: cl.session, userID: cl.userID, channelID: cl.channelID, out: out}); err != nil {
+	if _, err := actors.Ask[joined](ctx, s.engine, s.rooms, addPeer{session: cl.session, userID: cl.userID, channelID: cl.channelID, video: first.Video, out: out}); err != nil {
 		// The chat server counts them in the talk until told otherwise.
 		s.engine.Send(s.link, peerLeft{userID: cl.userID, channelID: cl.channelID, session: cl.session})
 		if errors.Is(err, errFull) {
@@ -193,6 +193,11 @@ func (s *Server) rtc(w http.ResponseWriter, r *http.Request) {
 			m = candidate{session: cl.session, init: *msg.Candidate}
 		case opSpeaking:
 			m = speaking{session: cl.session, on: msg.Speaking}
+		case opVideo:
+			if msg.Source != sourceCamera && msg.Source != sourceScreen {
+				continue
+			}
+			m = video{session: cl.session, source: msg.Source, on: msg.On}
 		default:
 			continue
 		}

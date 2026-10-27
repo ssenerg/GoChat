@@ -48,7 +48,8 @@ func (h *Handler) headers(next http.Handler) http.Handler {
 		hd.Set("Referrer-Policy", "same-origin")
 		hd.Set("Cross-Origin-Opener-Policy", "same-origin")
 		hd.Set("Cross-Origin-Resource-Policy", "same-origin")
-		hd.Set("Permissions-Policy", "camera=(), microphone=(self), geolocation=(), payment=(), usb=(), interest-cohort=()")
+		// Voice channels take the microphone, the camera and the screen.
+		hd.Set("Permissions-Policy", "camera=(self), microphone=(self), display-capture=(self), geolocation=(), payment=(), usb=(), interest-cohort=()")
 		if h.secure {
 			hd.Set("Strict-Transport-Security", "max-age=63072000; includeSubDomains")
 		}

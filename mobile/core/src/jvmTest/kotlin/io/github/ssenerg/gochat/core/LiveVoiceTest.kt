@@ -1,11 +1,13 @@
 package io.github.ssenerg.gochat.core
 
+import gochat.v1.Channel
 import gochat.v1.ChannelType
 import gochat.v1.CreateChannelRequest
 import io.github.ssenerg.gochat.core.api.ApiClient
 import io.github.ssenerg.gochat.core.api.GoChatApi
 import io.github.ssenerg.gochat.core.socket.Connection
 import io.github.ssenerg.gochat.core.state.AppState
+import io.github.ssenerg.gochat.core.state.ChatSession
 import io.github.ssenerg.gochat.core.state.GoChatApp
 import io.github.ssenerg.gochat.core.state.MemoryStore
 import io.github.ssenerg.gochat.core.voice.IceCandidate
@@ -14,6 +16,8 @@ import io.github.ssenerg.gochat.core.voice.RtcEngine
 import io.github.ssenerg.gochat.core.voice.RtcListener
 import io.github.ssenerg.gochat.core.voice.RtcPeer
 import io.github.ssenerg.gochat.core.voice.RtcState
+import io.github.ssenerg.gochat.core.voice.VideoSlots
+import io.github.ssenerg.gochat.core.voice.VideoSource
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -28,6 +32,7 @@ import kotlinx.coroutines.withTimeout
 import kotlin.random.Random
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertNotNull
 import kotlin.test.assertTrue
 
 /**
@@ -42,7 +47,12 @@ class LiveVoiceTest {
     private val password = System.getenv("GOCHAT_E2E_ADMIN_PASSWORD")
 
     @Test
-    fun aCallTalksInAVoiceChannel() {
+    fun aCallTalksInAVoiceChannel() = live { scope -> talk(scope) }
+
+    @Test
+    fun aCallSendsItsCameraAndScreen() = live { scope -> video(scope) }
+
+    private fun live(test: suspend (CoroutineScope) -> Unit) {
         if (url == null || admin == null || password == null) {
             println("GOCHAT_E2E_URL is not set: skipping")
             return
@@ -51,15 +61,15 @@ class LiveVoiceTest {
             val main = Dispatchers.Default.limitedParallelism(1)
             val scope = CoroutineScope(SupervisorJob() + main)
             try {
-                withTimeout(60_000) { run(scope) }
+                withTimeout(60_000) { test(scope) }
             } finally {
                 scope.cancel()
             }
         }
     }
 
-    private suspend fun run(scope: CoroutineScope) {
-        val rtc = FakeRtc()
+    /** Signs in with [rtc] for WebRTC and makes a voice channel. */
+    private suspend fun signIn(scope: CoroutineScope, rtc: FakeRtc): Triple<GoChatApp, ChatSession, Channel> {
         val app = GoChatApp(MemoryStore(), scope, rtc = rtc)
         assertEquals(null, withContext(scope.coroutineContext) { app.signIn(url!!, admin!!, password!!) })
         val session = (app.state.value as AppState.SignedIn).session
@@ -70,6 +80,12 @@ class LiveVoiceTest {
                 CreateChannelRequest(team_id = st.teamId!!, name = "app-voice-" + Random.nextInt(100_000), display_name = "App voice", type = ChannelType.CHANNEL_TYPE_VOICE),
             )!!
         }
+        return Triple(app, session, room)
+    }
+
+    private suspend fun talk(scope: CoroutineScope) {
+        val rtc = FakeRtc()
+        val (app, session, room) = signIn(scope, rtc)
         val me = session.me.id
         val call = session.voice
         val errors = scope.async { call.errors.first() }
@@ -118,19 +134,87 @@ class LiveVoiceTest {
         other.logout()
     }
 
+    private suspend fun video(scope: CoroutineScope) {
+        val rtc = FakeRtc(video = true)
+        val (app, session, room) = signIn(scope, rtc)
+        val me = session.me.id
+        val call = session.voice
+        assertTrue(call.video)
+
+        // A camera turned on before the voice connects goes out once the
+        // slots are answered. The others see its mark once the voice server
+        // forwards it, which a fake WebRTC never sends it anything to.
+        withContext(scope.coroutineContext) {
+            call.join(room)
+            call.toggleCamera()
+        }
+        rtc.offers.first { it > 0 }
+        assertNotNull(rtc.slots, "the first offer names the slots")
+        rtc.listener!!.onState(RtcState.Connected)
+        rtc.camera.first { it }
+        call.videos.first { v -> v.any { it.local && it.source == VideoSource.Camera && it.userId == me } }
+
+        // The screen goes out beside it.
+        withContext(scope.coroutineContext) { call.setVideo(VideoSource.Screen, true) }
+        call.videos.first { v -> v.any { it.local && it.source == VideoSource.Screen } }
+
+        // Someone else's camera comes and goes as their stream does.
+        rtc.listener!!.onVideo("u2:camera", "their camera")
+        call.videos.first { v -> v.any { !it.local && it.userId == "u2" && it.source == VideoSource.Camera && it.track == "their camera" } }
+        rtc.listener!!.onVideo("u2:camera", null)
+        call.videos.first { v -> v.none { it.userId == "u2" } }
+
+        // The system stopping the capture stops the screen.
+        rtc.listener!!.onScreenEnded()
+        call.state.first { it?.screen == false }
+        call.videos.first { v -> v.none { it.local && it.source == VideoSource.Screen } }
+
+        // A camera that stops by itself goes off and says so.
+        var errors = scope.async { call.errors.first() }
+        rtc.listener!!.onCameraEnded()
+        assertEquals("The camera stopped.", errors.await())
+        call.state.first { it?.camera == false }
+        call.videos.first { v -> v.none { it.local && it.source == VideoSource.Camera } }
+
+        // A camera that cannot start goes back off and says so.
+        rtc.broken = true
+        errors = scope.async { call.errors.first() }
+        withContext(scope.coroutineContext) { call.toggleCamera() }
+        assertEquals("Could not turn the camera on.", errors.await())
+        call.state.first { it?.camera == false }
+
+        withContext(scope.coroutineContext) { call.leave() }
+        assertTrue(rtc.stoppedVideo > 0, "leaving stops the camera and the screen")
+        withContext(scope.coroutineContext) { app.signOut() }
+    }
+
     /** Answers like WebRTC, with an SDP the voice server takes, and records what the call asks. */
-    private class FakeRtc : RtcEngine {
+    private class FakeRtc(override val video: Boolean = false) : RtcEngine {
         var listener: RtcListener? = null
         val offers = MutableStateFlow(0)
         val muted = MutableStateFlow<Boolean?>(null)
+        val camera = MutableStateFlow(false)
+
+        @Volatile
+        var slots: VideoSlots? = null
+
+        /** Set for a camera that cannot start. */
+        @Volatile
+        var broken = false
 
         @Volatile
         var closed = 0
 
+        @Volatile
+        var stoppedVideo = 0
+
         override fun connect(iceServers: List<IceServer>, listener: RtcListener): RtcPeer {
             this.listener = listener
             return object : RtcPeer {
-                override suspend fun answer(offer: String): String = fakeAnswer(offer).also { offers.value++ }
+                override suspend fun answer(offer: String, slots: VideoSlots?): String {
+                    if (slots != null) this@FakeRtc.slots = slots
+                    return fakeAnswer(offer).also { offers.value++ }
+                }
 
                 override suspend fun addCandidate(candidate: IceCandidate) {}
 
@@ -140,10 +224,22 @@ class LiveVoiceTest {
 
                 override fun setDeafened(deafened: Boolean) {}
 
+                override suspend fun setCamera(on: Boolean): Any? {
+                    if (on && broken) return null
+                    camera.value = on
+                    return if (on) "my camera" else null
+                }
+
+                override suspend fun setScreen(on: Boolean): Any? = if (on) "my screen" else null
+
                 override fun close() {
                     closed++
                 }
             }
+        }
+
+        override fun stopVideo() {
+            stoppedVideo++
         }
 
         private fun fakeAnswer(offer: String): String {
@@ -155,15 +251,17 @@ class LiveVoiceTest {
                 append("a=fingerprint:sha-256 ${List(32) { "AB" }.joinToString(":")}\r\n")
                 append("a=ice-ufrag:fakeufrag\r\na=ice-pwd:fakepasswordfakepassword\r\n")
                 media.forEachIndexed { i, m ->
-                    val pt = Regex("a=rtpmap:(\\d+) opus/48000/2").find(m)?.groupValues?.get(1) ?: "111"
+                    val kind = if (m.startsWith("m=video")) "video" else "audio"
+                    val codec = if (kind == "video") "VP8/90000" else "opus/48000/2"
+                    val pt = Regex("a=rtpmap:(\\d+) ${Regex.escape(codec)}").find(m)?.groupValues?.get(1) ?: if (kind == "video") "96" else "111"
                     val dir = when {
                         "a=recvonly" in m -> "sendonly"
                         "a=sendonly" in m -> "recvonly"
                         "a=inactive" in m -> "inactive"
                         else -> "sendrecv"
                     }
-                    append("m=audio 9 UDP/TLS/RTP/SAVPF $pt\r\nc=IN IP4 0.0.0.0\r\na=mid:${mids[i]}\r\n")
-                    append("a=setup:active\r\na=rtcp-mux\r\na=rtpmap:$pt opus/48000/2\r\na=$dir\r\n")
+                    append("m=$kind 9 UDP/TLS/RTP/SAVPF $pt\r\nc=IN IP4 0.0.0.0\r\na=mid:${mids[i]}\r\n")
+                    append("a=setup:active\r\na=rtcp-mux\r\na=rtpmap:$pt $codec\r\na=$dir\r\n")
                 }
             }
         }
