@@ -155,3 +155,28 @@ func TestAppCallsHaveBudgetsOfTheirOwn(t *testing.T) {
 		}
 	}
 }
+
+func TestAPITeamPhotoRefusals(t *testing.T) {
+	h := &Handler{logger: zap.NewNop()}
+	mux := http.NewServeMux()
+	mux.HandleFunc("POST /api/v2/teams/{team}/photo", h.apiSetTeamPhoto)
+	do := func(team, auth string) (*httptest.ResponseRecorder, *pb.ApiError) {
+		r := httptest.NewRequest(http.MethodPost, "/api/v2/teams/"+team+"/photo", strings.NewReader("picture"))
+		r.Header.Set("Accept", "application/proto")
+		if auth != "" {
+			r.Header.Set("Authorization", auth)
+		}
+		w := httptest.NewRecorder()
+		mux.ServeHTTP(w, r)
+		e := &pb.ApiError{}
+		_ = proto.Unmarshal(w.Body.Bytes(), e)
+		return w, e
+	}
+	token := "Bearer " + strings.Repeat("A", 43)
+	if w, e := do("6f1c1f9e-8a51-4f3a-9d2e-1b7c2a9f0e11", ""); w.Code != http.StatusUnauthorized || e.Code != 16 {
+		t.Errorf("without a token: %d %v", w.Code, e)
+	}
+	if w, e := do("acme", token); w.Code != http.StatusNotFound || e.Code != 5 {
+		t.Errorf("a team that is no id: %d %v", w.Code, e)
+	}
+}

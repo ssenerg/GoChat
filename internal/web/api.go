@@ -43,9 +43,9 @@ const (
 )
 
 // apiCalls are the calls of the chat API apps may make: the unary calls of
-// the services people use. Photos go through /api/v1/photo, which turns any
-// picture into the square one the server stores; the streams belong to
-// gateways and to the file endpoints.
+// the services people use. Photos go through /api/v1/photo and
+// /api/v2/teams/{team}/photo, which turn any picture into the square one the
+// server stores; the streams belong to gateways and to the file endpoints.
 var apiCalls = map[string][]string{
 	"gochat.v1.AuthService": {
 		"GetSignupInfo", "SignUp", "Login", "VerifyMFA", "Logout", "Me",
@@ -352,6 +352,32 @@ func (h *Handler) apiSetPhoto(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	h.apiWrite(w, enc, http.StatusOK, res.User)
+}
+
+// apiSetTeamPhoto makes the body, any picture, a team's photo, for its
+// admins.
+func (h *Handler) apiSetTeamPhoto(w http.ResponseWriter, r *http.Request) {
+	enc := answerEncoding(r)
+	if !h.apiSignedIn(w, r, enc) {
+		return
+	}
+	if !uuidRe.MatchString(r.PathValue("team")) {
+		h.apiFail(w, r, enc, ierrors.NotFound("no such team"))
+		return
+	}
+	data, err := h.readRawPhoto(w, r)
+	if err != nil {
+		h.apiFail(w, r, enc, err)
+		return
+	}
+	ctx, cancel := h.client.Context(r.Context(), h.apiCall(r))
+	defer cancel()
+	res, err := h.client.Teams.SetTeamPhoto(ctx, &pb.SetTeamPhotoRequest{TeamId: r.PathValue("team"), Image: data})
+	if err != nil {
+		h.apiFail(w, r, enc, err)
+		return
+	}
+	h.apiWrite(w, enc, http.StatusOK, res.Team)
 }
 
 // readRawPhoto reads a picture sent as the whole body and turns it into the

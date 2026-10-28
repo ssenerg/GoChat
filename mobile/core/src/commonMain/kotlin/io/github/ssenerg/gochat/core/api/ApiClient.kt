@@ -5,6 +5,7 @@ import com.squareup.wire.ProtoAdapter
 import gochat.v1.ApiError
 import gochat.v1.Attachment
 import gochat.v1.ServerInfo
+import gochat.v1.Team
 import gochat.v1.User
 import io.github.ssenerg.gochat.core.socket.KtorDialer
 import io.github.ssenerg.gochat.core.socket.Socket
@@ -193,7 +194,7 @@ class ApiClient(
         return res.body()
     }
 
-    /** Sets the caller's profile photo from any picture; /api/v2 has no photos yet. */
+    /** Sets the caller's profile photo from any picture; /api/v2 has no profile photos yet. */
     suspend fun setPhoto(picture: ByteArray): User {
         val res = http.post("$baseUrl/api/v1/photo") {
             timeout { requestTimeoutMillis = 2 * 60_000 }
@@ -203,6 +204,18 @@ class ApiClient(
             setBody(picture)
         }
         return decode(res, User.ADAPTER)
+    }
+
+    /** Sets a team's photo from any picture, for its admins. */
+    suspend fun setTeamPhoto(teamId: String, picture: ByteArray): Team {
+        val res = http.post("$baseUrl/api/v2/teams/$teamId/photo") {
+            timeout { requestTimeoutMillis = 2 * 60_000 }
+            authorize()
+            accept(PROTO)
+            contentType(ContentType.Application.OctetStream)
+            setBody(picture)
+        }
+        return decode(res, Team.ADAPTER)
     }
 
     fun fileUrl(attachmentId: String) = "$baseUrl/api/v2/files/$attachmentId"

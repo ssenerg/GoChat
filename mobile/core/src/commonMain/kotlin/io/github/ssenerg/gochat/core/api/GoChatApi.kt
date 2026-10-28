@@ -54,6 +54,21 @@ class GoChatApi(val client: ApiClient) {
         auth("ChangePassword", ChangePasswordRequest(current_password = current, new_password = new), ChangePasswordResponse.ADAPTER)
     }
 
+    // Two-factor authentication with an authenticator app.
+
+    /** Starts setting it up: the app's secret, and the otpauth:// URL a QR code carries. */
+    suspend fun beginTotp(password: String) =
+        auth("BeginTOTPSetup", BeginTOTPSetupRequest(password = password), BeginTOTPSetupResponse.ADAPTER)
+
+    /** Turns it on with a code of the app; answers the recovery codes, shown only now. */
+    suspend fun confirmTotp(code: String) =
+        auth("ConfirmTOTPSetup", ConfirmTOTPSetupRequest(code = code), ConfirmTOTPSetupResponse.ADAPTER).recovery_codes
+
+    /** Turns it off with the password and a code of the app or a recovery code. */
+    suspend fun disableTotp(password: String, code: String) {
+        auth("DisableTOTP", DisableTOTPRequest(password = password, code = code), DisableTOTPResponse.ADAPTER)
+    }
+
     // People.
 
     suspend fun user(id: String) = users("GetUser", GetUserRequest(user_id = id), GetUserResponse.ADAPTER).user
@@ -82,8 +97,31 @@ class GoChatApi(val client: ApiClient) {
     suspend fun teamMembers(teamId: String, query: String = "", limit: Int = 50) =
         teams("ListTeamMembers", ListTeamMembersRequest(team_id = teamId, query = query, limit = limit), ListTeamMembersResponse.ADAPTER).members
 
+    /** A page of the team's members; its next continues the listing. */
+    suspend fun teamMembersPage(teamId: String, after: String = "", limit: Int = 100) =
+        teams("ListTeamMembers", ListTeamMembersRequest(team_id = teamId, after = after, limit = limit), ListTeamMembersResponse.ADAPTER)
+
+    suspend fun setMemberRole(teamId: String, userId: String, role: TeamRole) {
+        teams("UpdateTeamMemberRole", UpdateTeamMemberRoleRequest(team_id = teamId, user_id = userId, role = role), UpdateTeamMemberRoleResponse.ADAPTER)
+    }
+
+    suspend fun removeMember(teamId: String, userId: String) {
+        teams("RemoveTeamMember", RemoveTeamMemberRequest(team_id = teamId, user_id = userId), RemoveTeamMemberResponse.ADAPTER)
+    }
+
+    suspend fun removeTeamPhoto(teamId: String) =
+        teams("RemoveTeamPhoto", RemoveTeamPhotoRequest(team_id = teamId), RemoveTeamPhotoResponse.ADAPTER).team
+
     suspend fun createInvite(teamId: String) =
         teams("CreateInvite", CreateInviteRequest(team_id = teamId), CreateInviteResponse.ADAPTER)
+
+    /** A page of the team's open invites; its next continues the listing. */
+    suspend fun invites(teamId: String, after: String = "") =
+        teams("ListInvites", ListInvitesRequest(team_id = teamId, after = after), ListInvitesResponse.ADAPTER)
+
+    suspend fun revokeInvite(teamId: String, inviteId: String) {
+        teams("RevokeInvite", RevokeInviteRequest(team_id = teamId, invite_id = inviteId), RevokeInviteResponse.ADAPTER)
+    }
 
     suspend fun invite(token: String) = teams("GetInvite", GetInviteRequest(token = token), GetInviteResponse.ADAPTER)
 
