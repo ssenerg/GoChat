@@ -23,11 +23,13 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -42,9 +44,12 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import gochat.v1.SSOProvider
 import io.github.ssenerg.gochat.core.state.AppState
 import io.github.ssenerg.gochat.core.state.GoChatApp
+import io.github.ssenerg.gochat.ui.LocalPlatform
 import io.github.ssenerg.gochat.ui.PlatformBackHandler
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
 private enum class Mode { SignIn, SignUp }
@@ -121,6 +126,33 @@ private fun SubmitButton(text: String, busy: Boolean, enabled: Boolean, onClick:
     }
 }
 
+/** The identity providers [server] signs in with, asked once its address settles. */
+@Composable
+private fun rememberProviders(app: GoChatApp, server: String): List<SSOProvider> {
+    var providers by remember { mutableStateOf(emptyList<SSOProvider>()) }
+    LaunchedEffect(server) {
+        providers = emptyList()
+        if (server.isBlank()) return@LaunchedEffect
+        delay(600)
+        providers = app.ssoProviders(server)
+    }
+    return providers
+}
+
+/** A button per provider, which signs in with it in the system browser. */
+@Composable
+private fun ProviderButtons(app: GoChatApp, server: String, providers: List<SSOProvider>, verb: String, invite: String = "") {
+    if (providers.isEmpty()) return
+    val platform = LocalPlatform.current
+    Text("or", color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.fillMaxWidth(), textAlign = TextAlign.Center)
+    providers.forEach { p ->
+        OutlinedButton(
+            onClick = { platform.signInInBrowser(app.ssoUrl(server, p.id, invite)) { app.ssoReturned(it) } },
+            modifier = Modifier.fillMaxWidth().height(48.dp),
+        ) { Text("$verb with ${p.name}") }
+    }
+}
+
 @Composable
 private fun SignInForm(app: GoChatApp, notice: String?, server: String, onServer: (String) -> Unit, onSignUp: () -> Unit) {
     val scope = rememberCoroutineScope()
@@ -129,6 +161,7 @@ private fun SignInForm(app: GoChatApp, notice: String?, server: String, onServer
     var busy by remember { mutableStateOf(false) }
     var error by remember(notice) { mutableStateOf(notice) }
     val ready = server.isNotBlank() && login.isNotBlank() && password.isNotEmpty()
+    val providers = rememberProviders(app, server)
     fun submit() {
         if (!ready || busy) return
         busy = true
@@ -161,6 +194,7 @@ private fun SignInForm(app: GoChatApp, notice: String?, server: String, onServer
         )
         FormError(error)
         SubmitButton("Sign in", busy, ready) { submit() }
+        ProviderButtons(app, server, providers, "Sign in")
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Center, verticalAlignment = Alignment.CenterVertically) {
             Text("Got an invite?", color = MaterialTheme.colorScheme.onSurfaceVariant)
             TextButton(onClick = onSignUp) { Text("Create an account") }
@@ -222,6 +256,7 @@ private fun SignUpForm(app: GoChatApp, server: String, onServer: (String) -> Uni
     var busy by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf<String?>(null) }
     val ready = server.isNotBlank() && username.isNotBlank() && email.isNotBlank() && password.isNotEmpty()
+    val providers = rememberProviders(app, server)
     fun submit() {
         if (!ready || busy) return
         if (password != confirm) {
@@ -277,6 +312,7 @@ private fun SignUpForm(app: GoChatApp, server: String, onServer: (String) -> Uni
         )
         FormError(error)
         SubmitButton("Create account", busy, ready) { submit() }
+        ProviderButtons(app, server, providers, "Sign up", invite)
         TextButton(onClick = onBack, modifier = Modifier.fillMaxWidth()) { Text("I have an account") }
     }
 }

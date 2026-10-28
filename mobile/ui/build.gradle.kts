@@ -49,6 +49,7 @@ kotlin {
         }
         androidMain.dependencies {
             implementation(libs.androidx.activity.compose)
+            implementation(libs.androidx.browser)
             implementation(libs.ktor.client.okhttp)
             implementation(libs.stream.webrtc)
             implementation(libs.firebase.messaging)

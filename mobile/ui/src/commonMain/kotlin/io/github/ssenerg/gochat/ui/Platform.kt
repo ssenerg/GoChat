@@ -33,6 +33,14 @@ interface Platform {
     fun share(text: String)
 
     fun copy(text: String)
+
+    /**
+     * Opens a provider's sign-in page in the system browser, which shares
+     * its sign-ins: a Custom Tab, or an ASWebAuthenticationSession. Where it
+     * comes back, at the app's own scheme, goes to [onReturn], or on Android
+     * to the activity that claims the scheme.
+     */
+    fun signInInBrowser(url: String, onReturn: (String) -> Unit)
 }
 
 val LocalPlatform = staticCompositionLocalOf<Platform> { error("no platform") }

@@ -5,6 +5,7 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import io.github.ssenerg.gochat.core.state.GoChatApp
 import io.github.ssenerg.gochat.ui.AndroidPush
 import io.github.ssenerg.gochat.ui.GoChatRoot
 
@@ -22,8 +23,14 @@ class MainActivity : ComponentActivity() {
         opened(intent)
     }
 
-    /** Opens what a tapped push shows. */
+    /** Opens what a tapped push shows, or finishes a sign-in the browser came back from. */
     private fun opened(intent: Intent?) {
-        AndroidPush.target(intent)?.let { (application as GoChatApplication).app.openPush(it) }
+        val app = (application as GoChatApplication).app
+        val data = intent?.data
+        if (data?.scheme == GoChatApp.SSO_SCHEME) {
+            app.ssoReturned(data.toString())
+            return
+        }
+        AndroidPush.target(intent)?.let { app.openPush(it) }
     }
 }

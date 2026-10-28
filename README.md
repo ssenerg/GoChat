@@ -173,6 +173,10 @@ it does for the web:
 
 Apps sign in with `AuthService/Login` (and `VerifyMFA` for two-factor
 accounts) and send the session token as `Authorization: Bearer <token>`.
+With single sign-on they list the providers with `ListSSOProviders`, open
+`/login/sso/<provider>?app=<S256 challenge>` in the system browser, which
+comes back to `io.github.ssenerg.gochat:/sso?code=` (or `?error=`), and
+trade the code and their PKCE verifier for a session with `RedeemSSO`.
 Their sessions show in the web's session list by the device the app names
 in its User-Agent, such as "GoChat app on Pixel 8", and are revoked there
 like any other; each session has its own request budget.
@@ -251,11 +255,38 @@ pushed, and the apps run as before.
   `/admin/users`, deactivate them, which signs them out everywhere and closes
   their sockets at once, sign out all their sessions, and set their storage
   quota (`services.files.quota` by default). Deactivated people cannot sign
-  in; an admin cannot deactivate themself.
+  in; an admin cannot deactivate themself. The user's card lists the
+  provider accounts linked to theirs, which the admin can unlink, and
+  `/admin/sso/<provider>` lists every account linked through a provider.
 - Bootstrap: the first account, which becomes the system admin, needs the
   setup token unless `services.accounts.allow_open_bootstrap` is set.
 - TOTP: optional per user, secrets sealed with AES-256-GCM bound to the user
   id, codes single-use, ten hashed single-use recovery codes.
+- Single sign-on (off until a provider is configured): OpenID Connect's
+  authorization code flow with PKCE (S256), a state bound to the browser
+  by a cookie, and a nonce. The ID token is checked with
+  [go-oidc](https://github.com/coreos/go-oidc) against the keys the issuer
+  publishes: signature, issuer, audience (and the authorized party when
+  there are several), expiry. A flow is single-use and lasts
+  `services.accounts.sso.flow_ttl`.
+  - An account at a provider is known by its issuer and subject, never by
+    its email. A new one whose email already has an account does not sign
+    in to it: its owner signs in with their password (and second factor),
+    then confirms the link, or links it from Settings while signed in.
+  - A first sign-in creates an account only as `SignUp` would: with an
+    invite, or while `open_signup` is on, never the first account, and
+    only with a verified email. `allowed_domains` admits only verified
+    emails of those domains, at every sign-in.
+  - A provider replaces the password, not the second factor: an account
+    with TOTP on is still asked for its code. An account created through a
+    provider has no password, so it cannot sign in with one, nor turn TOTP
+    on; it relies on the provider's own second factor. It cannot unlink
+    its last provider account, though an admin can.
+  - The apps sign in in the system browser (a Custom Tab, an
+    `ASWebAuthenticationSession`). The browser comes back to the app's
+    scheme with a code that lasts two minutes, works once, and only with
+    the PKCE verifier the app began with, so another app claiming the
+    scheme gets nothing of use.
 - Invites: one-time, expiring links; only the token hash is stored and it is
   consumed with a lightweight transaction. Team admins see the open invites
   and can revoke them; an invite is suspended while its creator may not
@@ -522,6 +553,7 @@ Secrets that should come from the environment:
 | `SERVICES_ACCOUNTS_SETUP_TOKEN` (until the first account exists) | server |
 | `SERVICES_PUSH_FCM_CREDENTIALS` or `SERVICES_PUSH_FCM_CREDENTIALS_FILE` (optional) | server |
 | `SERVICES_PUSH_APNS_KEY` or `SERVICES_PUSH_APNS_KEY_FILE` (optional) | server |
+| `SERVICES_ACCOUNTS_SSO_PROVIDERS` (optional, JSON; or `client_secret_file`) | server |
 
 `services.updates` sets how long the update logs keep updates (`retention`,
 a week by default), and `services.bots` how many bots a person may own and
@@ -560,6 +592,37 @@ SERVICES_PUSH_APNS_KEY_ID=ABC123DEFG
 SERVICES_PUSH_APNS_TEAM_ID=DEF123GHIJ
 SERVICES_PUSH_APNS_TOPIC=io.github.ssenerg.gochat
 ```
+
+`services.accounts.sso` turns on single sign-on with identity providers
+that speak OpenID Connect, such as Google Workspace, Okta, Keycloak or
+Authentik. Register GoChat at the provider as a web application (a
+confidential client) whose redirect URI is
+`<web.public_url>/login/sso/callback`, then list it:
+
+```yaml
+services:
+  accounts:
+    sso:
+      providers:
+        - id: google                  # in URLs: /login/sso/google
+          name: Google                # the button: "Sign in with Google"
+          issuer: https://accounts.google.com
+          client_id: 1234.apps.googleusercontent.com
+          client_secret_file: /run/secrets/google   # or client_secret
+          allowed_domains: [example.com]            # optional
+```
+
+The issuer is the provider's OpenID issuer URL, whose
+`/.well-known/openid-configuration` the server reads on first use: for
+example `https://<org>.okta.com`, `https://<host>/realms/<realm>` for
+Keycloak, `https://<host>/application/o/<slug>/` for Authentik. The server
+must reach it over HTTPS. `scopes` asks for more than `openid email
+profile`. In the environment, `SERVICES_ACCOUNTS_SSO_PROVIDERS` takes the
+list as one line of JSON, with the same keys. New accounts follow the
+sign-up rules (`open_signup` or an invite); their usernames come from the
+provider's `preferred_username` or the email, with a number added when
+taken. The apps need nothing more: they come back through
+`io.github.ssenerg.gochat:/sso`, which they claim.
 
 Set `web.public_url` to the origin browsers use; an `https` origin turns on
 `Secure` cookies and HSTS. Behind a reverse proxy, list its addresses in
