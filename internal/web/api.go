@@ -333,6 +333,15 @@ func (h *Handler) apiPhoto(w http.ResponseWriter, r *http.Request) {
 	h.sendPhoto(w, r, h.apiCall(r), func(err error) { h.apiFail(w, r, enc, err) })
 }
 
+// apiLinkImage answers a link preview's picture.
+func (h *Handler) apiLinkImage(w http.ResponseWriter, r *http.Request) {
+	enc := answerEncoding(r)
+	if !h.apiSignedIn(w, r, enc) {
+		return
+	}
+	h.sendLinkImage(w, r, h.apiCall(r), func(err error) { h.apiFail(w, r, enc, err) })
+}
+
 // apiSetPhoto makes the body, any picture, the caller's profile photo.
 func (h *Handler) apiSetPhoto(w http.ResponseWriter, r *http.Request) {
 	enc := answerEncoding(r)

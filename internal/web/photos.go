@@ -6,6 +6,7 @@ import (
 	"errors"
 	"io"
 	"net/http"
+	"regexp"
 	"strings"
 	"time"
 
@@ -241,5 +242,40 @@ func (h *Handler) sendPhoto(w http.ResponseWriter, r *http.Request, call drpc.Ca
 	} else {
 		hd.Set("Cache-Control", "private, max-age=60")
 	}
+	_, _ = w.Write(res.Image)
+}
+
+var linkImageRe = regexp.MustCompile(`^[0-9a-f]{32}$`)
+
+func (h *Handler) serveLinkImage(w http.ResponseWriter, r *http.Request) {
+	if h.signedIn(w, r) == nil {
+		return
+	}
+	h.sendLinkImage(w, r, h.call(r), func(err error) { h.fail(w, r, err) })
+}
+
+// sendLinkImage answers the picture of a link preview, which the server
+// fetched and made safe, named by its content: it never changes.
+func (h *Handler) sendLinkImage(w http.ResponseWriter, r *http.Request, call drpc.Call, fail func(error)) {
+	id := r.PathValue("id")
+	if !linkImageRe.MatchString(id) {
+		fail(errNoPage)
+		return
+	}
+	ctx, cancel := h.client.Context(r.Context(), call)
+	defer cancel()
+	res, err := h.client.Files.GetLinkImage(ctx, &pb.GetLinkImageRequest{Id: id})
+	if err != nil {
+		fail(err)
+		return
+	}
+	if res.ContentType != "image/jpeg" && res.ContentType != "image/png" {
+		fail(errNoPage)
+		return
+	}
+	hd := w.Header()
+	hd.Set("Content-Type", res.ContentType)
+	hd.Set("Content-Security-Policy", "default-src 'none'; sandbox")
+	hd.Set("Cache-Control", "private, max-age=31536000, immutable")
 	_, _ = w.Write(res.Image)
 }
