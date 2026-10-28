@@ -38,6 +38,16 @@ func (c *cache) GetLinkPreview(_ context.Context, key []byte) ([]byte, bool, err
 	return v, ok, nil
 }
 
+func (c *cache) ttlList() []time.Duration {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	var out []time.Duration
+	for _, ttl := range c.ttls {
+		out = append(out, ttl)
+	}
+	return out
+}
+
 func (c *cache) PutLinkPreview(_ context.Context, key, preview []byte, ttl time.Duration) error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
@@ -56,6 +66,12 @@ func (s *store) Put(_ context.Context, key string, r io.Reader, ctype string) (i
 	defer s.mu.Unlock()
 	s.objs[key] = ctype
 	return int64(len(b)), nil
+}
+
+func (s *store) typeOf(key string) string {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.objs[key]
 }
 
 type resolver struct{}
@@ -146,21 +162,41 @@ func (h *harness) ask(path string) channels.Unfurl {
 	return job
 }
 
-func (h *harness) next(t *testing.T) (channels.Previewed, bool) {
+// next waits for a preview; decoding pictures is slow under the race
+// detector.
+func (h *harness) next(t *testing.T) channels.Previewed {
 	t.Helper()
 	select {
 	case p := <-h.got:
-		return p, true
-	case <-time.After(500 * time.Millisecond):
-		return channels.Previewed{}, false
+		return p
+	case <-time.After(10 * time.Second):
+		t.Fatal("no preview came")
+		return channels.Previewed{}
+	}
+}
+
+// none waits for the queue to empty, then checks that no preview came.
+func (h *harness) none(t *testing.T, what string) {
+	t.Helper()
+	deadline := time.Now().Add(10 * time.Second)
+	for h.s.pending.Load() > 0 {
+		if time.Now().After(deadline) {
+			t.Fatal("the queue did not empty")
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	select {
+	case p := <-h.got:
+		t.Fatalf("%s: %v", what, p.Preview)
+	case <-time.After(100 * time.Millisecond):
 	}
 }
 
 func TestMakesAndCachesPreviews(t *testing.T) {
 	h := newHarness(t, Config{})
 	job := h.ask("/post")
-	p, ok := h.next(t)
-	if !ok || p.Unfurl != job {
+	p := h.next(t)
+	if p.Unfurl != job {
 		t.Fatalf("got %+v", p)
 	}
 	lp := p.Preview
@@ -168,15 +204,15 @@ func TestMakesAndCachesPreviews(t *testing.T) {
 		t.Fatalf("preview %v", lp)
 	}
 	key, ok := ImageKey(lp.ImageId)
-	if !ok || h.store.objs[key] != "image/jpeg" {
-		t.Fatalf("picture %q stored as %v", lp.ImageId, h.store.objs)
+	if ctype := h.store.typeOf(key); !ok || ctype != "image/jpeg" {
+		t.Fatalf("picture %q stored as %q", lp.ImageId, ctype)
 	}
 	if n := h.hits.Load(); n != 2 {
 		t.Fatalf("%d fetches for a page and its picture", n)
 	}
 	// Another message with the link takes the cached preview.
 	h.ask("/post")
-	if p, ok := h.next(t); !ok || p.Preview.Title != "The page" || h.hits.Load() != 2 {
+	if p := h.next(t); p.Preview.Title != "The page" || h.hits.Load() != 2 {
 		t.Fatalf("cached: %v, %d fetches", p.Preview, h.hits.Load())
 	}
 }
@@ -184,26 +220,21 @@ func TestMakesAndCachesPreviews(t *testing.T) {
 func TestPagesWithoutPreviews(t *testing.T) {
 	h := newHarness(t, Config{DenyHosts: []string{"denied.test"}})
 	h.ask("/plain")
-	if _, ok := h.next(t); ok {
-		t.Fatal("a page that says nothing has a preview")
-	}
+	h.none(t, "a page that says nothing has a preview")
 	// Known to have none, it is not fetched again for a while.
 	h.ask("/plain")
-	if _, ok := h.next(t); ok || h.hits.Load() != 1 {
-		t.Fatalf("%d fetches", h.hits.Load())
+	h.none(t, "a page that says nothing has a preview")
+	if n := h.hits.Load(); n != 1 {
+		t.Fatalf("%d fetches", n)
 	}
-	for _, ttl := range h.cache.ttls {
-		if ttl != time.Minute {
-			t.Fatalf("cached for %v", ttl)
-		}
+	if ttls := h.cache.ttlList(); len(ttls) != 1 || ttls[0] != time.Minute {
+		t.Fatalf("cached for %v", ttls)
 	}
 	h.s.Preview(channels.Unfurl{ChannelID: ids.New(), MessageID: ids.NewTime(), URL: "http://denied.test/"})
-	if _, ok := h.next(t); ok {
-		t.Fatal("a denied host was previewed")
-	}
+	h.none(t, "a denied host was previewed")
 	// A picture too small to show leaves the preview without one.
 	h.ask("/pixel")
-	if p, ok := h.next(t); !ok || p.Preview.Title != "Pixel" || p.Preview.ImageId != "" {
+	if p := h.next(t); p.Preview.Title != "Pixel" || p.Preview.ImageId != "" {
 		t.Fatalf("pixel: %v", p.Preview)
 	}
 }
@@ -212,7 +243,12 @@ func TestQueueIsBounded(t *testing.T) {
 	h := newHarness(t, Config{Queue: 1})
 	h.s.pending.Store(1)
 	h.ask("/post")
-	if _, ok := h.next(t); ok || h.hits.Load() != 0 {
+	select {
+	case <-h.got:
+		t.Fatal("a link past the queue was previewed")
+	case <-time.After(300 * time.Millisecond):
+	}
+	if h.s.pending.Load() != 1 || h.hits.Load() != 0 {
 		t.Fatal("a link past the queue was previewed")
 	}
 }
