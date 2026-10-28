@@ -21,11 +21,13 @@ import (
 	"github.com/ssenerg/gochat/internal/core/models"
 	"github.com/ssenerg/gochat/internal/core/secure"
 	ierrors "github.com/ssenerg/gochat/internal/errors"
+	"github.com/ssenerg/gochat/internal/repos/minio"
 	"github.com/ssenerg/gochat/internal/services/accounts"
 	"github.com/ssenerg/gochat/internal/services/convert"
 	"github.com/ssenerg/gochat/internal/services/directory"
 	"github.com/ssenerg/gochat/internal/services/files"
 	"github.com/ssenerg/gochat/internal/services/hub"
+	"github.com/ssenerg/gochat/internal/services/previews"
 )
 
 const (
@@ -203,6 +205,37 @@ func (s *fileService) GetPhoto(ctx context.Context, req *pb.GetPhotoRequest) (*p
 		return nil, err
 	}
 	return &pb.GetPhotoResponse{Image: ph.Data, ContentType: ph.ContentType, Version: ph.Version}, nil
+}
+
+var errNoLinkImage = ierrors.NotFound("picture not found")
+
+// GetLinkImage reads a link preview's picture, which any signed-in caller
+// may see.
+func (s *fileService) GetLinkImage(ctx context.Context, req *pb.GetLinkImageRequest) (*pb.GetLinkImageResponse, error) {
+	if _, err := Principal(ctx); err != nil {
+		return nil, err
+	}
+	key, ok := previews.ImageKey(req.Id)
+	if !ok {
+		return nil, errNoLinkImage
+	}
+	body, err := s.storage.Get(ctx, key)
+	if err != nil {
+		return nil, ierrors.Internal(err)
+	}
+	defer func() { _ = body.Close() }()
+	data, err := io.ReadAll(io.LimitReader(body, previews.MaxImage+1))
+	switch {
+	case minio.Missing(err):
+		return nil, errNoLinkImage
+	case err != nil:
+		return nil, ierrors.Internal(err)
+	}
+	ctype := http.DetectContentType(data)
+	if len(data) > previews.MaxImage || (ctype != "image/jpeg" && ctype != "image/png") {
+		return nil, errNoLinkImage
+	}
+	return &pb.GetLinkImageResponse{Image: data, ContentType: ctype}, nil
 }
 
 func (s *fileService) GetStorageUsage(ctx context.Context, req *pb.GetStorageUsageRequest) (*pb.GetStorageUsageResponse, error) {

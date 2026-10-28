@@ -190,6 +190,29 @@ services:
       key_id: ""
       team_id: ""
       topic: ""
+  # Link previews: a card under each message with a link, of what the page
+  # says of itself. The server fetches the first link of the message, from
+  # public addresses only, and keeps the page's picture.
+  previews:
+    enabled: true
+    # Previews made at once, and links waiting; links past it go without.
+    workers: 4
+    queue: 256
+    # Fetching a page, and again its picture, redirects included.
+    timeout: 8s
+    max_redirects: 5
+    max_page_size: 1048576
+    max_image_size: 5242880
+    ports: [80, 443]
+    # How long a link's preview is kept for the next message with it, and
+    # how long a link that gave none is left alone.
+    cache_ttl: 24h
+    failure_ttl: 1h
+    # The only hosts previewed, all when empty, and hosts never fetched
+    # from; a name covers its subdomains.
+    allow_hosts: []
+    deny_hosts: []
+    user_agent: "Mozilla/5.0 (compatible; GoChatBot/1.0; +https://github.com/ssenerg/GoChat)"
   hub:
     gateway_queue_limit: 65536
     presence_grace: 10s

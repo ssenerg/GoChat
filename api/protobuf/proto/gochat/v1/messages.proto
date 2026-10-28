@@ -31,6 +31,19 @@ service MessageService {
   // PressButton presses a button of a bot's message: the bot gets a
   // CallbackQuery, and its answer comes back as a CallbackAnswer event.
   rpc PressButton(PressButtonRequest) returns (PressButtonResponse);
+  // RemoveLinkPreview takes the link preview off the caller's own message
+  // for good: edits bring none back.
+  rpc RemoveLinkPreview(RemoveLinkPreviewRequest) returns (RemoveLinkPreviewResponse);
+}
+
+message RemoveLinkPreviewRequest {
+  string channel_id = 1;
+  string message_id = 2;
+  string root_id = 3;
+}
+
+message RemoveLinkPreviewResponse {
+  Message message = 1;
 }
 
 message PressButtonRequest {
@@ -169,6 +182,8 @@ message PostMessageRequest {
   string root_id = 4;
   // Buttons under the message; bots only.
   Markup markup = 5;
+  // Set to post without a link preview.
+  bool no_link_preview = 6;
 }
 
 message PostMessageResponse {
@@ -183,6 +198,9 @@ message EditMessageRequest {
   string root_id = 4;
   // The message's buttons from now on, none when unset; bots only.
   Markup markup = 5;
+  // Set to remove the message's link preview for good, as
+  // RemoveLinkPreview does.
+  bool no_link_preview = 6;
 }
 
 message EditMessageResponse {

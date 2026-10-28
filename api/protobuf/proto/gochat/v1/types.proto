@@ -198,6 +198,24 @@ message Message {
   bool saved = 13;
   // The buttons a bot put under the message.
   Markup markup = 14;
+  // The card of the first link in the message, which the server makes a
+  // moment after the post; a MessageEdited brings it.
+  LinkPreview link_preview = 15;
+}
+
+// LinkPreview is what a linked page says of itself, from its Open Graph or
+// Twitter card tags, or its title and description.
+message LinkPreview {
+  // The link as the message has it.
+  string url = 1;
+  string title = 2;
+  string description = 3;
+  string site_name = 4;
+  // The page's picture, which the server keeps: GET /api/v2/previews/<id>.
+  // Empty when there is none.
+  string image_id = 5;
+  uint32 image_width = 6;
+  uint32 image_height = 7;
 }
 
 // Markup is rows of buttons under a bot's message.

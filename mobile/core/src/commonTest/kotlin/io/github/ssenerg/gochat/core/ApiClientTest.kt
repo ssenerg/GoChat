@@ -4,11 +4,16 @@ import gochat.v1.ApiError
 import gochat.v1.Attachment
 import gochat.v1.GetChannelRequest
 import gochat.v1.GetChannelResponse
+import gochat.v1.LinkPreview
+import gochat.v1.Message
+import gochat.v1.RemoveLinkPreviewRequest
+import gochat.v1.RemoveLinkPreviewResponse
 import gochat.v1.Channel
 import gochat.v1.ServerInfo
 import io.github.ssenerg.gochat.core.api.ApiClient
 import io.github.ssenerg.gochat.core.api.ApiException
 import io.github.ssenerg.gochat.core.api.AppInfo
+import io.github.ssenerg.gochat.core.api.GoChatApi
 import io.github.ssenerg.gochat.core.state.GoChatApp
 import io.github.ssenerg.gochat.core.state.MemoryStore
 import io.ktor.client.engine.mock.MockEngine
@@ -22,6 +27,7 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 import kotlin.test.assertFalse
+import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 class ApiClientTest {
@@ -49,6 +55,19 @@ class ApiClientTest {
         val api = ApiClient("https://chat.test", "tok", engine)
         assertEquals("f1", api.upload("c1", "a.txt", "hi".encodeToByteArray()).id)
         assertEquals("https://chat.test/api/v2/files/f1", api.fileUrl("f1"))
+    }
+
+    @Test
+    fun linkPreviewsAreRemovedAndTheirPicturesServed() = runTest {
+        val api = GoChatApi(ApiClient("https://chat.test", "tok", caller = { method, payload ->
+            assertEquals("gochat.v1.MessageService/RemoveLinkPreview", method)
+            val req = RemoveLinkPreviewRequest.ADAPTER.decode(payload)
+            assertEquals(listOf("c1", "m1", "r1"), listOf(req.channel_id, req.message_id, req.root_id))
+            RemoveLinkPreviewResponse(message = Message(id = "m1", channel_id = "c1", root_id = "r1")).encode()
+        }))
+        val m = Message(id = "m1", channel_id = "c1", root_id = "r1", link_preview = LinkPreview(url = "https://example.com", title = "Example"))
+        assertNull(api.removeLinkPreview(m)?.link_preview)
+        assertEquals("https://chat.test/api/v2/previews/abc", api.client.linkImageUrl("abc"))
     }
 
     @Test

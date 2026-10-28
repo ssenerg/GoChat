@@ -507,6 +507,8 @@ class ChatSession internal constructor(
 
     suspend fun pin(m: Message, pinned: Boolean): String? = act { apply(api.pin(m, pinned)) }
 
+    suspend fun removeLinkPreview(m: Message): String? = act { apply(api.removeLinkPreview(m)) }
+
     suspend fun save(m: Message, saved: Boolean): String? = act {
         api.save(m, saved)?.let { apply(it) }
         _state.update { st -> st.copy(saved = if (saved) st.saved + m.id else st.saved - m.id) }

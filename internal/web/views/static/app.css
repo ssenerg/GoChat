@@ -538,6 +538,31 @@ kbd {
 
 /* Reactions: a quiet row of pills under the message, its own in accent. */
 .reactions { display: flex; flex-wrap: wrap; gap: 6px; margin-top: .4rem; }
+
+/* Link previews: what a linked page says of itself, under the message. */
+.link-card {
+  position: relative; display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: .35rem .75rem; align-items: start;
+  max-width: min(480px, 100%); margin-top: .45rem; padding: .55rem .7rem;
+  border: 1px solid var(--border); border-left: 3px solid var(--accent); border-radius: 10px; background: var(--bg-soft);
+}
+.link-card.wide { grid-template-columns: minmax(0, 1fr); }
+.link-text { display: grid; gap: .15rem; min-width: 0; color: inherit; text-decoration: none; }
+.link-text:hover .link-title { text-decoration: underline; }
+.link-site { color: var(--fg-muted); font-size: .78rem; }
+.link-title { color: var(--link); line-height: 1.3; overflow-wrap: anywhere; }
+.link-desc {
+  color: var(--fg-muted); font-size: .86rem; line-height: 1.4; overflow-wrap: anywhere;
+  display: -webkit-box; -webkit-line-clamp: 3; line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden;
+}
+.link-image img { display: block; width: 72px; height: 72px; object-fit: cover; border-radius: 8px; border: 1px solid var(--border); }
+.link-card.wide .link-image img { width: 100%; height: auto; max-height: 260px; }
+/* Room for the author's remove button, beside the text of a wide card. */
+.link-card:has(.link-remove) { padding-right: 2rem; }
+.link-card.wide:has(.link-remove) { padding-right: .7rem; }
+.link-card.wide:has(.link-remove) .link-text { padding-right: 1.4rem; }
+.link-remove { position: absolute; top: .3rem; right: .3rem; opacity: 0; }
+.msg:hover .link-remove, .link-remove:focus-visible { opacity: 1; }
+@media (hover: none) { .link-remove { opacity: 1; } }
 .reactions:empty { display: none; }
 .reaction {
   display: inline-flex; align-items: center; gap: .3rem; height: 28px; padding: 0 .55rem; border-radius: 99px;

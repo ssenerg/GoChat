@@ -204,6 +204,7 @@ func (h *Handler) Routes() http.Handler {
 	mux.HandleFunc("GET /m/{channel}/{message}/edit", h.editMessageForm)
 	mux.Handle("POST /m/{channel}/{message}", h.csrf(http.HandlerFunc(h.editMessage)))
 	mux.Handle("POST /m/{channel}/{message}/delete", h.csrf(http.HandlerFunc(h.deleteMessage)))
+	mux.Handle("POST /m/{channel}/{message}/preview/remove", h.csrf(http.HandlerFunc(h.removeLinkPreview)))
 
 	mux.Handle("POST /voice/join", h.csrf(http.HandlerFunc(h.joinVoice)))
 	mux.Handle("POST /voice/leave", h.csrf(http.HandlerFunc(h.leaveVoice)))
@@ -214,6 +215,7 @@ func (h *Handler) Routes() http.Handler {
 	mux.HandleFunc("GET /files/{id}", h.download)
 	mux.HandleFunc("GET /files/{id}/inline", h.download)
 	mux.HandleFunc("GET /photos/{kind}/{id}/{version}", h.servePhoto)
+	mux.HandleFunc("GET /previews/{id}", h.serveLinkImage)
 
 	mux.HandleFunc("GET /settings", h.settingsPage)
 	mux.Handle("POST /settings/profile", h.csrf(http.HandlerFunc(h.updateProfile)))
@@ -255,6 +257,7 @@ func (h *Handler) Routes() http.Handler {
 	mux.HandleFunc("GET /api/v2/socket", h.apiSocket)
 	mux.HandleFunc("POST /api/v2/files", h.apiUpload)
 	mux.HandleFunc("GET /api/v2/files/{id}", h.apiDownload)
+	mux.HandleFunc("GET /api/v2/previews/{id}", h.apiLinkImage)
 	mux.HandleFunc("POST /api/v2/teams/{team}/photo", h.apiSetTeamPhoto)
 	mux.HandleFunc("POST /api/v2/bot/{method...}", h.botAPI)
 

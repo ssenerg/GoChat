@@ -214,3 +214,48 @@ func TestBotMessageShowsItsButtons(t *testing.T) {
 		t.Error("a javascript: link was rendered")
 	}
 }
+
+func TestLinkPreview(t *testing.T) {
+	r, err := New(10)
+	if err != nil {
+		t.Fatal(err)
+	}
+	author := &pb.User{Id: "a", Username: "ann"}
+	msg := &pb.Message{Id: "id1", ChannelId: "c1", RootId: "r1", Content: "https://example.com/post", Author: author, LinkPreview: &pb.LinkPreview{
+		Url: "https://example.com/post", Title: "A <b>title</b>", Description: "What it says.", SiteName: "Example",
+		ImageId: "0123456789abcdef0123456789abcdef", ImageWidth: 640, ImageHeight: 336,
+	}}
+	render := func(viewer *pb.User) string {
+		t.Helper()
+		b, err := r.MessageBytes("message", r.Message(msg, viewer, false))
+		if err != nil {
+			t.Fatal(err)
+		}
+		return string(b)
+	}
+	// Sockets share rendered messages: a preview that comes later, with no
+	// edit, is rendered anew.
+	preview := msg.LinkPreview
+	msg.LinkPreview = nil
+	if strings.Contains(render(author), "link-card") {
+		t.Fatal("a card without a preview")
+	}
+	msg.LinkPreview = preview
+	out := render(author)
+	for _, want := range []string{
+		`class="link-card wide"`, `href="https://example.com/post"`, `A &lt;b&gt;title&lt;/b&gt;`, `<span class="link-site">Example</span>`,
+		`src="/previews/0123456789abcdef0123456789abcdef"`, `hx-post="/m/c1/id1/preview/remove?root=r1"`,
+	} {
+		if !strings.Contains(out, want) {
+			t.Errorf("missing %s in %s", want, out)
+		}
+	}
+	if strings.Contains(render(&pb.User{Id: "b", Username: "bob"}), "preview/remove") {
+		t.Error("someone else may remove the preview")
+	}
+	msg.LinkPreview.ImageWidth, msg.LinkPreview.ImageHeight, msg.LinkPreview.Url = 200, 200, "javascript:alert(1)"
+	out = render(author)
+	if strings.Contains(out, "link-card wide") || strings.Contains(out, "javascript:") {
+		t.Errorf("a square picture or a bad link: %s", out)
+	}
+}

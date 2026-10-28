@@ -69,6 +69,11 @@ func (s *Storage) Delete(ctx context.Context, key string) error {
 	return s.client.RemoveObject(ctx, s.cfg.Bucket, key, minio.RemoveObjectOptions{})
 }
 
+// Missing reports whether err says the object does not exist.
+func Missing(err error) bool {
+	return minio.ToErrorResponse(err).Code == "NoSuchKey"
+}
+
 func (s *Storage) Ping(ctx context.Context) error {
 	_, err := s.client.BucketExists(ctx, s.cfg.Bucket)
 	return err

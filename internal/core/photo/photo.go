@@ -41,6 +41,52 @@ func Process(r io.Reader) ([]byte, string, error) {
 	if err != nil {
 		return nil, "", err
 	}
+	img, format, err := decode(raw)
+	if err != nil {
+		return nil, "", err
+	}
+	out := image.NewRGBA(image.Rect(0, 0, Size, Size))
+	draw.CatmullRom.Scale(out, out.Bounds(), img, centerSquare(img.Bounds()), draw.Src, nil)
+	if format == "jpeg" {
+		// The center square turns with the picture, so orienting the small
+		// result is enough.
+		out = orient(out, jpegOrientation(raw))
+	}
+	return encode(out)
+}
+
+// Fit turns a picture into one that fits within width by height, scaled
+// down when larger, upright and encoded again, as Process does. It returns
+// the result's content type and size.
+func Fit(raw []byte, width, height int) ([]byte, string, image.Point, error) {
+	img, format, err := decode(raw)
+	if err != nil {
+		return nil, "", image.Point{}, err
+	}
+	o := 1
+	if format == "jpeg" {
+		o = jpegOrientation(raw)
+	}
+	b := img.Bounds()
+	// The size upright, scaled to fit, then as stored before turning.
+	w, h := b.Dx(), b.Dy()
+	if o >= 5 {
+		w, h = h, w
+	}
+	scale := min(1, float64(width)/float64(w), float64(height)/float64(h))
+	w, h = max(1, int(float64(w)*scale+0.5)), max(1, int(float64(h)*scale+0.5))
+	if o >= 5 {
+		w, h = h, w
+	}
+	out := image.NewRGBA(image.Rect(0, 0, w, h))
+	draw.CatmullRom.Scale(out, out.Bounds(), img, b, draw.Src, nil)
+	out = orient(out, o)
+	data, ctype, err := encode(out)
+	return data, ctype, out.Bounds().Size(), err
+}
+
+// decode reads a picture of an allowed format within the limits.
+func decode(raw []byte) (image.Image, string, error) {
 	if len(raw) > MaxUpload {
 		return nil, "", ErrTooLarge
 	}
@@ -60,14 +106,7 @@ func Process(r io.Reader) ([]byte, string, error) {
 	if err != nil {
 		return nil, "", ErrUnsupported
 	}
-	out := image.NewRGBA(image.Rect(0, 0, Size, Size))
-	draw.CatmullRom.Scale(out, out.Bounds(), img, centerSquare(img.Bounds()), draw.Src, nil)
-	if format == "jpeg" {
-		// The center square turns with the picture, so orienting the small
-		// result is enough.
-		out = orient(out, jpegOrientation(raw))
-	}
-	return encode(out)
+	return img, format, nil
 }
 
 func centerSquare(b image.Rectangle) image.Rectangle {
@@ -175,31 +214,36 @@ func tiffOrientation(t []byte) int {
 	return 1
 }
 
-// orient turns a square image upright for an EXIF orientation.
+// orient turns an image upright for an EXIF orientation; 5 to 8 swap its
+// sides.
 func orient(src *image.RGBA, o int) *image.RGBA {
 	if o <= 1 || o > 8 {
 		return src
 	}
-	n := src.Bounds().Dx() - 1
-	dst := image.NewRGBA(src.Bounds())
-	for y := 0; y <= n; y++ {
-		for x := 0; x <= n; x++ {
+	w, h := src.Bounds().Dx(), src.Bounds().Dy()
+	dw, dh := w, h
+	if o >= 5 {
+		dw, dh = h, w
+	}
+	dst := image.NewRGBA(image.Rect(0, 0, dw, dh))
+	for y := range dh {
+		for x := range dw {
 			var sx, sy int
 			switch o {
 			case 2:
-				sx, sy = n-x, y
+				sx, sy = w-1-x, y
 			case 3:
-				sx, sy = n-x, n-y
+				sx, sy = w-1-x, h-1-y
 			case 4:
-				sx, sy = x, n-y
+				sx, sy = x, h-1-y
 			case 5:
 				sx, sy = y, x
 			case 6:
-				sx, sy = y, n-x
+				sx, sy = y, h-1-x
 			case 7:
-				sx, sy = n-y, n-x
+				sx, sy = w-1-y, h-1-x
 			case 8:
-				sx, sy = n-y, x
+				sx, sy = w-1-y, x
 			}
 			copy(dst.Pix[dst.PixOffset(x, y):dst.PixOffset(x, y)+4], src.Pix[src.PixOffset(sx, sy):src.PixOffset(sx, sy)+4])
 		}

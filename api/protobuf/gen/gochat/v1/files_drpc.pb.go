@@ -43,6 +43,7 @@ type DRPCFileServiceClient interface {
 	GetPhoto(ctx context.Context, in *GetPhotoRequest) (*GetPhotoResponse, error)
 	GetStorageUsage(ctx context.Context, in *GetStorageUsageRequest) (*GetStorageUsageResponse, error)
 	DiscardUploads(ctx context.Context, in *DiscardUploadsRequest) (*DiscardUploadsResponse, error)
+	GetLinkImage(ctx context.Context, in *GetLinkImageRequest) (*GetLinkImageResponse, error)
 }
 
 type drpcFileServiceClient struct {
@@ -167,12 +168,22 @@ func (c *drpcFileServiceClient) DiscardUploads(ctx context.Context, in *DiscardU
 	return out, nil
 }
 
+func (c *drpcFileServiceClient) GetLinkImage(ctx context.Context, in *GetLinkImageRequest) (*GetLinkImageResponse, error) {
+	out := new(GetLinkImageResponse)
+	err := c.cc.Invoke(ctx, "/gochat.v1.FileService/GetLinkImage", drpcEncoding_File_gochat_v1_files_proto{}, in, out)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 type DRPCFileServiceServer interface {
 	Upload(DRPCFileService_UploadStream) error
 	Download(*DownloadRequest, DRPCFileService_DownloadStream) error
 	GetPhoto(context.Context, *GetPhotoRequest) (*GetPhotoResponse, error)
 	GetStorageUsage(context.Context, *GetStorageUsageRequest) (*GetStorageUsageResponse, error)
 	DiscardUploads(context.Context, *DiscardUploadsRequest) (*DiscardUploadsResponse, error)
+	GetLinkImage(context.Context, *GetLinkImageRequest) (*GetLinkImageResponse, error)
 }
 
 type DRPCFileServiceUnimplementedServer struct{}
@@ -197,9 +208,13 @@ func (s *DRPCFileServiceUnimplementedServer) DiscardUploads(context.Context, *Di
 	return nil, drpcerr.WithCode(errors.New("Unimplemented"), drpcerr.Unimplemented)
 }
 
+func (s *DRPCFileServiceUnimplementedServer) GetLinkImage(context.Context, *GetLinkImageRequest) (*GetLinkImageResponse, error) {
+	return nil, drpcerr.WithCode(errors.New("Unimplemented"), drpcerr.Unimplemented)
+}
+
 type DRPCFileServiceDescription struct{}
 
-func (DRPCFileServiceDescription) NumMethods() int { return 5 }
+func (DRPCFileServiceDescription) NumMethods() int { return 6 }
 
 func (DRPCFileServiceDescription) Method(n int) (string, drpc.Encoding, drpc.Receiver, interface{}, bool) {
 	switch n {
@@ -247,6 +262,15 @@ func (DRPCFileServiceDescription) Method(n int) (string, drpc.Encoding, drpc.Rec
 						in1.(*DiscardUploadsRequest),
 					)
 			}, DRPCFileServiceServer.DiscardUploads, true
+	case 5:
+		return "/gochat.v1.FileService/GetLinkImage", drpcEncoding_File_gochat_v1_files_proto{},
+			func(srv interface{}, ctx context.Context, in1, in2 interface{}) (drpc.Message, error) {
+				return srv.(DRPCFileServiceServer).
+					GetLinkImage(
+						ctx,
+						in1.(*GetLinkImageRequest),
+					)
+			}, DRPCFileServiceServer.GetLinkImage, true
 	default:
 		return "", nil, nil, nil, false
 	}
@@ -360,6 +384,26 @@ func (x *drpcFileService_DiscardUploadsStream) GetStream() drpc.Stream {
 }
 
 func (x *drpcFileService_DiscardUploadsStream) SendAndClose(m *DiscardUploadsResponse) error {
+	if err := x.MsgSend(m, drpcEncoding_File_gochat_v1_files_proto{}); err != nil {
+		return err
+	}
+	return x.CloseSend()
+}
+
+type DRPCFileService_GetLinkImageStream interface {
+	drpc.Stream
+	SendAndClose(*GetLinkImageResponse) error
+}
+
+type drpcFileService_GetLinkImageStream struct {
+	drpc.Stream
+}
+
+func (x *drpcFileService_GetLinkImageStream) GetStream() drpc.Stream {
+	return x.Stream
+}
+
+func (x *drpcFileService_GetLinkImageStream) SendAndClose(m *GetLinkImageResponse) error {
 	if err := x.MsgSend(m, drpcEncoding_File_gochat_v1_files_proto{}); err != nil {
 		return err
 	}

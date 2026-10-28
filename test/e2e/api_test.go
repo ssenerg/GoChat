@@ -9,6 +9,7 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"os"
 	"strings"
 	"testing"
 	"time"
@@ -284,6 +285,50 @@ func testClientAPI(t *testing.T, bobName, bobPass, town string) {
 		adminWS.next(5*time.Second, "the reaction", func(f *pb.ClientFrame) bool {
 			return f.GetEvent().GetReactionsChanged().GetMessageId() == posted.Message.Id
 		})
+	})
+
+	t.Run("link previews", func(t *testing.T) {
+		edited := func(id string, preview bool) func(*pb.ClientFrame) bool {
+			return func(f *pb.ClientFrame) bool {
+				m := f.GetEvent().GetMessageEdited().GetMessage()
+				return m.GetId() == id && (m.GetLinkPreview() != nil) == preview
+			}
+		}
+		// A link into the server's own network is never fetched.
+		posted := &pb.PostMessageResponse{}
+		admin.must("gochat.v1.MessageService/PostMessage", &pb.PostMessageRequest{ChannelId: town, Content: "see http://127.0.0.1:9100/metrics"}, posted)
+		bobWS.never(2*time.Second, "a preview of a private address", edited(posted.Message.Id, true))
+		remove := &pb.RemoveLinkPreviewRequest{ChannelId: town, MessageId: posted.Message.Id}
+		if status, e := bob.call("gochat.v1.MessageService/RemoveLinkPreview", remove, &pb.RemoveLinkPreviewResponse{}); e == nil || e.Code != 7 {
+			t.Fatalf("bob removed the preview of admin's message: %d %v", status, e)
+		}
+		admin.must("gochat.v1.MessageService/RemoveLinkPreview", remove, &pb.RemoveLinkPreviewResponse{})
+		bobWS.next(5*time.Second, "the removal", edited(posted.Message.Id, false))
+		if res, _ := bob.raw(http.MethodGet, "/api/v2/previews/"+strings.Repeat("0", 32), nil, nil); res.StatusCode != http.StatusNotFound {
+			t.Fatalf("a picture no preview has: %d", res.StatusCode)
+		}
+		// A public page, when one is named, gets its card and its picture.
+		page := os.Getenv("GOCHAT_E2E_PREVIEW_URL")
+		if page == "" {
+			return
+		}
+		admin.must("gochat.v1.MessageService/PostMessage", &pb.PostMessageRequest{ChannelId: town, Content: "look: " + page}, posted)
+		p := bobWS.next(30*time.Second, "the preview", edited(posted.Message.Id, true)).GetEvent().GetMessageEdited().GetMessage().GetLinkPreview()
+		if p.Url != page || p.Title == "" {
+			t.Fatalf("preview %v", p)
+		}
+		if p.ImageId != "" {
+			res, b := bob.raw(http.MethodGet, "/api/v2/previews/"+p.ImageId, nil, nil)
+			if res.StatusCode != http.StatusOK || !strings.HasPrefix(res.Header.Get("Content-Type"), "image/") || len(b) == 0 {
+				t.Fatalf("the picture: %d %s", res.StatusCode, res.Header.Get("Content-Type"))
+			}
+		}
+		got := &pb.GetMessageResponse{}
+		bob.must("gochat.v1.MessageService/GetMessage", &pb.GetMessageRequest{ChannelId: town, MessageId: posted.Message.Id}, got)
+		if got.Message.GetLinkPreview().GetTitle() != p.Title {
+			t.Fatalf("the message keeps no preview: %v", got.Message)
+		}
+		t.Logf("preview of %s: %q from %q, picture %s %dx%d", page, p.Title, p.SiteName, p.ImageId, p.ImageWidth, p.ImageHeight)
 	})
 
 	t.Run("presence reaches the apps that show the person", func(t *testing.T) {

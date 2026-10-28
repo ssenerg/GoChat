@@ -55,6 +55,7 @@ type DRPCMessageServiceClient interface {
 	SaveMessage(ctx context.Context, in *SaveMessageRequest) (*SaveMessageResponse, error)
 	ListSaved(ctx context.Context, in *ListSavedRequest) (*ListSavedResponse, error)
 	PressButton(ctx context.Context, in *PressButtonRequest) (*PressButtonResponse, error)
+	RemoveLinkPreview(ctx context.Context, in *RemoveLinkPreviewRequest) (*RemoveLinkPreviewResponse, error)
 }
 
 type drpcMessageServiceClient struct {
@@ -220,6 +221,15 @@ func (c *drpcMessageServiceClient) PressButton(ctx context.Context, in *PressBut
 	return out, nil
 }
 
+func (c *drpcMessageServiceClient) RemoveLinkPreview(ctx context.Context, in *RemoveLinkPreviewRequest) (*RemoveLinkPreviewResponse, error) {
+	out := new(RemoveLinkPreviewResponse)
+	err := c.cc.Invoke(ctx, "/gochat.v1.MessageService/RemoveLinkPreview", drpcEncoding_File_gochat_v1_messages_proto{}, in, out)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 type DRPCMessageServiceServer interface {
 	PostMessage(context.Context, *PostMessageRequest) (*PostMessageResponse, error)
 	EditMessage(context.Context, *EditMessageRequest) (*EditMessageResponse, error)
@@ -238,6 +248,7 @@ type DRPCMessageServiceServer interface {
 	SaveMessage(context.Context, *SaveMessageRequest) (*SaveMessageResponse, error)
 	ListSaved(context.Context, *ListSavedRequest) (*ListSavedResponse, error)
 	PressButton(context.Context, *PressButtonRequest) (*PressButtonResponse, error)
+	RemoveLinkPreview(context.Context, *RemoveLinkPreviewRequest) (*RemoveLinkPreviewResponse, error)
 }
 
 type DRPCMessageServiceUnimplementedServer struct{}
@@ -310,9 +321,13 @@ func (s *DRPCMessageServiceUnimplementedServer) PressButton(context.Context, *Pr
 	return nil, drpcerr.WithCode(errors.New("Unimplemented"), drpcerr.Unimplemented)
 }
 
+func (s *DRPCMessageServiceUnimplementedServer) RemoveLinkPreview(context.Context, *RemoveLinkPreviewRequest) (*RemoveLinkPreviewResponse, error) {
+	return nil, drpcerr.WithCode(errors.New("Unimplemented"), drpcerr.Unimplemented)
+}
+
 type DRPCMessageServiceDescription struct{}
 
-func (DRPCMessageServiceDescription) NumMethods() int { return 17 }
+func (DRPCMessageServiceDescription) NumMethods() int { return 18 }
 
 func (DRPCMessageServiceDescription) Method(n int) (string, drpc.Encoding, drpc.Receiver, interface{}, bool) {
 	switch n {
@@ -469,6 +484,15 @@ func (DRPCMessageServiceDescription) Method(n int) (string, drpc.Encoding, drpc.
 						in1.(*PressButtonRequest),
 					)
 			}, DRPCMessageServiceServer.PressButton, true
+	case 17:
+		return "/gochat.v1.MessageService/RemoveLinkPreview", drpcEncoding_File_gochat_v1_messages_proto{},
+			func(srv interface{}, ctx context.Context, in1, in2 interface{}) (drpc.Message, error) {
+				return srv.(DRPCMessageServiceServer).
+					RemoveLinkPreview(
+						ctx,
+						in1.(*RemoveLinkPreviewRequest),
+					)
+			}, DRPCMessageServiceServer.RemoveLinkPreview, true
 	default:
 		return "", nil, nil, nil, false
 	}
@@ -812,6 +836,26 @@ func (x *drpcMessageService_PressButtonStream) GetStream() drpc.Stream {
 }
 
 func (x *drpcMessageService_PressButtonStream) SendAndClose(m *PressButtonResponse) error {
+	if err := x.MsgSend(m, drpcEncoding_File_gochat_v1_messages_proto{}); err != nil {
+		return err
+	}
+	return x.CloseSend()
+}
+
+type DRPCMessageService_RemoveLinkPreviewStream interface {
+	drpc.Stream
+	SendAndClose(*RemoveLinkPreviewResponse) error
+}
+
+type drpcMessageService_RemoveLinkPreviewStream struct {
+	drpc.Stream
+}
+
+func (x *drpcMessageService_RemoveLinkPreviewStream) GetStream() drpc.Stream {
+	return x.Stream
+}
+
+func (x *drpcMessageService_RemoveLinkPreviewStream) SendAndClose(m *RemoveLinkPreviewResponse) error {
 	if err := x.MsgSend(m, drpcEncoding_File_gochat_v1_messages_proto{}); err != nil {
 		return err
 	}

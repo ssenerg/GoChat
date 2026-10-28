@@ -205,6 +205,10 @@ type Message struct {
 	Pinned       bool         `db:"pinned"`
 	// Markup holds the buttons a bot put under the message, a pb.Markup.
 	Markup []byte `db:"markup"`
+	// LinkPreview is the card of its first link, a pb.LinkPreview;
+	// NoLinkPreview keeps it from having one.
+	LinkPreview   []byte `db:"link_preview"`
+	NoLinkPreview bool   `db:"no_link_preview"`
 }
 
 type Attachment struct {

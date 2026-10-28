@@ -82,6 +82,7 @@ type Repo interface {
 	ChannelPts(ctx context.Context, channelID gocql.UUID) (int64, error)
 	GetBot(ctx context.Context, id gocql.UUID) (*models.Bot, error)
 	SetMarkup(ctx context.Context, channelID, rootID, id gocql.UUID, markup []byte) error
+	SetLinkPreview(ctx context.Context, channelID, rootID, id gocql.UUID, preview []byte, off bool) error
 	AppendChannelUpdate(ctx context.Context, channelID gocql.UUID, e *scylla.LogEntry, stamp int64, ttl time.Duration) error
 	ChannelUpdates(ctx context.Context, channelID gocql.UUID, after, upTo int64, limit int) ([]*scylla.LogEntry, error)
 	DeleteChannelUpdates(ctx context.Context, channelID gocql.UUID, upTo int64) error
@@ -110,6 +111,8 @@ type Deps struct {
 	// Push reaches the closed apps of those a message calls for; nil
 	// pushes nothing.
 	Push *actor.PID
+	// Previews makes the previews of messages' links; nil makes none.
+	Previews Previewer
 }
 
 // passivate asks to stop an idle channel actor that has handled requests.
