@@ -743,8 +743,11 @@ class ChatSession internal constructor(
         ev.profile_changed?.user?.let { u ->
             _state.update { s ->
                 s.copy(
-                    // The event shows the person as others see them, without two-factor.
-                    me = if (u.id == s.me.id) u.copy(totp_enabled = s.me.totp_enabled) else s.me,
+                    // The event shows the person as others see them, without what only they see.
+                    me = if (u.id != s.me.id) s.me else u.copy(
+                        totp_enabled = s.me.totp_enabled, created_at = s.me.created_at,
+                        status = s.me.status, dnd_until = s.me.dnd_until,
+                    ),
                     channels = s.channels.map { ch ->
                         when {
                             ch.peer?.id == u.id -> ch.copy(peer = u)
