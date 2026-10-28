@@ -28,18 +28,19 @@ import org.webrtc.Camera2Enumerator
 import org.webrtc.CameraVideoCapturer
 import org.webrtc.DataChannel
 import org.webrtc.DefaultVideoDecoderFactory
-import org.webrtc.DefaultVideoEncoderFactory
 import org.webrtc.EglBase
 import org.webrtc.MediaConstraints
 import org.webrtc.MediaStream
 import org.webrtc.PeerConnection
 import org.webrtc.PeerConnectionFactory
+import org.webrtc.ResolutionAdjustment
 import org.webrtc.RtpParameters
 import org.webrtc.RtpReceiver
 import org.webrtc.RtpTransceiver
 import org.webrtc.ScreenCapturerAndroid
 import org.webrtc.SdpObserver
 import org.webrtc.SessionDescription
+import org.webrtc.SimulcastAlignedVideoEncoderFactory
 import org.webrtc.SurfaceTextureHelper
 import org.webrtc.VideoCapturer
 import org.webrtc.VideoTrack
@@ -55,8 +56,8 @@ import kotlin.math.sqrt
 /**
  * Voice channels on Android, over the WebRTC library Stream builds from
  * Google's: one connection at a time, which sends the microphone, the
- * front camera and the screen, plays the others on the loudspeaker or a
- * headset, and hears how loud the person is.
+ * front camera in layers and the screen, plays the others on the
+ * loudspeaker or a headset, and hears how loud the person is.
  */
 class AndroidRtcEngine(context: Context) : RtcEngine {
     private val context = context.applicationContext
@@ -98,8 +99,9 @@ class AndroidRtcEngine(context: Context) : RtcEngine {
             .createAudioDeviceModule()
         val f = PeerConnectionFactory.builder()
             .setAudioDeviceModule(module)
-            // The phone's own encoders and decoders where it has them, libvpx where not.
-            .setVideoEncoderFactory(DefaultVideoEncoderFactory(egl.eglBaseContext, true, false))
+            // The phone's own encoders and decoders where it has them, libvpx
+            // where not; one encoder per camera layer, at sizes they take.
+            .setVideoEncoderFactory(SimulcastAlignedVideoEncoderFactory(egl.eglBaseContext, true, false, ResolutionAdjustment.MULTIPLE_OF_16))
             .setVideoDecoderFactory(DefaultVideoDecoderFactory(egl.eglBaseContext))
             .createPeerConnectionFactory()
         audio = module
@@ -364,12 +366,19 @@ private class AndroidRtcPeer(
         return true
     }
 
-    /** Caps what a source sends, as the web does; a screen keeps its sharpness and gives up frames. */
+    /**
+     * Caps what a source sends, as the web does: a camera's layers each at
+     * their size; a screen keeps its sharpness and gives up frames.
+     */
     private fun limit(source: VideoSource) {
         val sender = slots[source]?.sender ?: return
         val params = sender.parameters
         if (params.encodings.isEmpty()) return
-        params.encodings[0].maxBitrateBps = if (source == VideoSource.Camera) CAMERA_BITRATE else SCREEN_BITRATE
+        for (e in params.encodings) {
+            val layer = if (source == VideoSource.Camera) CAMERA_LAYERS[e.rid] else null
+            if (layer != null) e.scaleResolutionDownBy = layer.scale
+            e.maxBitrateBps = layer?.bitrate ?: if (source == VideoSource.Camera) CAMERA_BITRATE else SCREEN_BITRATE
+        }
         if (source == VideoSource.Screen) params.degradationPreference = RtpParameters.DegradationPreference.MAINTAIN_RESOLUTION
         sender.parameters = params
     }
@@ -403,6 +412,12 @@ private class AndroidRtcPeer(
         const val SCREEN_BITRATE = 2_500_000
     }
 }
+
+/** A layer the camera goes out in: how much smaller than the camera it is, and what it may send. */
+private class CameraLayer(val scale: Double, val bitrate: Int)
+
+/** The camera's layers, by the rids the voice server asks for them by, as the web sends them. */
+private val CAMERA_LAYERS = mapOf("q" to CameraLayer(4.0, 150_000), "h" to CameraLayer(2.0, 500_000), "f" to CameraLayer(1.0, 1_000_000))
 
 /** Runs a set call of the peer connection and waits for its outcome. */
 private suspend fun PeerConnection.awaitSet(call: (SdpObserver) -> Unit) = suspendCancellableCoroutine { c ->

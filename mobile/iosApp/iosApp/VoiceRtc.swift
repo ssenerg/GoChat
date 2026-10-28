@@ -6,9 +6,9 @@ import WebRTC
 
 /// Voice channels on iOS: Google's WebRTC, as stasel/WebRTC builds it, behind
 /// the protocols the shared Kotlin code talks to. One connection at a time
-/// sends the microphone, the front camera and the screen the broadcast
-/// extension captures, and plays the others, on the loudspeaker unless a
-/// headset is connected.
+/// sends the microphone, the front camera in layers and the screen the
+/// broadcast extension captures, and plays the others, on the loudspeaker
+/// unless a headset is connected.
 final class VoiceRtc: NSObject, IosRtcEngine {
     let video = true
 
@@ -322,13 +322,24 @@ private final class VoicePeer: NSObject, IosRtcPeer, RTCPeerConnectionDelegate {
         return true
     }
 
-    /// Caps what a source sends, as the web does; a screen keeps its
-    /// sharpness and gives up frames.
+    /// The layers the camera goes out in, by the rids the voice server asks
+    /// for them by: how much smaller than the camera each is, and what it
+    /// may send, as the web sends them.
+    private static let cameraLayers: [String: (scale: Double, bitrate: Int)] = [
+        "q": (4, 150_000), "h": (2, 500_000), "f": (1, 1_000_000),
+    ]
+
+    /// Caps what a source sends, as the web does: a camera's layers each at
+    /// their size; a screen keeps its sharpness and gives up frames.
     private func limit(_ source: String) {
         guard let sender = slot(source)?.sender else { return }
         let params = sender.parameters
-        guard let encoding = params.encodings.first else { return }
-        encoding.maxBitrateBps = NSNumber(value: source == "camera" ? 1_000_000 : 2_500_000)
+        guard !params.encodings.isEmpty else { return }
+        for encoding in params.encodings {
+            let layer = source == "camera" ? encoding.rid.flatMap { Self.cameraLayers[$0] } : nil
+            if let layer = layer { encoding.scaleResolutionDownBy = NSNumber(value: layer.scale) }
+            encoding.maxBitrateBps = NSNumber(value: layer?.bitrate ?? (source == "camera" ? 1_000_000 : 2_500_000))
+        }
         if source == "screen" {
             params.degradationPreference = NSNumber(value: RTCDegradationPreference.maintainResolution.rawValue)
         }

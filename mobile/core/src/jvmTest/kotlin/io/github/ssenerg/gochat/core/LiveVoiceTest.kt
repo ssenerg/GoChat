@@ -149,7 +149,10 @@ class LiveVoiceTest {
             call.toggleCamera()
         }
         rtc.offers.first { it > 0 }
-        assertNotNull(rtc.slots, "the first offer names the slots")
+        val slots = assertNotNull(rtc.slots, "the first offer names the slots")
+        // It asks for the camera in layers, on the camera's slot alone, and
+        // the answer sends them, as WebRTC's does.
+        assertEquals(listOf(slots.camera), rtc.layered, "the first offer asks for the camera's layers")
         rtc.listener!!.onState(RtcState.Connected)
         rtc.camera.first { it }
         call.videos.first { v -> v.any { it.local && it.source == VideoSource.Camera && it.userId == me } }
@@ -183,6 +186,9 @@ class LiveVoiceTest {
         assertEquals("Could not turn the camera on.", errors.await())
         call.state.first { it?.camera == false }
 
+        // The voice server took the answer, layers and all: it never
+        // dropped the call, which would have reconnected.
+        assertEquals(1, rtc.offers.value, "one offer, and no reconnect")
         withContext(scope.coroutineContext) { call.leave() }
         assertTrue(rtc.stoppedVideo > 0, "leaving stops the camera and the screen")
         withContext(scope.coroutineContext) { app.signOut() }
@@ -197,6 +203,10 @@ class LiveVoiceTest {
 
         @Volatile
         var slots: VideoSlots? = null
+
+        /** The mids the offers asked to send in layers. */
+        @Volatile
+        var layered: List<String> = emptyList()
 
         /** Set for a camera that cannot start. */
         @Volatile
@@ -262,6 +272,13 @@ class LiveVoiceTest {
                     }
                     append("m=$kind 9 UDP/TLS/RTP/SAVPF $pt\r\nc=IN IP4 0.0.0.0\r\na=mid:${mids[i]}\r\n")
                     append("a=setup:active\r\na=rtcp-mux\r\na=rtpmap:$pt $codec\r\na=$dir\r\n")
+                    // Asked for layers, WebRTC answers that it sends them.
+                    val rids = Regex("a=simulcast:recv (\\S+)").find(m)?.groupValues?.get(1)?.split(";")
+                    if (rids != null) {
+                        layered = layered + mids[i]
+                        rids.forEach { append("a=rid:$it send\r\n") }
+                        append("a=simulcast:send ${rids.joinToString(";")}\r\n")
+                    }
                 }
             }
         }
