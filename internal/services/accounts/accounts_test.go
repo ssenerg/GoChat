@@ -41,10 +41,16 @@ type fakeRepo struct {
 	bootstrapped bool
 	touched      int
 	bots         map[gocql.UUID]*models.Bot
+	invites      map[string]*models.Invite
+	challenges   map[string]*models.MFAChallenge
+	*ssoRows
 }
 
 func newFakeRepo() *fakeRepo {
-	return &fakeRepo{users: make(map[gocql.UUID]*models.User), sessions: make(map[string]*models.Session)}
+	return &fakeRepo{
+		users: make(map[gocql.UUID]*models.User), sessions: make(map[string]*models.Session),
+		invites: make(map[string]*models.Invite), challenges: make(map[string]*models.MFAChallenge), ssoRows: newSSORows(),
+	}
 }
 
 func (f *fakeRepo) CreateUser(_ context.Context, u *models.User) error {
@@ -203,8 +209,12 @@ func (f *fakeRepo) ConsumeRecoveryCode(context.Context, gocql.UUID, []byte) (boo
 	return false, errUnused
 }
 
-func (f *fakeRepo) CreateMFAChallenge(context.Context, *models.MFAChallenge, time.Time) error {
-	return errUnused
+func (f *fakeRepo) CreateMFAChallenge(_ context.Context, c *models.MFAChallenge, _ time.Time) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	cc := *c
+	f.challenges[string(c.TokenHash)] = &cc
+	return nil
 }
 
 func (f *fakeRepo) GetMFAChallenge(context.Context, []byte) (*models.MFAChallenge, error) {
@@ -219,15 +229,38 @@ func (f *fakeRepo) ConsumeMFAChallenge(context.Context, []byte) (bool, error) {
 }
 func (f *fakeRepo) GetTeam(context.Context, gocql.UUID) (*models.Team, error) { return nil, errUnused }
 func (f *fakeRepo) GetTeamMember(context.Context, gocql.UUID, gocql.UUID) (*models.TeamMember, error) {
-	return nil, errUnused
-}
-func (f *fakeRepo) GetInvite(context.Context, []byte) (*models.Invite, error) { return nil, errUnused }
-func (f *fakeRepo) ConsumeInvite(context.Context, *models.Invite, gocql.UUID, time.Time) (bool, error) {
-	return false, errUnused
+	return nil, ierrors.NotFound("not found")
 }
 
-func (f *fakeRepo) ReleaseInvite(context.Context, *models.Invite, gocql.UUID, time.Time) error {
-	return errUnused
+func (f *fakeRepo) GetInvite(_ context.Context, hash []byte) (*models.Invite, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	inv, ok := f.invites[string(hash)]
+	if !ok {
+		return nil, ierrors.NotFound("not found")
+	}
+	c := *inv
+	return &c, nil
+}
+
+func (f *fakeRepo) ConsumeInvite(_ context.Context, inv *models.Invite, userID gocql.UUID, _ time.Time) (bool, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	cur, ok := f.invites[string(inv.TokenHash)]
+	if !ok || !ids.IsZero(cur.UsedBy) {
+		return false, nil
+	}
+	cur.UsedBy = userID
+	return true, nil
+}
+
+func (f *fakeRepo) ReleaseInvite(_ context.Context, inv *models.Invite, userID gocql.UUID, _ time.Time) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if cur, ok := f.invites[string(inv.TokenHash)]; ok && cur.UsedBy == userID {
+		cur.UsedBy = gocql.UUID{}
+	}
+	return nil
 }
 
 // recorder keeps what the accounts send the hub, and push.

@@ -65,7 +65,7 @@ func newSSOProviders(cfg *SSOConfig) (*ssoProviders, error) {
 	for _, c := range cfg.Providers {
 		secret := c.ClientSecret
 		if c.ClientSecretFile != "" {
-			b, err := os.ReadFile(c.ClientSecretFile) //nolint:gosec // the operator's own path
+			b, err := os.ReadFile(c.ClientSecretFile)
 			if err != nil {
 				return nil, err
 			}
