@@ -631,9 +631,10 @@ web gateway: invites, real-time delivery, typing, attachments, voice messages
 and their channel setting, voice channels (with Pion peers that talk through
 the voice server), the client API the apps use, bots (commands, buttons,
 catching up after a restart, the HTTP Bot API and token resets through
-[pkg/gochat](pkg/gochat)), private channel isolation,
-CSRF, TOTP with recovery codes, session revocation, deactivation and storage
-quotas. It needs an existing admin account and team, or with
+[pkg/gochat](pkg/gochat)), link previews (none for a private address; with
+`GOCHAT_E2E_PREVIEW_URL` set to a public page, its card and picture),
+private channel isolation, CSRF, TOTP with recovery codes, session
+revocation, deactivation and storage quotas. It needs an existing admin account and team, or with
 `GOCHAT_E2E_BOOTSTRAP=1` and the server's token in `GOCHAT_E2E_SETUP_TOKEN`
 creates them on a fresh server:
 
