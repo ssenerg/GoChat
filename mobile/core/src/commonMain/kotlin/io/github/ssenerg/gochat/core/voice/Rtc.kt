@@ -28,7 +28,10 @@ data class VideoSlots(val camera: String, val screen: String)
  * for the screen that draws it: an org.webrtc.VideoTrack on Android, an
  * RTCVideoTrack on iOS.
  */
-class CallVideo(val userId: String, val source: VideoSource, val track: Any, val local: Boolean = false)
+class CallVideo(val userId: String, val source: VideoSource, val track: Any, val local: Boolean = false) {
+    /** The voice server's name for it, as "u1:camera". */
+    val streamId: String get() = "$userId:${source.wire}"
+}
 
 /** What a platform's WebRTC tells a call, from any thread. */
 interface RtcListener {

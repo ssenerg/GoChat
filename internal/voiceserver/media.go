@@ -53,9 +53,13 @@ func NewMedia(cfg *ICEConfig) (*Media, error) {
 	if err := m.RegisterCodec(vp8, webrtc.RTPCodecTypeVideo); err != nil {
 		return nil, err
 	}
-	// Pion's default interceptors but the simulcast header extensions: the
-	// server forwards packets as they come, and a sender's mid in them would
-	// steer the receivers' browsers to the wrong transceiver.
+	// Pion's default interceptors. The simulcast header extensions name a
+	// camera's layers as they come in; the server takes every extension
+	// off what it forwards, where a sender's mid would steer the receivers'
+	// browsers to the wrong transceiver.
+	if err := webrtc.ConfigureSimulcastExtensionHeaders(m); err != nil {
+		return nil, err
+	}
 	registry := &interceptor.Registry{}
 	if err := webrtc.ConfigureNack(m, registry); err != nil {
 		return nil, err

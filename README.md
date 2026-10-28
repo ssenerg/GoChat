@@ -52,7 +52,8 @@ can run as many gateways as you like behind a load balancer.
 keeps one actor per voice channel with talk, which receives each person's
 voice (Opus), camera and screen (VP8) over WebRTC
 ([Pion](https://github.com/pion/webrtc)) and forwards them to the others,
-neither mixed nor decoded.
+neither mixed nor decoded: a camera comes in layers, and each viewer gets
+the one that fits how big it shows it.
 
 The server is designed as a single node: channel actors and the hub live in
 one process. Scylla and MinIO scale independently, and so do voice servers:
@@ -83,6 +84,21 @@ carry the voice:
    from each at most. A room forwards 8 cameras and screens at most
    (`max_videos_per_room`); past them, the voice server refuses one with a
    `video` message of its own, and the page or app turns it off.
+5. A page sends its camera in three layers (simulcast): a quarter, half
+   and all of its size, at about 150 kbit/s, 500 kbit/s and 1 Mbit/s. The
+   voice server asks for them in its first offer, of those that identify
+   with `simulcast`, and the page's answer decides. Each viewer gets one
+   layer of each camera: the least while it shows the camera in a tile,
+   the full one while it enlarges it, which it says in a `focus` message.
+   The voice server switches layers on keyframes, asking the sender for
+   one, and rewrites the sequence numbers, timestamps and VP8 picture ids,
+   so the viewer sees one stream throughout; when the sender pauses a
+   layer, as browsers do when their network is short, its viewers move to
+   another. Screens go in one layer, as sharp as they come. Pages and apps
+   that do not identify with `layers` get the best layer of each camera.
+   The apps take layers, and full screen counts as enlarged, but send their
+   own camera in one layer: their encoders' simulcast is untested on
+   devices.
 
 Each person talks in one channel at a time: joining elsewhere, or from another
 tab, disconnects the earlier connection. Mute and deafen are the person's own
@@ -231,9 +247,10 @@ photos there; [retiring-api-v1.md](docs/retiring-api-v1.md) plans the rest.
   one voice server; its websocket takes the web gateway's pages and no other
   site's (the apps, which are not pages, send no origin). Only
   Opus and VP8 are negotiated, and each voice is capped at 512 kbit/s, each
-  camera at 2.5 Mbit/s and each screen at 5 Mbit/s, so the room cannot be
-  made to repeat a flood; with at most 8 cameras and screens in a room of
-  25, what one room sends stays bounded. Connections that have not identified and
+  layer of a camera at 2.5 Mbit/s and each screen at 5 Mbit/s, so the room
+  cannot be made to repeat a flood: each viewer gets one layer of each
+  camera. With at most 8 cameras and screens in a room of 25, what one room
+  sends stays bounded. Connections that have not identified and
   signaling messages are bounded. The voice server is ICE lite: it answers
   browsers and never sends to an address a browser names. Voice is
   encrypted in transit between each browser and the voice server

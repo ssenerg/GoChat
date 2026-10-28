@@ -885,6 +885,17 @@ label.status-choice:has(input:focus-visible) { outline: 2px solid var(--accent);
 }
 .voice-tile.has-video .vt-cam { color: #fff; }
 .voice-tile.has-video.speaking { box-shadow: 0 0 0 3px var(--online); }
+/* A camera grows to the stage's width on its button, where the voice
+   server sends it sharp; the others stay small, and cheap. */
+.vt-expand { position: absolute; top: 6px; left: 6px; display: none; color: #fff; background: rgb(0 0 0 / .45); opacity: 0; transition: opacity .12s ease; }
+.voice-tile.has-video .vt-expand { display: inline-grid; }
+.voice-tile:hover .vt-expand, .vt-expand:focus-visible, .vt-expand[aria-pressed="true"] { opacity: 1; }
+.vt-expand:hover { background: rgb(0 0 0 / .7); }
+@media (hover: none) { .vt-expand { opacity: 1; } }
+.vt-expand .when-big, .vt-expand[aria-pressed="true"] .when-small { display: none; }
+.vt-expand .when-small, .vt-expand[aria-pressed="true"] .when-big { display: contents; }
+.voice-tile.has-video.big { order: -1; flex-basis: 100%; aspect-ratio: 16 / 9; max-height: 62dvh; }
+.voice-tile.big .vt-video { object-fit: contain; }
 /* Screens go above the tiles, as large as the stage allows. */
 .voice-screens { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 420px), 1fr)); gap: 14px; margin-bottom: 18px; }
 /* A screen leaves room for the tiles under it. */

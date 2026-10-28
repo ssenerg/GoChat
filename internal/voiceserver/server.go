@@ -158,7 +158,10 @@ func (s *Server) rtc(w http.ResponseWriter, r *http.Request) {
 		defer close(written)
 		s.write(wctx, ws, out)
 	}()
-	if _, err := actors.Ask[joined](ctx, s.engine, s.rooms, addPeer{session: cl.session, userID: cl.userID, channelID: cl.channelID, video: first.Video, out: out}); err != nil {
+	if _, err := actors.Ask[joined](ctx, s.engine, s.rooms, addPeer{
+		session: cl.session, userID: cl.userID, channelID: cl.channelID,
+		video: first.Video, simulcast: first.Simulcast, layers: first.Layers, out: out,
+	}); err != nil {
 		// The chat server counts them in the talk until told otherwise.
 		s.engine.Send(s.link, peerLeft{userID: cl.userID, channelID: cl.channelID, session: cl.session})
 		if errors.Is(err, errFull) {
@@ -198,6 +201,12 @@ func (s *Server) rtc(w http.ResponseWriter, r *http.Request) {
 				continue
 			}
 			m = video{session: cl.session, source: msg.Source, on: msg.On}
+		case opFocus:
+			// A stream id is a user id, a colon and a source.
+			if len(msg.Stream) > 128 {
+				continue
+			}
+			m = focus{session: cl.session, stream: msg.Stream}
 		default:
 			continue
 		}

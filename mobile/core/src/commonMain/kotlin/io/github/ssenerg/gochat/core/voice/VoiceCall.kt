@@ -103,6 +103,9 @@ class VoiceCall internal constructor(
     /** What goes out now, besides the voice, as the others are told. */
     private var sending = emptySet<VideoSource>()
 
+    /** The camera or screen shown big, by stream id, which comes sharp; the others come small. */
+    private var focus: String? = null
+
     /** The connection's own events, which a camera or screen turned on or off joins. */
     private var signals: Queue<Signal>? = null
 
@@ -151,6 +154,17 @@ class VoiceCall internal constructor(
         signals?.trySend(Signal.Video)
     }
 
+    /**
+     * Says which of the others' cameras or screens the person shows big,
+     * by [CallVideo.streamId], or none: the voice server sends that one in
+     * its best layer and the others in their least.
+     */
+    fun setFocus(streamId: String?) {
+        if (focus == streamId) return
+        focus = streamId
+        signals?.trySend(Signal.Focus)
+    }
+
     /** Hangs up without a word to the chat server, for signing out. */
     internal fun close() = hangUp()
 
@@ -190,6 +204,7 @@ class VoiceCall internal constructor(
         engine?.stopVideo()
         identified = false
         sending = emptySet()
+        focus = null
         _videos.value = emptyList()
         _state.value = null
     }
@@ -200,6 +215,7 @@ class VoiceCall internal constructor(
         engine?.stopVideo()
         identified = false
         sending = emptySet()
+        focus = null
         _videos.value = emptyList()
         _state.value = null
         message?.let { _errors.tryEmit(it) }
@@ -256,6 +272,9 @@ class VoiceCall internal constructor(
         /** The person turned the camera or screen on or off. */
         data object Video : Signal
 
+        /** The person showed another camera or screen big, or none. */
+        data object Focus : Signal
+
         data object ScreenEnded : Signal
 
         data object CameraEnded : Signal
@@ -309,7 +328,19 @@ class VoiceCall internal constructor(
                     for (frame in incoming) if (frame is Frame.Text) signals.send(Signal.Message(frame.readText()))
                     signals.send(Signal.Closed)
                 }
-                send(Frame.Text(buildJsonObject { put("op", "identify"); put("token", ticket.token); put("video", engine.video) }.toString()))
+                // With video, the others' cameras come small but for the one shown big.
+                send(
+                    Frame.Text(
+                        buildJsonObject {
+                            put("op", "identify")
+                            put("token", ticket.token)
+                            put("video", engine.video)
+                            put("layers", engine.video)
+                        }.toString(),
+                    ),
+                )
+                // What the voice server was last told is big; a new connection knows of none.
+                var focused: String? = null
                 var timer: Job? = null
                 val early = mutableListOf<IceCandidate>()
                 var offered = false
@@ -341,6 +372,7 @@ class VoiceCall internal constructor(
                                     created.setMuted(_muted.value || _deafened.value)
                                     created.setDeafened(_deafened.value)
                                     if (_muted.value || _deafened.value) report()
+                                    signals.trySend(Signal.Focus)
                                     timer = launch {
                                         delay(CONNECT_TIMEOUT)
                                         signals.send(Signal.TimedOut)
@@ -466,6 +498,10 @@ class VoiceCall internal constructor(
                                         listOfNotNull(track?.let { CallVideo(myId, source, it, local = true) })
                                 }
                             }
+                        }
+                        Signal.Focus -> if (p != null && focus != focused) {
+                            focused = focus
+                            emit(buildJsonObject { put("op", "focus"); put("stream", focused.orEmpty()) })
                         }
                         Signal.ScreenEnded -> setVideo(VideoSource.Screen, false)
                         Signal.CameraEnded -> if (_state.value?.camera == true) {

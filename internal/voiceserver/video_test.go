@@ -1,11 +1,13 @@
 package voiceserver
 
 import (
+	"fmt"
 	"sync"
 	"testing"
 	"time"
 
 	"github.com/pion/rtcp"
+	"github.com/pion/rtp"
 	"github.com/pion/sdp/v3"
 	"github.com/pion/webrtc/v4"
 	"github.com/pion/webrtc/v4/pkg/media"
@@ -315,4 +317,260 @@ func TestAVideoNeverTakesAnothersPlaceUnderAnOffer(t *testing.T) {
 	}
 	eventually(t, "carol sees bob's camera", func() bool { return carol.heard("bob:camera") > 10 })
 	eventually(t, "carol gets reports on it", func() bool { return carol.reported("bob:camera") > 0 })
+}
+
+// layeredCamera plays a browser that sends its camera in the three layers
+// the server asks for: a frame a packet on each, its VP8 descriptor with a
+// picture id, the layer's rank after the VP8 header. A layer sends a
+// keyframe only when asked for one there.
+type layeredCamera struct {
+	t    *testing.T
+	mu   sync.Mutex
+	on   bool
+	plis map[string]int
+	want map[string]bool
+}
+
+func (cam *layeredCamera) attach(c *client, sl *slots) {
+	cam.mu.Lock()
+	defer cam.mu.Unlock()
+	if cam.on {
+		return
+	}
+	cam.on, cam.plis, cam.want = true, map[string]int{}, map[string]bool{}
+	var slot *webrtc.RTPTransceiver
+	for _, tr := range c.pc.GetTransceivers() {
+		if tr.Mid() == sl.Camera {
+			slot = tr
+		}
+	}
+	if slot == nil {
+		cam.t.Error("no slot for the camera")
+		return
+	}
+	tracks := make([]*webrtc.TrackLocalStaticRTP, len(rids))
+	for i, rid := range rids {
+		track, err := webrtc.NewTrackLocalStaticRTP(webrtc.RTPCodecCapability{MimeType: webrtc.MimeTypeVP8, ClockRate: 90000}, "camera", "local", webrtc.WithRTPStreamID(rid))
+		if err != nil {
+			cam.t.Error(err)
+			return
+		}
+		tracks[i] = track
+	}
+	s, err := c.api.NewRTPSender(tracks[0], c.pc.SCTP().Transport())
+	if err != nil {
+		cam.t.Error(err)
+		return
+	}
+	// The slot takes a sender of one layer: the others join it there.
+	if err := slot.SetSender(s, tracks[0]); err != nil {
+		cam.t.Error(err)
+		return
+	}
+	for _, track := range tracks[1:] {
+		if err := s.AddEncoding(track); err != nil {
+			cam.t.Error(err)
+			return
+		}
+	}
+	for _, rid := range rids {
+		go func() {
+			for {
+				pkts, _, err := s.ReadSimulcastRTCP(rid)
+				if err != nil {
+					return
+				}
+				for _, pkt := range pkts {
+					if _, ok := pkt.(*rtcp.PictureLossIndication); ok {
+						cam.mu.Lock()
+						cam.plis[rid]++
+						cam.want[rid] = true
+						cam.mu.Unlock()
+					}
+				}
+			}
+		}()
+	}
+	go func() {
+		seq := []uint16{1000, 30000, 65500}
+		ts := []uint32{5000, 1 << 31, 4_294_000_000}
+		pic := []uint16{100, 20000, 32700}
+		for c.pc.ConnectionState() != webrtc.PeerConnectionStateClosed {
+			time.Sleep(33 * time.Millisecond)
+			// The ids of the extensions that name the mid and the layer, as
+			// the server offered them.
+			var midID, ridID uint8
+			for _, e := range s.GetParameters().HeaderExtensions {
+				switch e.URI {
+				case sdp.SDESMidURI:
+					midID = uint8(e.ID)
+				case sdp.SDESRTPStreamIDURI:
+					ridID = uint8(e.ID)
+				}
+			}
+			if midID == 0 || ridID == 0 {
+				continue
+			}
+			for i, rid := range rids {
+				cam.mu.Lock()
+				key := cam.want[rid]
+				cam.want[rid] = false
+				cam.mu.Unlock()
+				hdr := byte(1)
+				if key {
+					hdr = 0
+				}
+				payload := append([]byte{0x90, 0x80, 0x80 | byte(pic[i]>>8), byte(pic[i]), hdr, byte(i)}, make([]byte, 200)...)
+				pkt := &rtp.Packet{Header: rtp.Header{Version: 2, PayloadType: 96, SequenceNumber: seq[i], Timestamp: ts[i], Marker: true}, Payload: payload}
+				if pkt.SetExtension(midID, []byte(sl.Camera)) != nil || pkt.SetExtension(ridID, []byte(rid)) != nil {
+					cam.t.Error("could not mark a packet")
+					return
+				}
+				if err := tracks[i].WriteRTP(pkt); err != nil {
+					return
+				}
+				seq[i]++
+				ts[i] += 3000
+				pic[i] = (pic[i] + 1) & 0x7fff
+			}
+		}
+	}()
+}
+
+func (cam *layeredCamera) pli(rid string) int {
+	cam.mu.Lock()
+	defer cam.mu.Unlock()
+	return cam.plis[rid]
+}
+
+func (s *sfu) focus(session, stream string) {
+	s.engine.Send(s.rooms, toRoom{channelID: "room", msg: focus{session: session, stream: stream}})
+}
+
+// layer is the layer of the last frame a client got of a stream, -1 before
+// any.
+func (c *client) layer(streamID string) int {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	fs := c.frames[streamID]
+	if len(fs) == 0 {
+		return -1
+	}
+	return fs[len(fs)-1].layer
+}
+
+// layers are the layers a client got frames of, in the order they came.
+func (c *client) layers(streamID string) []int {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	var got []int
+	for _, f := range c.frames[streamID] {
+		if len(got) == 0 || got[len(got)-1] != f.layer {
+			got = append(got, f.layer)
+		}
+	}
+	return got
+}
+
+// switched finds where a client's frames of one layer gave way to
+// another's, and says how the stream went on there, if not as one.
+func (c *client) switched(streamID string, from, to int) string {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	fs := c.frames[streamID]
+	for i := len(fs) - 1; i > 0; i-- {
+		a, b := fs[i-1], fs[i]
+		if a.layer != from || b.layer != to {
+			continue
+		}
+		switch {
+		case !b.key:
+			return "not on a keyframe"
+		case b.seq != a.seq+1:
+			return fmt.Sprintf("sequence %d then %d", a.seq, b.seq)
+		case b.ts-a.ts == 0 || b.ts-a.ts >= 1<<31:
+			return fmt.Sprintf("timestamp %d then %d", a.ts, b.ts)
+		case b.pic != (a.pic+1)&0x7fff:
+			return fmt.Sprintf("picture %d then %d", a.pic, b.pic)
+		}
+		return ""
+	}
+	return fmt.Sprintf("no switch from layer %d to %d", from, to)
+}
+
+func TestAViewerGetsTheLayerThatFitsItsTile(t *testing.T) {
+	s := newSFU(t, 4)
+	cam := &layeredCamera{t: t}
+	alice, err := s.joinAs("s-alice", "alice", true, hello{video: true, simulcast: true, layers: true}, cam.attach)
+	if err != nil {
+		t.Fatal(err)
+	}
+	bob, err := s.joinAs("s-bob", "bob", true, hello{video: true, layers: true}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// carol's app picks no layers: she gets the best of each.
+	carol, err := s.joinWith("s-carol", "carol", true, true, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	eventually(t, "bob hears alice", func() bool { return bob.heard("alice") > 10 })
+
+	// Only alice said she sends layers: her first offer asks for them, on
+	// her camera's slot.
+	for _, c := range []*client{alice, bob, carol} {
+		c.mu.Lock()
+		if layered := c.layered; layered == 0 != (c != alice) {
+			t.Errorf("%d offers asked %s for layers", layered, c.userID)
+		}
+		c.mu.Unlock()
+	}
+
+	// Bob shows alice's camera in a tile: he gets the least layer, alone.
+	s.video("s-alice", sourceCamera, true)
+	eventually(t, "bob sees alice's camera", func() bool { return bob.heard("alice:camera") > 30 })
+	if got := bob.layers("alice:camera"); len(got) != 1 || got[0] != 0 {
+		t.Fatalf("bob, who shows it small, got layers %v", got)
+	}
+	eventually(t, "carol gets the full layer", func() bool { return carol.layer("alice:camera") == 2 })
+
+	// His browser asking for a keyframe asks for one of his layer.
+	plis := cam.pli("q")
+	time.Sleep(keyframeGap)
+	bob.mu.Lock()
+	remote := bob.remotes["alice:camera"]
+	bob.mu.Unlock()
+	if err := bob.pc.WriteRTCP([]rtcp.Packet{&rtcp.PictureLossIndication{MediaSSRC: uint32(remote.SSRC())}}); err != nil {
+		t.Fatal(err)
+	}
+	eventually(t, "bob's request reaches alice's least layer", func() bool { return cam.pli("q") > plis })
+
+	// He enlarges it: the full layer comes from its next keyframe on, as
+	// the same stream.
+	s.focus("s-bob", "alice:camera")
+	eventually(t, "bob gets the full layer", func() bool { return bob.layer("alice:camera") == 2 })
+	if how := bob.switched("alice:camera", 0, 2); how != "" {
+		t.Fatalf("switching up: %s", how)
+	}
+	frames := bob.heard("alice:camera")
+	eventually(t, "the full layer goes on", func() bool { return bob.heard("alice:camera") > frames+10 })
+	if got := bob.layers("alice:camera"); len(got) != 2 {
+		t.Fatalf("bob got layers %v", got)
+	}
+
+	// And shrinks it again.
+	s.focus("s-bob", "")
+	eventually(t, "bob gets the least layer again", func() bool { return bob.layer("alice:camera") == 0 })
+	if how := bob.switched("alice:camera", 2, 0); how != "" {
+		t.Fatalf("switching down: %s", how)
+	}
+
+	// All of it on one track, as Pion's own reports describe it.
+	bob.mu.Lock()
+	tracks := bob.tracks["alice:camera"]
+	bob.mu.Unlock()
+	if tracks != 1 {
+		t.Fatalf("bob got alice's camera on %d tracks", tracks)
+	}
+	eventually(t, "bob gets reports on it", func() bool { return bob.reported("alice:camera") > 0 })
 }
