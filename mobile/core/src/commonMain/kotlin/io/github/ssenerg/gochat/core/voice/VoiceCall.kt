@@ -328,13 +328,15 @@ class VoiceCall internal constructor(
                     for (frame in incoming) if (frame is Frame.Text) signals.send(Signal.Message(frame.readText()))
                     signals.send(Signal.Closed)
                 }
-                // With video, the others' cameras come small but for the one shown big.
+                // With video, the camera goes out in layers, and the others'
+                // come small but for the one shown big.
                 send(
                     Frame.Text(
                         buildJsonObject {
                             put("op", "identify")
                             put("token", ticket.token)
                             put("video", engine.video)
+                            put("simulcast", engine.video)
                             put("layers", engine.video)
                         }.toString(),
                     ),

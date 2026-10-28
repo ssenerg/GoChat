@@ -61,9 +61,10 @@ iosApp/      the Xcode project: a SwiftUI shell that shows the shared screens
 - Cameras and screens in voice channels: turn the front camera on, share
   the screen (Android asks which; iOS starts a broadcast from the system's
   picker or the Control Center), see the others' cameras in their tiles and
-  their screens above them, full screen at a tap. Cameras in tiles come in
-  their smallest layer, and the one full screen in its best. The sidebar
-  marks who has their camera on and who is live, as the web does.
+  their screens above them, full screen at a tap. The camera goes out in
+  three layers, as the web's does: cameras in tiles come in their smallest
+  layer, and the one full screen in its best. The sidebar marks who has
+  their camera on and who is live, as the web does.
 - Messages with Markdown, mentions, emoji, images, files, reactions,
   threads, edits, deletes, pins and saves; typing indicators; search;
   followed threads; saved messages.

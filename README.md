@@ -86,10 +86,10 @@ carry the voice:
    from each at most. A room forwards 8 cameras and screens at most
    (`max_videos_per_room`); past them, the voice server refuses one with a
    `video` message of its own, and the page or app turns it off.
-5. A page sends its camera in three layers (simulcast): a quarter, half
-   and all of its size, at about 150 kbit/s, 500 kbit/s and 1 Mbit/s. The
-   voice server asks for them in its first offer, of those that identify
-   with `simulcast`, and the page's answer decides. Each viewer gets one
+5. A page or an app sends its camera in three layers (simulcast): a
+   quarter, half and all of its size, at about 150 kbit/s, 500 kbit/s and
+   1 Mbit/s. The voice server asks for them in its first offer, of those
+   that identify with `simulcast`, and the answer decides. Each viewer gets one
    layer of each camera: the least while it shows the camera in a tile,
    the full one while it enlarges it, which it says in a `focus` message.
    The voice server switches layers on keyframes, asking the sender for
@@ -98,9 +98,7 @@ carry the voice:
    layer, as browsers do when their network is short, its viewers move to
    another. Screens go in one layer, as sharp as they come. Pages and apps
    that do not identify with `layers` get the best layer of each camera.
-   The apps take layers, and full screen counts as enlarged, but send their
-   own camera in one layer: their encoders' simulcast is untested on
-   devices.
+   In the apps, full screen counts as enlarged.
 
 Each person talks in one channel at a time: joining elsewhere, or from another
 tab, disconnects the earlier connection. Mute and deafen are the person's own
