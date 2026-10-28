@@ -362,7 +362,8 @@ repository, in the setup the server has: the script,
 `docker-compose.yml` and `.env` belong to root, and the key cannot change
 them. When `deployments/docker/deploy.sh` or
 `deployments/docker/docker-compose.yml` change here, install them on the
-server again, as below; voice channels changed both.
+server again, as below; voice channels changed both, and push
+notifications the compose file.
 
 Once, on the server, as root, in a clone of this repository: a user to
 deploy as (in the `docker` group, which is as good as root on that server)
@@ -531,10 +532,9 @@ A push reaches only the builds of the app those credentials belong to, so
 a server pushes to the apps built with its Firebase project and its Apple
 team: see [mobile/README.md](mobile/README.md#push-notifications). The
 server must reach `fcm.googleapis.com`, `oauth2.googleapis.com` and
-`api.push.apple.com` (or `api.sandbox.push.apple.com`) over HTTPS. In the
-Docker stack its networks are internal: add it to one with outbound
-access, such as `frontend`, under `networks:` in `docker-compose.yml`.
-`.env` passes the credentials through:
+`api.push.apple.com` (or `api.sandbox.push.apple.com`) over HTTPS; in the
+Docker stack it reaches them over the `frontend` network, where it
+publishes no port. `.env` passes the credentials through:
 
 ```bash
 SERVICES_PUSH_FCM_CREDENTIALS='{"type":"service_account","project_id":...}'   # jq -c . key.json

@@ -166,8 +166,7 @@ services:
       SERVER_DRPC_VOICE_SERVER_KEY: ${VOICE_SERVER_KEY:-}
       SERVICES_ACCOUNTS_SECRET_KEY: ${SERVICES_ACCOUNTS_SECRET_KEY}
       SERVICES_ACCOUNTS_SETUP_TOKEN: ${SERVICES_ACCOUNTS_SETUP_TOKEN:-}
-      # Push notifications to the apps, off while empty. The server then
-      # needs a network with outbound access too, such as frontend.
+      # Push notifications to the apps, off while empty.
       SERVICES_PUSH_FCM_CREDENTIALS: ${SERVICES_PUSH_FCM_CREDENTIALS:-}
       SERVICES_PUSH_APNS_KEY: ${SERVICES_PUSH_APNS_KEY:-}
       SERVICES_PUSH_APNS_KEY_ID: ${SERVICES_PUSH_APNS_KEY_ID:-}
@@ -190,6 +189,9 @@ services:
     networks:
       - backend
       - gateway
+      # Outbound only, to FCM and APNs for pushes: the server publishes no
+      # port.
+      - frontend
 
   web:
     image: gochat:latest
