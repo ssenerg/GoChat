@@ -7,11 +7,9 @@ on:
       - "mobile/**"
       - "api/protobuf/proto/**"
       - ".github/workflows/mobile.yml"
+  # Every pull request, so main can require android and ios: they skip,
+  # which counts as passing, when the change touches nothing they build.
   pull_request:
-    paths:
-      - "mobile/**"
-      - "api/protobuf/proto/**"
-      - ".github/workflows/mobile.yml"
   workflow_dispatch:
 
 permissions:
@@ -27,7 +25,30 @@ defaults:
 
 # The runners carry a JDK, the Android SDK and Xcode.
 jobs:
+  # Whether a pull request touches the apps, the protos or this workflow.
+  changes:
+    runs-on: ubuntu-latest
+    outputs:
+      mobile: ${{ steps.diff.outputs.mobile }}
+    steps:
+      # The pull request's merge commit and its first parent, the base.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          fetch-depth: 2
+      - id: diff
+        working-directory: .
+        run: |
+          if [ "$GITHUB_EVENT_NAME" != pull_request ] ||
+            git diff --name-only HEAD^ HEAD | grep -qE '^(mobile/|api/protobuf/proto/|\.github/workflows/mobile\.yml$)'; then
+            echo "mobile=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "mobile=false" >> "$GITHUB_OUTPUT"
+          fi
+
   android:
+    needs: changes
+    if: needs.changes.outputs.mobile == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -51,6 +72,8 @@ jobs:
           if-no-files-found: error
 
   ios:
+    needs: changes
+    if: needs.changes.outputs.mobile == 'true'
     runs-on: macos-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1

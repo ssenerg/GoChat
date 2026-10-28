@@ -136,8 +136,11 @@ GOCHAT_E2E_ADMIN_PASSWORD=... GOCHAT_E2E_TEAM=acme ./gradlew :core:jvmTest
 
 CI (`.github/workflows/mobile.yml`) checks the Gradle wrapper, runs the
 core's tests on the JVM and the iOS simulator, builds the Android app's
-debug and release builds and lints it, and builds the iOS app. The main
-workflow's e2e job runs the core's tests against the stack it starts.
+debug and release builds and lints it, and builds the iOS app. It runs on
+every pull request, which can't merge until its `android` and `ios` jobs
+pass; they skip when the change touches neither `mobile/`, the protos nor
+the workflow. The main workflow's e2e job runs the core's tests against
+the stack it starts.
 
 **Release builds** are signed when these are set, as CI secrets or in the
 environment: `GOCHAT_RELEASE_KEYSTORE` (the keystore's path),
