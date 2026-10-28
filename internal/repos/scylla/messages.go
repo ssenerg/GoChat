@@ -14,8 +14,8 @@ import (
 )
 
 const (
-	messageColumns = "channel_id, bucket, id, user_id, content, attachments, edited_at, reply_count, last_reply_at, participants, pinned, markup"
-	replyColumns   = "channel_id, root_id, id, user_id, content, attachments, edited_at, pinned, markup"
+	messageColumns = "channel_id, bucket, id, user_id, content, attachments, edited_at, reply_count, last_reply_at, participants, pinned, markup, link_preview, no_link_preview"
+	replyColumns   = "channel_id, root_id, id, user_id, content, attachments, edited_at, pinned, markup, link_preview, no_link_preview"
 )
 
 // InsertMessage writes m, and the bucket it opens when newBucket is set.
@@ -29,15 +29,18 @@ func (r *Repository) InsertMessage(ctx context.Context, m *models.Message, newBu
 	return wrap(r.query(ctx, "INSERT INTO messages ("+cols+") VALUES ("+marks(len(vals))+")", vals...).ExecRelease())
 }
 
-// optional adds m's attachments and buttons to the columns of an insert
-// when it has them: a null or a whole collection would each write a
-// tombstone.
+// optional adds m's attachments, buttons and preview setting to the
+// columns of an insert when it has them: a null or a whole collection
+// would each write a tombstone.
 func optional(m *models.Message, cols string, vals ...any) (string, []any) {
 	if len(m.Attachments) > 0 {
 		cols, vals = cols+", attachments", append(vals, m.Attachments)
 	}
 	if len(m.Markup) > 0 {
 		cols, vals = cols+", markup", append(vals, m.Markup)
+	}
+	if m.NoLinkPreview {
+		cols, vals = cols+", no_link_preview", append(vals, true)
 	}
 	return cols, vals
 }
@@ -132,6 +135,17 @@ func (r *Repository) SetMarkup(ctx context.Context, channelID, rootID, id gocql.
 	}
 	return wrap(r.query(ctx, "UPDATE replies SET markup = ? WHERE channel_id = ? AND root_id = ? AND id = ?",
 		markup, channelID, rootID, id).ExecRelease())
+}
+
+// SetLinkPreview replaces the link preview of a message, or of a reply
+// with rootID; off keeps it from having one.
+func (r *Repository) SetLinkPreview(ctx context.Context, channelID, rootID, id gocql.UUID, preview []byte, off bool) error {
+	if ids.IsZero(rootID) {
+		return wrap(r.query(ctx, "UPDATE messages SET link_preview = ?, no_link_preview = ? WHERE channel_id = ? AND bucket = ? AND id = ?",
+			preview, off, channelID, ids.BucketOf(id), id).ExecRelease())
+	}
+	return wrap(r.query(ctx, "UPDATE replies SET link_preview = ?, no_link_preview = ? WHERE channel_id = ? AND root_id = ? AND id = ?",
+		preview, off, channelID, rootID, id).ExecRelease())
 }
 
 func (r *Repository) GetReply(ctx context.Context, channelID, rootID, id gocql.UUID) (*models.Message, error) {

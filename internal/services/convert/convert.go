@@ -222,6 +222,12 @@ func Message(m *models.Message, author *pb.User, atts []*models.Attachment) *pb.
 			out.Markup = &markup
 		}
 	}
+	if len(m.LinkPreview) > 0 && !m.NoLinkPreview {
+		var preview pb.LinkPreview
+		if proto.Unmarshal(m.LinkPreview, &preview) == nil {
+			out.LinkPreview = &preview
+		}
+	}
 	return out
 }
 

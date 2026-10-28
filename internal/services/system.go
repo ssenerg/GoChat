@@ -21,6 +21,7 @@ import (
 	"github.com/ssenerg/gochat/internal/services/files"
 	"github.com/ssenerg/gochat/internal/services/hub"
 	"github.com/ssenerg/gochat/internal/services/index"
+	"github.com/ssenerg/gochat/internal/services/previews"
 	"github.com/ssenerg/gochat/internal/services/push"
 	"github.com/ssenerg/gochat/internal/services/updates"
 	"github.com/ssenerg/gochat/internal/services/users"
@@ -44,7 +45,9 @@ type System struct {
 	Updates *actor.PID
 	Bots    *actor.PID
 	// Push reaches closed apps; nil without a provider.
-	Push     *actor.PID
+	Push *actor.PID
+	// Previews makes link previews; nil while they are off.
+	Previews *previews.Service
 	Sessions *accounts.Deps
 	Users    *users.Cache
 	janitor  *actor.PID
@@ -104,6 +107,13 @@ func Start(logger *zap.Logger, cfg *Config, repo *scylla.Repository, storage *mi
 	s.callbacks = engine.Spawn(callbacks.New(s.Hub), "callbacks", actor.WithID("main"), recovered)
 	channelDeps.Updates, channelDeps.Callbacks = s.Updates, s.callbacks
 	s.Channels = engine.Spawn(channels.New(channelDeps), "channels", actor.WithID("main"), recovered)
+	if cfg.Previews.Enabled {
+		s.Previews = previews.Start(&previews.Deps{
+			Logger: logger.Named("previews"), Cfg: cfg.Previews, Repo: repo, Storage: storage, Engine: engine,
+			Channels: s.Channels, Fetcher: previews.Fetcher(cfg.Previews),
+		})
+		channelDeps.Previews = s.Previews
+	}
 	fileDeps := &files.Deps{
 		Logger: logger.Named("files"), Cfg: cfg.Files, Repo: repo, Storage: storage,
 		Authz: az, Engine: engine, Channels: s.Channels,
@@ -147,7 +157,11 @@ func (s *System) Stop(timeout time.Duration) {
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
-	for _, pid := range []*actor.PID{s.Bots, s.webhooks, s.Accounts, s.Auth, s.Directory, s.Files, s.Search, s.backfill, s.adopter, s.janitor, s.Channels, s.Push, s.Voice, s.callbacks, s.Updates, s.filing, s.Hub, s.events} {
+	var previewer *actor.PID
+	if s.Previews != nil {
+		previewer = s.Previews.PID
+	}
+	for _, pid := range []*actor.PID{s.Bots, s.webhooks, s.Accounts, s.Auth, s.Directory, s.Files, s.Search, s.backfill, s.adopter, s.janitor, previewer, s.Channels, s.Push, s.Voice, s.callbacks, s.Updates, s.filing, s.Hub, s.events} {
 		if pid == nil {
 			continue
 		}

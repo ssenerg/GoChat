@@ -58,6 +58,7 @@ var botCalls = map[string]bool{
 	"/gochat.v1.MessageService/ListThread":         true,
 	"/gochat.v1.MessageService/SendTyping":         true,
 	"/gochat.v1.MessageService/React":              true,
+	"/gochat.v1.MessageService/RemoveLinkPreview":  true,
 	"/gochat.v1.FileService/Upload":                true,
 	"/gochat.v1.FileService/Download":              true,
 	"/gochat.v1.UpdatesService/GetState":           true,

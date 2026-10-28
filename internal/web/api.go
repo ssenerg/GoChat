@@ -70,7 +70,7 @@ var apiCalls = map[string][]string{
 	"gochat.v1.MessageService": {
 		"PostMessage", "EditMessage", "DeleteMessage", "ListMessages", "GetMessage", "SendTyping",
 		"ListThread", "React", "SearchMessages", "ListThreads", "MarkThreadRead", "FollowThread",
-		"PinMessage", "ListPinned", "SaveMessage", "ListSaved", "PressButton",
+		"PinMessage", "ListPinned", "SaveMessage", "ListSaved", "PressButton", "RemoveLinkPreview",
 	},
 	"gochat.v1.UpdatesService": {"GetState", "GetDifference", "GetChannelDifference"},
 	"gochat.v1.BotService": {

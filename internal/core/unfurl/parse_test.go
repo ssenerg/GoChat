@@ -8,16 +8,16 @@ import (
 
 func TestFirstLink(t *testing.T) {
 	for content, want := range map[string]string{
-		"see https://example.com/a.":                                "https://example.com/a",
-		"no links here":                                             "",
-		"`https://code.example/x` then http://after.example":        "http://after.example",
+		"see https://example.com/a.":                                 "https://example.com/a",
+		"no links here":                                              "",
+		"`https://code.example/x` then http://after.example":         "http://after.example",
 		"```\nhttps://block.example\n```\nhttps://out.example/p?q=1": "https://out.example/p?q=1",
-		"[docs](https://md.example/x) and https://second.example":   "https://md.example/x",
-		"<https://auto.example/y>":                                  "https://auto.example/y",
-		"www.example.com/z":                                         "http://www.example.com/z",
-		"ftp://files.example mailto:a@b.example a@b.example":        "",
-		"[bad](javascript:alert(1)) https://good.example":           "https://good.example",
-		"(see https://paren.example/a)":                             "https://paren.example/a",
+		"[docs](https://md.example/x) and https://second.example":    "https://md.example/x",
+		"<https://auto.example/y>":                                   "https://auto.example/y",
+		"www.example.com/z":                                          "http://www.example.com/z",
+		"ftp://files.example mailto:a@b.example a@b.example":         "",
+		"[bad](javascript:alert(1)) https://good.example":            "https://good.example",
+		"(see https://paren.example/a)":                              "https://paren.example/a",
 	} {
 		if got := FirstLink(content); got != want {
 			t.Errorf("FirstLink(%q) = %q, want %q", content, got, want)
