@@ -1,0 +1,19 @@
+{{define "content"}}
+<main class="auth">
+  <div class="auth-card">
+    <div class="brand"><img src="{{static "icon.svg"}}" alt="" width="40" height="40"><span>GoChat</span></div>
+    <h1>Link your account</h1>
+    {{with .Error}}<p class="alert" role="alert">{{.}}</p>{{end}}
+    {{with .Link}}
+    <p>Sign in to <strong>@{{$.User.Username}}</strong> with your {{.ProviderName}} account{{with .Email}} <strong>{{.}}</strong>{{end}} from now on?</p>
+    <p class="muted">Link it only if it is yours: whoever holds it can sign in as you.</p>
+    {{end}}
+    <form method="post" action="/login/sso/link" class="row">
+      <input type="hidden" name="_csrf" value="{{.CSRF}}">
+      <input type="hidden" name="next" value="{{.Next}}">
+      {{if .Link}}<button class="btn primary" type="submit">Link</button>{{end}}
+      <button class="btn" type="submit" name="decline" value="1">{{if .Link}}Not now{{else}}Continue{{end}}</button>
+    </form>
+  </div>
+</main>
+{{end}}

@@ -188,6 +188,9 @@ fieldset.choice legend { font-weight: 600; font-size: .92rem; padding: 0 .3rem; 
 .auth-card h1 { margin: 0; font-size: 1.5rem; }
 .auth-card p { margin: 0; }
 .brand { display: flex; align-items: center; gap: .6rem; font-weight: 800; font-size: 1.2rem; }
+.or { display: flex; align-items: center; gap: .75rem; color: var(--fg-muted); font-size: .85rem; }
+.or::before, .or::after { content: ""; flex: 1; border-top: 1px solid var(--border); }
+.notice { padding: .6rem .8rem; border-radius: 10px; background: var(--accent-soft); color: var(--accent-soft-ink); }
 .page { max-width: 720px; margin: 0 auto; padding: 16px 16px 48px; display: grid; gap: 16px; }
 .page-header { display: flex; align-items: center; gap: 1rem; padding-top: env(safe-area-inset-top); }
 .page-header h1 { margin: 0; font-size: 1.4rem; }

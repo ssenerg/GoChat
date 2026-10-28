@@ -25,11 +25,13 @@ const protocolName = "gochat.v2"
 
 // anonymousCalls are those a socket makes before it has a session.
 var anonymousCalls = map[string]bool{
-	"gochat.v1.AuthService/GetSignupInfo": true,
-	"gochat.v1.AuthService/SignUp":        true,
-	"gochat.v1.AuthService/Login":         true,
-	"gochat.v1.AuthService/VerifyMFA":     true,
-	"gochat.v1.TeamService/GetInvite":     true,
+	"gochat.v1.AuthService/GetSignupInfo":    true,
+	"gochat.v1.AuthService/SignUp":           true,
+	"gochat.v1.AuthService/Login":            true,
+	"gochat.v1.AuthService/VerifyMFA":        true,
+	"gochat.v1.AuthService/ListSSOProviders": true,
+	"gochat.v1.AuthService/RedeemSSO":        true,
+	"gochat.v1.TeamService/GetInvite":        true,
 }
 
 // apiSocket opens a socket of the GoChat protocol; the client says who it

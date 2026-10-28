@@ -15,6 +15,7 @@
       <div class="row"><button class="btn primary" type="submit">Save</button><span id="profile-status" class="status"></span></div>
     </form>
   </section>
+  {{if .HasPassword}}
   <section class="card">
     <h2>Password</h2>
     <p class="muted">Changing it signs out every other session.</p>
@@ -25,6 +26,12 @@
       <div class="row"><button class="btn primary" type="submit">Change password</button><span id="password-status" class="status"></span></div>
     </form>
   </section>
+  {{end}}
+  {{if .SSO.Providers}}
+  <section class="card" id="sso">
+    {{template "sso" .SSO}}
+  </section>
+  {{end}}
   <section class="card" id="notifications">
     <h2>Desktop notifications</h2>
     <p class="muted">For direct messages, mentions and replies in your threads, while GoChat is in the background. Mute a channel from its header to silence it.</p>
@@ -41,9 +48,11 @@
     </fieldset>
     <span class="status" data-voice-noise-state></span>
   </section>
+  {{if or .HasPassword .User.TotpEnabled}}
   <section class="card" id="totp">
     {{template "totp" .}}
   </section>
+  {{end}}
   <section class="card" id="sessions">
     {{template "sessions" .Sessions}}
   </section>

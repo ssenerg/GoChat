@@ -17,10 +17,14 @@ import (
 
 type settingsData struct {
 	Page
-	Email    string
-	Sessions sessionsData
-	Storage  *pb.GetStorageUsageResponse
-	Bots     botsData
+	Email string
+	// HasPassword is false for an account that only signs in with single
+	// sign-on.
+	HasPassword bool
+	Sessions    sessionsData
+	Storage     *pb.GetStorageUsageResponse
+	Bots        botsData
+	SSO         ssoData
 }
 
 type sessionsData struct {
@@ -70,12 +74,19 @@ func (h *Handler) settingsPage(w http.ResponseWriter, r *http.Request) {
 		h.fail(w, r, err)
 		return
 	}
+	sso, err := h.loadSSO(r, me.HasPassword)
+	if err != nil {
+		h.fail(w, r, err)
+		return
+	}
 	h.page(w, r, http.StatusOK, "settings", settingsData{
-		Page:     Page{Title: "Settings", CSRF: h.csrfToken(w, r), User: me.User},
-		Email:    me.Email,
-		Sessions: listed(sessions.Sessions),
-		Storage:  storage,
-		Bots:     bots,
+		Page:        Page{Title: "Settings", CSRF: h.csrfToken(w, r), User: me.User},
+		Email:       me.Email,
+		HasPassword: me.HasPassword,
+		Sessions:    listed(sessions.Sessions),
+		Storage:     storage,
+		Bots:        bots,
+		SSO:         sso,
 	})
 }
 

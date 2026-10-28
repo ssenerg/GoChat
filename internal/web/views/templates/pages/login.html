@@ -3,6 +3,7 @@
   <div class="auth-card">
     <div class="brand"><img src="{{static "icon.svg"}}" alt="" width="40" height="40"><span>GoChat</span></div>
     <h1>Sign in</h1>
+    {{with .Link}}<p class="notice">Your {{.ProviderName}} account{{with .Email}} {{.}}{{end}} is not linked yet. Sign in with your password, and it will be.</p>{{end}}
     {{with .Error}}<p class="alert" role="alert">{{.}}</p>{{end}}
     <form method="post" action="/login" class="stack">
       <input type="hidden" name="_csrf" value="{{.CSRF}}">
@@ -15,6 +16,12 @@
       </label>
       <button class="btn primary block" type="submit">Sign in</button>
     </form>
+    {{if and .Providers (not .Link)}}
+    <p class="or">or</p>
+    <div class="stack">
+      {{range .Providers}}<a class="btn block" href="/login/sso/{{.Id}}{{with $.Next}}?next={{.}}{{end}}">Sign in with {{.Name}}</a>{{end}}
+    </div>
+    {{end}}
     <p class="muted center">No account? <a href="/signup{{with .Next}}?next={{.}}{{end}}">Create one</a></p>
   </div>
 </main>

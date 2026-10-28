@@ -636,6 +636,7 @@ func TestSSOConfig(t *testing.T) {
 		"plain http":     func(c *SSOConfig) { c.Providers[0].Issuer = "http://accounts.example.test" },
 		"a bad id":       func(c *SSOConfig) { c.Providers[0].ID = "Google!" },
 		"a repeated id":  func(c *SSOConfig) { c.Providers = append(c.Providers, c.Providers[0]) },
+		"a reserved id":  func(c *SSOConfig) { c.Providers[0].ID = "callback" },
 		"no client id":   func(c *SSOConfig) { c.Providers[0].ClientID = "" },
 		"two secrets":    func(c *SSOConfig) { c.Providers[0].ClientSecretFile = "/run/secret" },
 		"no secret":      func(c *SSOConfig) { c.Providers[0].ClientSecret = "" },

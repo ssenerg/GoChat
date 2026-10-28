@@ -17,6 +17,17 @@ type loginData struct {
 	Page
 	Next  string
 	Login string
+	// Providers are the single sign-on buttons, and Link the account at
+	// one that signing in links.
+	Providers []*pb.SSOProvider
+	Link      *pb.GetSSOLinkResponse
+}
+
+func (h *Handler) loginData(w http.ResponseWriter, r *http.Request, next, msg string) loginData {
+	return loginData{
+		Page: Page{Title: "Sign in", CSRF: h.csrfToken(w, r), Error: msg}, Next: next,
+		Providers: h.ssoProviders(r), Link: h.pendingLink(r),
+	}
 }
 
 // nextParam keeps a redirect target only when it stays on this site.
@@ -47,7 +58,7 @@ func (h *Handler) loginPage(w http.ResponseWriter, r *http.Request) {
 		http.Redirect(w, r, safeNext(next), http.StatusSeeOther) //nolint:gosec // safeNext keeps it on this site
 		return
 	}
-	h.page(w, r, http.StatusOK, "login", loginData{Page: Page{Title: "Sign in", CSRF: h.csrfToken(w, r)}, Next: next})
+	h.page(w, r, http.StatusOK, "login", h.loginData(w, r, next, ""))
 }
 
 func (h *Handler) login(w http.ResponseWriter, r *http.Request) {
@@ -64,9 +75,9 @@ func (h *Handler) login(w http.ResponseWriter, r *http.Request) {
 		if len(login) > 254 {
 			login = ""
 		}
-		h.page(w, r, statusOf(drpc.Err(err).Code), "login", loginData{
-			Page: Page{Title: "Sign in", CSRF: h.csrfToken(w, r), Error: msg}, Next: next, Login: login,
-		})
+		data := h.loginData(w, r, next, msg)
+		data.Login = login
+		h.page(w, r, statusOf(drpc.Err(err).Code), "login", data)
 		return
 	}
 	if token := res.GetMfaToken(); token != "" {
@@ -79,7 +90,7 @@ func (h *Handler) login(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	h.startSession(w, res.GetSession())
-	http.Redirect(w, r, safeNext(next), http.StatusSeeOther) //nolint:gosec // safeNext keeps it on this site
+	http.Redirect(w, r, h.afterSignIn(r, next), http.StatusSeeOther)
 }
 
 func (h *Handler) mfaToken(r *http.Request) string {
@@ -112,7 +123,7 @@ func (h *Handler) mfa(w http.ResponseWriter, r *http.Request) {
 		e := drpc.Err(err)
 		if e.Code == ierrors.CodeFailedPrecondition {
 			h.clearCookie(w, "mfa")
-			h.page(w, r, http.StatusUnauthorized, "login", loginData{Page: Page{Title: "Sign in", CSRF: h.csrfToken(w, r), Error: e.Message}, Next: next})
+			h.page(w, r, http.StatusUnauthorized, "login", h.loginData(w, r, next, e.Message))
 			return
 		}
 		h.page(w, r, statusOf(e.Code), "mfa", loginData{Page: Page{Title: "Verify", CSRF: h.csrfToken(w, r), Error: e.Message}, Next: next})
@@ -120,7 +131,7 @@ func (h *Handler) mfa(w http.ResponseWriter, r *http.Request) {
 	}
 	h.clearCookie(w, "mfa")
 	h.startSession(w, res.Session)
-	http.Redirect(w, r, safeNext(next), http.StatusSeeOther) //nolint:gosec // safeNext keeps it on this site
+	http.Redirect(w, r, h.afterSignIn(r, next), http.StatusSeeOther)
 }
 
 type signupForm struct {
@@ -129,6 +140,7 @@ type signupForm struct {
 
 type signupData struct {
 	Page
+	Providers   []*pb.SSOProvider
 	Allowed     bool
 	Bootstrap   bool
 	SetupToken  bool
@@ -165,6 +177,7 @@ func (h *Handler) signupPage(w http.ResponseWriter, r *http.Request) {
 	}
 	data := signupData{
 		Page:        Page{Title: "Sign up", CSRF: h.csrfToken(w, r)},
+		Providers:   h.ssoProviders(r),
 		Allowed:     signupAllowed(info),
 		Bootstrap:   info.Bootstrap,
 		SetupToken:  info.SetupTokenRequired,
@@ -192,6 +205,7 @@ func (h *Handler) signup(w http.ResponseWriter, r *http.Request) {
 	}
 	data := signupData{
 		Page:        Page{Title: "Sign up", CSRF: h.csrfToken(w, r)},
+		Providers:   h.ssoProviders(r),
 		Allowed:     signupAllowed(info),
 		Bootstrap:   info.Bootstrap,
 		SetupToken:  info.SetupTokenRequired,

@@ -22,6 +22,30 @@
 {{if .Others}}<div class="row"><button class="btn danger" hx-post="/settings/sessions/revoke" hx-target="#sessions" hx-confirm="Sign out every other session?">Sign out all other sessions</button></div>{{end}}
 {{end}}
 
+{{define "sso"}}
+<h2>Single sign-on</h2>
+<p class="muted">{{if .HasPassword}}Sign in with these accounts as well as your password.{{else}}Your account has no password: you sign in with these, and their own second factor guards it.{{end}} Two-factor codes, when on, are still asked for.</p>
+{{with .Error}}<p class="alert" role="alert">{{.}}</p>{{end}}
+{{with .Status}}<p class="status ok" role="status">{{.}}</p>{{end}}
+{{if .Identities}}
+<ul class="list">
+  {{range .Identities}}
+  <li>
+    <span><strong>{{.ProviderName}}</strong> <small class="muted">{{with .Email}}{{.}} · {{end}}linked {{date .LinkedAt.AsTime}}</small></span>
+    <form hx-post="/settings/sso/unlink" hx-target="#sso" hx-confirm="Unlink this {{.ProviderName}} account?">
+      <input type="hidden" name="issuer" value="{{.Issuer}}">
+      <input type="hidden" name="subject" value="{{.Subject}}">
+      <button class="btn sm danger" type="submit">Unlink</button>
+    </form>
+  </li>
+  {{end}}
+</ul>
+{{end}}
+<div class="row">
+  {{range .Providers}}<button class="btn" hx-post="/settings/sso/{{.Id}}/link" hx-target="#sso">Link {{.Name}}</button>{{end}}
+</div>
+{{end}}
+
 {{define "storage"}}
 <p>{{size .Used}} used{{if .Quota}} of {{size .Quota}}{{end}}{{if .Custom}} <small class="muted">(set by an admin)</small>{{end}}.</p>
 {{if .Quota}}<progress class="usage" max="{{.Quota}}" value="{{.Used}}" aria-label="Storage used"></progress>{{end}}
@@ -44,6 +68,21 @@
   <ul class="list">{{range .Sessions}}<li>{{template "session-meta" .}}</li>{{end}}</ul>
   <div class="row"><button class="btn danger" hx-post="/admin/users/{{.User.Id}}/sessions/revoke" hx-target="#admin-user" hx-swap="outerHTML" hx-confirm="Sign {{name .User}} out everywhere?">Sign out everywhere</button></div>
   {{else}}<p class="muted">Not signed in anywhere.</p>{{end}}
+  {{if .Identities}}
+  <h3 class="subhead">Single sign-on</h3>
+  <ul class="list">
+    {{range .Identities}}
+    <li>
+      <span><strong>{{.ProviderName}}</strong> <small class="muted">{{with .Email}}{{.}} · {{end}}linked {{date .LinkedAt.AsTime}}</small></span>
+      <form hx-post="/admin/users/{{$.User.Id}}/sso/unlink" hx-target="#admin-user" hx-swap="outerHTML" hx-confirm="Unlink this {{.ProviderName}} account? It no longer signs in to {{name $.User}}.">
+        <input type="hidden" name="issuer" value="{{.Issuer}}">
+        <input type="hidden" name="subject" value="{{.Subject}}">
+        <button class="btn sm danger" type="submit">Unlink</button>
+      </form>
+    </li>
+    {{end}}
+  </ul>
+  {{end}}
   <h3 class="subhead">Storage</h3>
   {{template "storage" .Storage}}
   <form class="row" hx-post="/admin/users/{{.User.Id}}/quota" hx-target="#admin-user" hx-swap="outerHTML">

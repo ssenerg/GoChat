@@ -88,7 +88,8 @@ func (c *SSOConfig) Validate() error {
 	seen := make(map[string]bool)
 	for i := range c.Providers {
 		p := &c.Providers[i]
-		if !ssoIDRe.MatchString(p.ID) || seen[p.ID] {
+		// The gateway's own paths under /login/sso/ take these.
+		if !ssoIDRe.MatchString(p.ID) || seen[p.ID] || p.ID == "link" || p.ID == "callback" {
 			return fmt.Errorf("providers: %q is not a unique id of lowercase letters, digits and '-'", p.ID)
 		}
 		seen[p.ID] = true

@@ -11,8 +11,9 @@ import (
 
 type adminData struct {
 	Page
-	Query string
-	Found *adminUser
+	Query     string
+	Found     *adminUser
+	Providers []*pb.SSOProvider
 }
 
 type adminUser struct {
@@ -20,6 +21,8 @@ type adminUser struct {
 	Email    string
 	Sessions []*pb.SessionInfo
 	Storage  *pb.GetStorageUsageResponse
+	// Identities are the accounts at providers linked to the user's.
+	Identities []*pb.SSOIdentity
 	// Self is set when the admin found themself.
 	Self          bool
 	Status, Error string
@@ -53,7 +56,14 @@ func (h *Handler) findUser(r *http.Request, me *pb.User, req *pb.FindUserRequest
 	if err != nil {
 		return nil, err
 	}
-	return &adminUser{User: found.User, Email: found.Email, Sessions: sessions.Sessions, Storage: storage, Self: id == me.Id}, nil
+	identities, err := h.client.Auth.ListSSOIdentities(ctx, &pb.ListSSOIdentitiesRequest{UserId: id})
+	if err != nil {
+		return nil, err
+	}
+	return &adminUser{
+		User: found.User, Email: found.Email, Sessions: sessions.Sessions, Storage: storage,
+		Identities: identities.Identities, Self: id == me.Id,
+	}, nil
 }
 
 func (h *Handler) adminUsers(w http.ResponseWriter, r *http.Request) {
@@ -61,7 +71,7 @@ func (h *Handler) adminUsers(w http.ResponseWriter, r *http.Request) {
 	if me == nil {
 		return
 	}
-	data := adminData{Page: Page{Title: "Users", CSRF: h.csrfToken(w, r), User: me}, Query: r.URL.Query().Get("q")}
+	data := adminData{Page: Page{Title: "Users", CSRF: h.csrfToken(w, r), User: me}, Query: r.URL.Query().Get("q"), Providers: h.ssoProviders(r)}
 	if data.Query != "" {
 		found, err := h.findUser(r, me, &pb.FindUserRequest{Key: &pb.FindUserRequest_Login{Login: data.Query}})
 		switch {
@@ -147,4 +157,57 @@ func (h *Handler) adminQuota(w http.ResponseWriter, r *http.Request) {
 	defer cancel()
 	_, err := h.client.Admin.SetStorageQuota(ctx, &pb.SetStorageQuotaRequest{UserId: r.PathValue("user"), Quota: quota})
 	h.adminCard(w, r, me, err, "Quota saved.")
+}
+
+func (h *Handler) adminUnlinkSSO(w http.ResponseWriter, r *http.Request) {
+	me := h.adminTarget(w, r)
+	if me == nil {
+		return
+	}
+	ctx, cancel := h.ctx(r)
+	defer cancel()
+	_, err := h.client.Auth.UnlinkSSO(ctx, &pb.UnlinkSSORequest{UserId: r.PathValue("user"), Issuer: r.PostFormValue("issuer"), Subject: r.PostFormValue("subject")})
+	h.adminCard(w, r, me, err, "Unlinked.")
+}
+
+type adminSSOData struct {
+	Page
+	Provider *pb.SSOProvider
+	Accounts []*pb.SSOAccount
+	Next     string
+}
+
+// adminSSOAccounts lists the accounts linked through a provider, a page at
+// a time.
+func (h *Handler) adminSSOAccounts(w http.ResponseWriter, r *http.Request) {
+	me := h.admin(w, r)
+	if me == nil {
+		return
+	}
+	id := r.PathValue("provider")
+	var provider *pb.SSOProvider
+	for _, p := range h.ssoProviders(r) {
+		if p.Id == id {
+			provider = p
+		}
+	}
+	if provider == nil {
+		h.notFound(w, r)
+		return
+	}
+	ctx, cancel := h.ctx(r)
+	defer cancel()
+	after := r.URL.Query().Get("after")
+	if after != "" && !uuidRe.MatchString(after) {
+		after = ""
+	}
+	res, err := h.client.Admin.ListSSOAccounts(ctx, &pb.ListSSOAccountsRequest{ProviderId: id, After: after})
+	if err != nil {
+		h.fail(w, r, err)
+		return
+	}
+	h.page(w, r, http.StatusOK, "admin-sso", adminSSOData{
+		Page:     Page{Title: provider.Name + " accounts", CSRF: h.csrfToken(w, r), User: me},
+		Provider: provider, Accounts: res.Accounts, Next: res.Next,
+	})
 }
