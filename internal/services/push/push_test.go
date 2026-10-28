@@ -2,6 +2,7 @@ package push
 
 import (
 	"context"
+	"fmt"
 	"slices"
 	"strings"
 	"sync"
@@ -72,6 +73,8 @@ func (f *fakeRepo) ListPushDevices(_ context.Context, userID gocql.UUID) ([]*mod
 			out = append(out, &c)
 		}
 	}
+	// In an order a test can count on.
+	slices.SortFunc(out, func(a, b *models.PushDevice) int { return strings.Compare(a.Token, b.Token) })
 	return out, nil
 }
 
@@ -104,7 +107,10 @@ func (f *fakeRepo) DeletePushToken(_ context.Context, platform, token string) er
 	return nil
 }
 
-func (f *fakeRepo) GetSession(_ context.Context, hash []byte) (*models.Session, error) {
+func (f *fakeRepo) GetSession(ctx context.Context, hash []byte) (*models.Session, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	s, ok := f.sessions[string(hash)]
@@ -159,6 +165,8 @@ type fakeProvider struct {
 	mu   sync.Mutex
 	sent []delivery
 	dead map[string]bool
+	// slow tokens are not reached before the push gives up.
+	slow map[string]bool
 }
 
 type delivery struct {
@@ -166,7 +174,16 @@ type delivery struct {
 	n     *Notice
 }
 
-func (p *fakeProvider) Send(_ context.Context, d *models.PushDevice, n *Notice) error {
+func (p *fakeProvider) Send(ctx context.Context, d *models.PushDevice, n *Notice) error {
+	p.mu.Lock()
+	slow := p.slow[d.Token]
+	p.mu.Unlock()
+	if slow {
+		<-ctx.Done()
+	}
+	if err := ctx.Err(); err != nil {
+		return err
+	}
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	if p.dead[d.Token] {
@@ -280,6 +297,7 @@ func (f *fixture) connect(p *models.Principal) {
 func (f *fixture) post(msg Posted) {
 	f.t.Helper()
 	(&worker{Deps: f.deps}).posted(msg)
+	f.deps.fan.running.Wait()
 }
 
 func members(ps ...*models.Principal) hub.Members {
@@ -577,5 +595,48 @@ func TestDeadDevicesAreForgotten(t *testing.T) {
 	}
 	if list, _ := f.repo.ListPushDevices(context.Background(), bob.UserID); len(list) != 0 {
 		t.Fatalf("devices left: %+v", list)
+	}
+}
+
+func TestSlowPushesHoldUpNoOne(t *testing.T) {
+	f := newFixture(t)
+	f.deps.Cfg.SendTimeout = 2 * time.Second
+	f.apns.slow = map[string]bool{apnsToken(1): true}
+	ann, bob := f.person("ann"), f.person("bob")
+	f.register(bob, pb.PushPlatform_PUSH_PLATFORM_APNS, apnsToken(1))
+	dm := ids.New()
+
+	// APNs takes its time with bob's phone: each worker still takes the
+	// next registration at once.
+	for range 2 {
+		f.engine.Send(f.pid, Posted{Message: message(f.user(ann), dm, "hi"), Conversation: true, Members: members(ann, bob)})
+	}
+	time.Sleep(100 * time.Millisecond)
+	start := time.Now()
+	for i := range 4 {
+		f.register(f.person(fmt.Sprintf("p%d", i)), pb.PushPlatform_PUSH_PLATFORM_FCM, fcmToken(fmt.Sprintf("p%d", i)))
+	}
+	if took := time.Since(start); took > time.Second {
+		t.Fatalf("registering took %v behind slow pushes", took)
+	}
+	f.deps.fan.running.Wait()
+}
+
+func TestASlowDeviceCostsTheOthersNothing(t *testing.T) {
+	f := newFixture(t)
+	f.deps.Cfg.OpTimeout, f.deps.Cfg.SendTimeout = 300*time.Millisecond, 300*time.Millisecond
+	f.apns.slow = map[string]bool{apnsToken(1): true}
+	ann, bob := f.person("ann"), f.person("bob")
+	f.register(bob, pb.PushPlatform_PUSH_PLATFORM_APNS, apnsToken(1))
+	var phones []string
+	for i := range 4 {
+		phones = append(phones, fcmToken(fmt.Sprintf("phone%d", i)))
+		f.register(f.session(bob.UserID), pb.PushPlatform_PUSH_PLATFORM_FCM, phones[i])
+	}
+	// The iPad, listed first, never answers in time: the phones get
+	// theirs all the same.
+	f.post(Posted{Message: message(f.user(ann), ids.New(), "hi"), Conversation: true, Members: members(ann, bob)})
+	if got := tokens(f.fcm.take()); !slices.Equal(got, phones) {
+		t.Fatalf("pushed to %v", got)
 	}
 }

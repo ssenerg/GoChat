@@ -11,6 +11,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"net/url"
 	"strconv"
 	"sync"
 	"time"
@@ -24,8 +25,6 @@ const (
 	// apnsTokenAge is how long a signed token is used: Apple refuses one
 	// older than an hour and one renewed more often than every 20 minutes.
 	apnsTokenAge = 40 * time.Minute
-	// apnsExpiry is how long APNs keeps a push for a device out of reach.
-	apnsExpiry = 24 * time.Hour
 )
 
 // APNs sends pushes through Apple's push service, with a token signed by
@@ -129,9 +128,14 @@ func (a *APNs) Send(ctx context.Context, d *models.PushDevice, n *Notice) error 
 		req.Header.Set("apns-topic", a.topic)
 		req.Header.Set("apns-push-type", "alert")
 		req.Header.Set("apns-priority", "10")
-		req.Header.Set("apns-expiration", strconv.FormatInt(time.Now().Add(apnsExpiry).Unix(), 10))
+		req.Header.Set("apns-expiration", strconv.FormatInt(time.Now().Add(expiry).Unix(), 10))
 		resp, err := a.client.Do(req)
 		if err != nil {
+			// Its URL holds the device's token, which logs must not.
+			var ue *url.Error
+			if errors.As(err, &ue) {
+				return fmt.Errorf("apns: %s: %w", ue.Op, ue.Err)
+			}
 			return err
 		}
 		answer := readBody(resp)

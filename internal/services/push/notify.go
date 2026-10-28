@@ -6,11 +6,12 @@ import (
 	"fmt"
 	"slices"
 	"strings"
+	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/gocql/gocql"
 	"go.uber.org/zap"
-	"golang.org/x/sync/errgroup"
 
 	pb "github.com/ssenerg/gochat/api/protobuf/gen/gochat/v1"
 	"github.com/ssenerg/gochat/internal/actors"
@@ -35,8 +36,22 @@ type Posted struct {
 	Participants []string
 }
 
-// parallel bounds the people one message is pushed to at once.
-const parallel = 16
+// A message's pushes go out off the workers, so a slow FCM or APNs holds
+// up no registration: sends bounds the people pushed to at once, over all
+// messages, and backlog the messages waiting, past which one's pushes are
+// dropped.
+const (
+	sends   = 64
+	backlog = 1024
+)
+
+type fanOut struct {
+	slots   chan struct{}
+	waiting atomic.Int32
+	running sync.WaitGroup
+}
+
+func newFanOut() *fanOut { return &fanOut{slots: make(chan struct{}, sends)} }
 
 // posted pushes a message to whom it calls for, as the apps' notices do:
 // the others of a conversation, the people of a reply's thread and those
@@ -54,23 +69,35 @@ func (w *worker) posted(msg Posted) {
 		w.Logger.Warn("failed to find who to push to", zap.Error(err))
 		return
 	}
+	if len(away) == 0 {
+		return
+	}
 	n := w.notice(msg)
 	channelID, _ := ids.Parse(msg.Message.GetChannelId())
-	var g errgroup.Group
-	g.SetLimit(parallel)
-	for _, raw := range away {
-		userID, ok := ids.Parse(raw)
-		if !ok {
-			continue
-		}
-		g.Go(func() error {
-			ctx, cancel := context.WithTimeout(context.Background(), w.Cfg.OpTimeout)
-			defer cancel()
-			w.reach(ctx, userID, channelID, n)
-			return nil
-		})
+	f := w.fan
+	if f.waiting.Add(1) > backlog {
+		f.waiting.Add(-1)
+		w.Logger.Warn("pushes fell behind: a message's were dropped", zap.String("message", msg.Message.GetId()))
+		return
 	}
-	_ = g.Wait()
+	f.running.Add(1)
+	go func() {
+		defer f.running.Done()
+		defer f.waiting.Add(-1)
+		var each sync.WaitGroup
+		for _, raw := range away {
+			userID, ok := ids.Parse(raw)
+			if !ok {
+				continue
+			}
+			f.slots <- struct{}{}
+			each.Go(func() {
+				defer func() { <-f.slots }()
+				w.reach(userID, channelID, n)
+			})
+		}
+		each.Wait()
+	}()
 }
 
 // targets are the people msg calls for, the author left out.
@@ -112,7 +139,9 @@ func (w *worker) targets(ctx context.Context, msg Posted) []string {
 
 // reach pushes n to userID's devices, unless the channel is muted or they
 // do not want to be disturbed.
-func (w *worker) reach(ctx context.Context, userID, channelID gocql.UUID, n *Notice) {
+func (w *worker) reach(userID, channelID gocql.UUID, n *Notice) {
+	ctx, cancel := context.WithTimeout(context.Background(), w.Cfg.OpTimeout)
+	defer cancel()
 	devices, err := w.Repo.ListPushDevices(ctx, userID)
 	if err != nil {
 		w.Logger.Warn("failed to list a person's devices", zap.Error(err))
@@ -130,21 +159,29 @@ func (w *worker) reach(ctx context.Context, userID, channelID gocql.UUID, n *Not
 		return
 	}
 	for _, d := range devices {
-		p := w.Providers[d.Platform]
-		if p == nil || !w.alive(ctx, d) {
-			continue
+		w.deliver(d, n)
+	}
+}
+
+// deliver pushes n to one device, on deadlines of its own: one out of
+// reach costs the person's others nothing.
+func (w *worker) deliver(d *models.PushDevice, n *Notice) {
+	p := w.Providers[d.Platform]
+	if p == nil || !w.alive(d) {
+		return
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), w.Cfg.SendTimeout)
+	err := p.Send(ctx, d, n)
+	cancel()
+	switch {
+	case errors.Is(err, ErrDeadToken):
+		ctx, cancel := context.WithTimeout(context.Background(), w.Cfg.OpTimeout)
+		defer cancel()
+		if err := w.Repo.DeletePushDevice(ctx, d); err != nil {
+			w.Logger.Warn("failed to forget a dead device token", zap.Error(err))
 		}
-		sendCtx, cancel := context.WithTimeout(ctx, w.Cfg.SendTimeout)
-		err := p.Send(sendCtx, d, n)
-		cancel()
-		switch {
-		case errors.Is(err, ErrDeadToken):
-			if err := w.Repo.DeletePushDevice(ctx, d); err != nil {
-				w.Logger.Warn("failed to forget a dead device token", zap.Error(err))
-			}
-		case err != nil:
-			w.Logger.Warn("push failed", zap.String("platform", d.Platform), zap.Error(err))
-		}
+	case err != nil:
+		w.Logger.Warn("push failed", zap.String("platform", d.Platform), zap.Error(err))
 	}
 }
 
@@ -155,9 +192,12 @@ func disturbing(u *models.User, now time.Time) bool {
 
 // alive reports whether d's session may still be used, forgetting d when
 // it may not: it ended, or went unused past the idle timeout.
-func (w *worker) alive(ctx context.Context, d *models.PushDevice) bool {
+func (w *worker) alive(d *models.PushDevice) bool {
+	ctx, cancel := context.WithTimeout(context.Background(), w.Cfg.OpTimeout)
+	defer cancel()
 	s, err := w.Repo.GetSession(ctx, d.SessionHash)
 	if err != nil && !ierrors.Is(err, ierrors.CodeNotFound) {
+		w.Logger.Warn("failed to read a device's session", zap.Error(err))
 		return false
 	}
 	now := time.Now()

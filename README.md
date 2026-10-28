@@ -212,6 +212,11 @@ pushed, and the apps run as before.
   With `services.push.excerpts` off it says "New message" alone, and FCM
   and APNs never read what anyone wrote. Its data names the channel, the
   thread and the team, which the app opens when the push is tapped.
+- A push a device does not get within a day is dropped, by FCM and APNs
+  alike. Pushes go out off the workers that register devices, 64 people
+  at once over all messages, each device on deadlines of its own: a slow
+  provider holds up no registration, nor a person's other devices. Past
+  1024 messages waiting, a message's pushes are dropped.
 
 ### Storage
 
