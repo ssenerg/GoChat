@@ -127,6 +127,7 @@ type child struct {
 type manager struct {
 	*Deps
 	children map[gocql.UUID]*child
+	spawned  actors.Children
 	gen      uint64
 }
 
@@ -138,20 +139,22 @@ func New(d *Deps) actor.Producer {
 
 func (m *manager) Receive(c *actor.Context) {
 	switch msg := c.Message().(type) {
+	case actor.Stopped:
+		m.spawned.Stop(c)
 	case passivate:
 		// A child stops only once it has handled every request routed to it;
 		// a successor must never run beside it.
 		if ch, ok := m.children[msg.id]; ok && ch.pid.Equals(msg.pid) && ch.routed == msg.handled {
 			delete(m.children, msg.id)
-			c.Engine().Poison(ch.pid)
+			m.spawned.Poison(c, ch.pid)
 		}
 	case Request:
 		id := msg.channel()
 		ch, ok := m.children[id]
-		// A child that exhausted its restarts is gone from the context.
-		if !ok || c.Child(ch.pid.ID) == nil {
+		// A child that exhausted its restarts is gone.
+		if !ok || !m.spawned.Alive(c, ch.pid) {
 			m.gen++
-			ch = &child{pid: c.SpawnChild(newChannel(m.Deps, id), "channel",
+			ch = &child{pid: m.spawned.Spawn(c, newChannel(m.Deps, id, c.PID()), "channel",
 				actor.WithID(id.String()+"."+strconv.FormatUint(m.gen, 36)),
 				actor.WithInboxSize(256),
 				actor.WithMiddleware(actors.Recover(m.Logger)))}

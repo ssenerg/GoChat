@@ -1,5 +1,6 @@
 // Package actors holds what every hollywood actor of the application shares:
-// request and reply, a worker pool, panic recovery and event logging.
+// request and reply, a worker pool, children, panic recovery and event
+// logging.
 package actors
 
 import (

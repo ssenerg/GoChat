@@ -35,6 +35,7 @@ type idleCheck struct{}
 type channel struct {
 	*Deps
 	id      gocql.UUID
+	manager *actor.PID
 	ch      *models.Channel
 	members map[gocql.UUID]models.ChannelRole
 	// cleared holds up to which message each person of a direct
@@ -60,9 +61,9 @@ type channel struct {
 	bots  map[gocql.UUID]*botMember
 }
 
-func newChannel(d *Deps, id gocql.UUID) actor.Producer {
+func newChannel(d *Deps, id gocql.UUID, manager *actor.PID) actor.Producer {
 	return func() actor.Receiver {
-		return &channel{Deps: d, id: id}
+		return &channel{Deps: d, id: id, manager: manager}
 	}
 }
 
@@ -111,7 +112,7 @@ func (a *channel) Receive(c *actor.Context) {
 func (a *channel) passivate(c *actor.Context) {
 	if !a.asked {
 		a.asked = true
-		c.Send(c.Parent(), passivate{id: a.id, pid: c.PID(), handled: a.handled})
+		c.Send(a.manager, passivate{id: a.id, pid: c.PID(), handled: a.handled})
 	}
 }
 

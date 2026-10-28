@@ -11,6 +11,7 @@ import (
 	"net/netip"
 	"net/url"
 	"regexp"
+	"strconv"
 	"syscall"
 	"time"
 
@@ -224,13 +225,17 @@ func Webhooks(d *WebhookDeps) actor.Producer {
 
 type webhooks struct {
 	*WebhookDeps
-	hooks map[gocql.UUID]*actor.PID
+	hooks   map[gocql.UUID]*actor.PID
+	spawned actors.Children
+	gen     uint64
 }
 
 func (h *webhooks) Receive(c *actor.Context) {
 	switch msg := c.Message().(type) {
 	case actor.Started:
 		c.Send(c.PID(), start{})
+	case actor.Stopped:
+		h.spawned.Stop(c)
 	case start:
 		go h.startAll(c.Engine(), c.PID())
 	case Hooked:
@@ -238,7 +243,10 @@ func (h *webhooks) Receive(c *actor.Context) {
 			c.Send(pid, Hooked{BotID: msg.BotID})
 			return
 		}
-		pid := c.SpawnChild(newHook(h.WebhookDeps, msg.BotID, c.PID()), "hook", actor.WithID(msg.BotID.String()),
+		// A hook of the bot may still be stopping, under the last id.
+		h.gen++
+		pid := h.spawned.Spawn(c, newHook(h.WebhookDeps, msg.BotID, c.PID()), "hook",
+			actor.WithID(msg.BotID.String()+"."+strconv.FormatUint(h.gen, 36)),
 			actor.WithMiddleware(actors.Recover(h.Logger)))
 		h.hooks[msg.BotID] = pid
 		c.Send(h.Updates, updates.Listen{UserID: msg.BotID, PID: pid})
@@ -246,7 +254,7 @@ func (h *webhooks) Receive(c *actor.Context) {
 		if pid := h.hooks[msg.botID]; pid != nil && pid.Equals(msg.pid) {
 			delete(h.hooks, msg.botID)
 			c.Send(h.Updates, updates.Unlisten{UserID: msg.botID})
-			c.Engine().Poison(pid)
+			h.spawned.Poison(c, pid)
 		}
 	}
 }

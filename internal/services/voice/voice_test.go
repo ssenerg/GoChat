@@ -480,3 +480,18 @@ func TestExpiredSignInsEndTheTalk(t *testing.T) {
 		t.Fatalf("left: %v", users(s))
 	}
 }
+
+// TestVoiceStopsAsAServerGoes stops the voice actor just as a voice server
+// goes, which once left it waiting on that server's writer forever.
+func TestVoiceStopsAsAServerGoes(t *testing.T) {
+	for range 300 {
+		r := newRig(t, 10, gocql.UUID{})
+		r.serverUp("vs1")
+		r.engine.Send(r.voice, ServerDown{Key: "vs1"})
+		select {
+		case <-r.engine.Poison(r.voice).Done():
+		case <-time.After(5 * time.Second):
+			t.Fatal("the voice actor never stopped")
+		}
+	}
+}

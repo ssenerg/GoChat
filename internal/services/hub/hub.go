@@ -223,6 +223,7 @@ type hub struct {
 	viewers map[string]map[*gateway]map[uint64]struct{}
 	// watchers holds the connections watching each user.
 	watchers map[string]map[*gateway]map[uint64]struct{}
+	writers  actors.Children
 }
 
 func New(logger *zap.Logger, cfg *Config) actor.Producer {
@@ -355,6 +356,7 @@ func (h *hub) Receive(c *actor.Context) {
 			h.announce(c, msg.userID)
 		}
 	case actor.Stopped:
+		h.writers.Stop(c)
 		for _, gw := range h.gateways {
 			closeStream(gw.stream)
 		}
@@ -381,7 +383,7 @@ func (h *hub) register(c *actor.Context, msg RegisterGateway) {
 		pending: new(atomic.Int64),
 		conns:   make(map[uint64]*conn),
 	}
-	gw.pid = c.SpawnChild(newWriter(h.logger, gw.id, msg.Stream, gw.pending), "gateway",
+	gw.pid = h.writers.Spawn(c, newWriter(h.logger, gw.id, msg.Stream, gw.pending), "gateway",
 		actor.WithMiddleware(actors.Recover(h.logger)))
 	h.gateways[msg.ID] = gw
 	h.send(c, gw, &pb.ConnectResponse{Frame: &pb.ConnectResponse_Welcome{Welcome: &pb.Welcome{}}})
@@ -398,7 +400,7 @@ func (h *hub) unregister(c *actor.Context, id string) {
 	for connID := range gw.conns {
 		h.removeConn(c, gw, connID)
 	}
-	c.Engine().Poison(gw.pid)
+	h.writers.Poison(c, gw.pid)
 	h.logger.Info("gateway unregistered", zap.String("gateway", id))
 }
 

@@ -450,3 +450,25 @@ func TestRevokeAllClosesEveryConnection(t *testing.T) {
 		t.Fatalf("online after the revocation: %v", online)
 	}
 }
+
+// TestHubStopsAsAGatewayGoes stops the hub just as a gateway goes, which
+// once left it waiting on that gateway's writer forever.
+func TestHubStopsAsAGatewayGoes(t *testing.T) {
+	for range 300 {
+		engine, err := actor.NewEngine(actor.NewEngineConfig())
+		if err != nil {
+			t.Fatal(err)
+		}
+		pid := engine.Spawn(New(zap.NewNop(), &Config{GatewayQueueLimit: 16, PresenceGrace: time.Second}), "hub")
+		w := &wire{got: make(chan *pb.ConnectResponse, 16)}
+		if _, err := actors.Ask[Registered](context.Background(), engine, pid, RegisterGateway{ID: "gw", Stream: w}); err != nil {
+			t.Fatal(err)
+		}
+		engine.Send(pid, UnregisterGateway{ID: "gw"})
+		select {
+		case <-engine.Poison(pid).Done():
+		case <-time.After(5 * time.Second):
+			t.Fatal("the hub never stopped")
+		}
+	}
+}

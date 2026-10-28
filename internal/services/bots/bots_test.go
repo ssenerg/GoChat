@@ -290,3 +290,37 @@ func TestAWebhookStartsFromNow(t *testing.T) {
 		t.Fatalf("confirmed %d, %v", repo.delivered(), err)
 	}
 }
+
+// TestWebhooksStopAsAHookEnds stops the webhooks just as a hook ends and is
+// stopped, which once left them waiting on that hook forever.
+func TestWebhooksStopAsAHookEnds(t *testing.T) {
+	for range 300 {
+		engine, err := actor.NewEngine(actor.NewEngineConfig())
+		if err != nil {
+			t.Fatal(err)
+		}
+		unlistened := make(chan struct{}, 1)
+		upd := engine.SpawnFunc(func(c *actor.Context) {
+			if _, ok := c.Message().(updates.Unlisten); ok {
+				unlistened <- struct{}{}
+			}
+		}, "updates")
+		// The bot has no webhook, so its hook ends at once.
+		botID := ids.New()
+		hooks := engine.Spawn(Webhooks(&WebhookDeps{
+			Deps:    &Deps{Logger: zap.NewNop(), Repo: &memRepo{bot: &models.Bot{ID: botID}}, Engine: engine, Cfg: &Config{OpTimeout: time.Second}},
+			Updates: upd,
+		}), "webhooks")
+		engine.Send(hooks, Hooked{BotID: botID})
+		select {
+		case <-unlistened:
+		case <-time.After(5 * time.Second):
+			t.Fatal("the hook never ended")
+		}
+		select {
+		case <-engine.Poison(hooks).Done():
+		case <-time.After(5 * time.Second):
+			t.Fatal("the webhooks never stopped")
+		}
+	}
+}
