@@ -10,6 +10,7 @@
       <button class="btn primary" type="submit">Find</button>
     </form>
     {{with .Error}}<p class="alert" role="alert">{{.}}</p>{{end}}
+    {{with .Providers}}<p class="muted">Accounts linked through {{range $i, $p := .}}{{if $i}} · {{end}}<a href="/admin/sso/{{$p.Id}}">{{$p.Name}}</a>{{end}}</p>{{end}}
   </section>
   {{with .Found}}{{template "admin-user" .}}{{end}}
 </main>

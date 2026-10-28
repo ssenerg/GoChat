@@ -77,6 +77,25 @@ message Session {
   google.protobuf.Timestamp expires_at = 3;
 }
 
+// SSOProvider is an identity provider people may sign in with.
+message SSOProvider {
+  string id = 1;
+  // What its button says: "Sign in with <name>".
+  string name = 2;
+}
+
+// SSOIdentity is an account at an identity provider linked to a GoChat
+// account. Its issuer and subject name it.
+message SSOIdentity {
+  string provider_id = 1;
+  string provider_name = 2;
+  string issuer = 3;
+  string subject = 4;
+  // Its email at the provider, as of linking.
+  string email = 5;
+  google.protobuf.Timestamp linked_at = 6;
+}
+
 // SessionInfo describes a signed-in browser or device, never its token.
 message SessionInfo {
   string id = 1;

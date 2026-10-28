@@ -3,6 +3,10 @@ package accounts
 import (
 	"errors"
 	"fmt"
+	"net"
+	"net/url"
+	"regexp"
+	"strings"
 	"time"
 
 	"github.com/ssenerg/gochat/internal/config"
@@ -36,6 +40,98 @@ type Config struct {
 	AllowOpenBootstrap bool          `mapstructure:"allow_open_bootstrap"`
 	LoginFailures      int           `mapstructure:"login_failures"`
 	LoginWindow        time.Duration `mapstructure:"login_window"`
+	SSO                SSOConfig     `mapstructure:"sso"`
+}
+
+// SSOConfig lets people sign in with identity providers over OpenID
+// Connect; without providers it is off.
+type SSOConfig struct {
+	// FlowTTL bounds a sign-in from leaving for the provider to finishing.
+	FlowTTL time.Duration `mapstructure:"flow_ttl"`
+	// Timeout bounds each request to a provider.
+	Timeout   time.Duration `mapstructure:"timeout"`
+	Providers []SSOProvider `mapstructure:"providers"`
+}
+
+type SSOProvider struct {
+	// ID names the provider in URLs, such as google.
+	ID string `mapstructure:"id"`
+	// Name is what the button says: "Sign in with <name>".
+	Name   string `mapstructure:"name"`
+	Issuer string `mapstructure:"issuer"`
+	// ClientID and the secret, or the file holding it, of GoChat's client
+	// at the provider.
+	ClientID         string `mapstructure:"client_id"`
+	ClientSecret     string `mapstructure:"client_secret"`
+	ClientSecretFile string `mapstructure:"client_secret_file"`
+	// Scopes are asked for beside openid, email and profile.
+	Scopes []string `mapstructure:"scopes"`
+	// AllowedDomains, when set, admits only verified emails at them.
+	AllowedDomains []string `mapstructure:"allowed_domains"`
+}
+
+var (
+	ssoIDRe     = regexp.MustCompile(`^[a-z0-9][a-z0-9-]{0,31}$`)
+	ssoDomainRe = regexp.MustCompile(`^([a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}$`)
+)
+
+func (c *SSOConfig) Validate() error {
+	if len(c.Providers) == 0 {
+		return nil
+	}
+	if c.FlowTTL < time.Minute || c.FlowTTL > time.Hour {
+		return errors.New("flow_ttl must be between 1m and 1h")
+	}
+	if c.Timeout <= 0 {
+		return errors.New("timeout must be positive")
+	}
+	seen := make(map[string]bool)
+	for i := range c.Providers {
+		p := &c.Providers[i]
+		// The gateway's own paths under /login/sso/ take these.
+		if !ssoIDRe.MatchString(p.ID) || seen[p.ID] || p.ID == "link" || p.ID == "callback" {
+			return fmt.Errorf("providers: %q is not a unique id of lowercase letters, digits and '-'", p.ID)
+		}
+		seen[p.ID] = true
+		if err := p.validate(); err != nil {
+			return fmt.Errorf("providers.%s.%w", p.ID, err)
+		}
+	}
+	return nil
+}
+
+func (p *SSOProvider) validate() error {
+	if n := len(p.Name); n == 0 || n > 64 {
+		return errors.New("name must be 1-64 characters")
+	}
+	u, err := url.Parse(p.Issuer)
+	if err != nil || u.Host == "" || u.RawQuery != "" || u.Fragment != "" ||
+		(u.Scheme != "https" && (u.Scheme != "http" || !loopback(u.Hostname()))) {
+		return errors.New("issuer must be an https URL")
+	}
+	if p.ClientID == "" {
+		return errors.New("client_id is required")
+	}
+	if (p.ClientSecret == "") == (p.ClientSecretFile == "") {
+		return errors.New("client_secret or client_secret_file is required, not both")
+	}
+	for i, d := range p.AllowedDomains {
+		d = strings.ToLower(strings.TrimSpace(d))
+		if !ssoDomainRe.MatchString(d) {
+			return fmt.Errorf("allowed_domains: %q is not a domain", d)
+		}
+		p.AllowedDomains[i] = d
+	}
+	return nil
+}
+
+// loopback lets an issuer on this machine, as in tests, go without TLS.
+func loopback(host string) bool {
+	if host == "localhost" {
+		return true
+	}
+	ip := net.ParseIP(host)
+	return ip != nil && ip.IsLoopback()
 }
 
 var _ config.Config = (*Config)(nil)
@@ -78,6 +174,9 @@ func (c *Config) Validate() error {
 	}
 	if c.LoginFailures < 1 || c.LoginWindow <= 0 {
 		return errors.New("login_failures and login_window must be positive")
+	}
+	if err := c.SSO.Validate(); err != nil {
+		return fmt.Errorf("sso.%w", err)
 	}
 	return nil
 }

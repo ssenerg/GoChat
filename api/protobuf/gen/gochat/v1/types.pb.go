@@ -552,6 +552,147 @@ func (x *Session) GetExpiresAt() *timestamppb.Timestamp {
 	return nil
 }
 
+// SSOProvider is an identity provider people may sign in with.
+type SSOProvider struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	Id    string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
+	// What its button says: "Sign in with <name>".
+	Name          string `protobuf:"bytes,2,opt,name=name,proto3" json:"name,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *SSOProvider) Reset() {
+	*x = SSOProvider{}
+	mi := &file_gochat_v1_types_proto_msgTypes[3]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *SSOProvider) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*SSOProvider) ProtoMessage() {}
+
+func (x *SSOProvider) ProtoReflect() protoreflect.Message {
+	mi := &file_gochat_v1_types_proto_msgTypes[3]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use SSOProvider.ProtoReflect.Descriptor instead.
+func (*SSOProvider) Descriptor() ([]byte, []int) {
+	return file_gochat_v1_types_proto_rawDescGZIP(), []int{3}
+}
+
+func (x *SSOProvider) GetId() string {
+	if x != nil {
+		return x.Id
+	}
+	return ""
+}
+
+func (x *SSOProvider) GetName() string {
+	if x != nil {
+		return x.Name
+	}
+	return ""
+}
+
+// SSOIdentity is an account at an identity provider linked to a GoChat
+// account. Its issuer and subject name it.
+type SSOIdentity struct {
+	state        protoimpl.MessageState `protogen:"open.v1"`
+	ProviderId   string                 `protobuf:"bytes,1,opt,name=provider_id,json=providerId,proto3" json:"provider_id,omitempty"`
+	ProviderName string                 `protobuf:"bytes,2,opt,name=provider_name,json=providerName,proto3" json:"provider_name,omitempty"`
+	Issuer       string                 `protobuf:"bytes,3,opt,name=issuer,proto3" json:"issuer,omitempty"`
+	Subject      string                 `protobuf:"bytes,4,opt,name=subject,proto3" json:"subject,omitempty"`
+	// Its email at the provider, as of linking.
+	Email         string                 `protobuf:"bytes,5,opt,name=email,proto3" json:"email,omitempty"`
+	LinkedAt      *timestamppb.Timestamp `protobuf:"bytes,6,opt,name=linked_at,json=linkedAt,proto3" json:"linked_at,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *SSOIdentity) Reset() {
+	*x = SSOIdentity{}
+	mi := &file_gochat_v1_types_proto_msgTypes[4]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *SSOIdentity) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*SSOIdentity) ProtoMessage() {}
+
+func (x *SSOIdentity) ProtoReflect() protoreflect.Message {
+	mi := &file_gochat_v1_types_proto_msgTypes[4]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use SSOIdentity.ProtoReflect.Descriptor instead.
+func (*SSOIdentity) Descriptor() ([]byte, []int) {
+	return file_gochat_v1_types_proto_rawDescGZIP(), []int{4}
+}
+
+func (x *SSOIdentity) GetProviderId() string {
+	if x != nil {
+		return x.ProviderId
+	}
+	return ""
+}
+
+func (x *SSOIdentity) GetProviderName() string {
+	if x != nil {
+		return x.ProviderName
+	}
+	return ""
+}
+
+func (x *SSOIdentity) GetIssuer() string {
+	if x != nil {
+		return x.Issuer
+	}
+	return ""
+}
+
+func (x *SSOIdentity) GetSubject() string {
+	if x != nil {
+		return x.Subject
+	}
+	return ""
+}
+
+func (x *SSOIdentity) GetEmail() string {
+	if x != nil {
+		return x.Email
+	}
+	return ""
+}
+
+func (x *SSOIdentity) GetLinkedAt() *timestamppb.Timestamp {
+	if x != nil {
+		return x.LinkedAt
+	}
+	return nil
+}
+
 // SessionInfo describes a signed-in browser or device, never its token.
 type SessionInfo struct {
 	state     protoimpl.MessageState `protogen:"open.v1"`
@@ -572,7 +713,7 @@ type SessionInfo struct {
 
 func (x *SessionInfo) Reset() {
 	*x = SessionInfo{}
-	mi := &file_gochat_v1_types_proto_msgTypes[3]
+	mi := &file_gochat_v1_types_proto_msgTypes[5]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -584,7 +725,7 @@ func (x *SessionInfo) String() string {
 func (*SessionInfo) ProtoMessage() {}
 
 func (x *SessionInfo) ProtoReflect() protoreflect.Message {
-	mi := &file_gochat_v1_types_proto_msgTypes[3]
+	mi := &file_gochat_v1_types_proto_msgTypes[5]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -597,7 +738,7 @@ func (x *SessionInfo) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SessionInfo.ProtoReflect.Descriptor instead.
 func (*SessionInfo) Descriptor() ([]byte, []int) {
-	return file_gochat_v1_types_proto_rawDescGZIP(), []int{3}
+	return file_gochat_v1_types_proto_rawDescGZIP(), []int{5}
 }
 
 func (x *SessionInfo) GetId() string {
@@ -676,7 +817,7 @@ type Team struct {
 
 func (x *Team) Reset() {
 	*x = Team{}
-	mi := &file_gochat_v1_types_proto_msgTypes[4]
+	mi := &file_gochat_v1_types_proto_msgTypes[6]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -688,7 +829,7 @@ func (x *Team) String() string {
 func (*Team) ProtoMessage() {}
 
 func (x *Team) ProtoReflect() protoreflect.Message {
-	mi := &file_gochat_v1_types_proto_msgTypes[4]
+	mi := &file_gochat_v1_types_proto_msgTypes[6]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -701,7 +842,7 @@ func (x *Team) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Team.ProtoReflect.Descriptor instead.
 func (*Team) Descriptor() ([]byte, []int) {
-	return file_gochat_v1_types_proto_rawDescGZIP(), []int{4}
+	return file_gochat_v1_types_proto_rawDescGZIP(), []int{6}
 }
 
 func (x *Team) GetId() string {
@@ -771,7 +912,7 @@ type TeamMember struct {
 
 func (x *TeamMember) Reset() {
 	*x = TeamMember{}
-	mi := &file_gochat_v1_types_proto_msgTypes[5]
+	mi := &file_gochat_v1_types_proto_msgTypes[7]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -783,7 +924,7 @@ func (x *TeamMember) String() string {
 func (*TeamMember) ProtoMessage() {}
 
 func (x *TeamMember) ProtoReflect() protoreflect.Message {
-	mi := &file_gochat_v1_types_proto_msgTypes[5]
+	mi := &file_gochat_v1_types_proto_msgTypes[7]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -796,7 +937,7 @@ func (x *TeamMember) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use TeamMember.ProtoReflect.Descriptor instead.
 func (*TeamMember) Descriptor() ([]byte, []int) {
-	return file_gochat_v1_types_proto_rawDescGZIP(), []int{5}
+	return file_gochat_v1_types_proto_rawDescGZIP(), []int{7}
 }
 
 func (x *TeamMember) GetUser() *User {
@@ -856,7 +997,7 @@ type Channel struct {
 
 func (x *Channel) Reset() {
 	*x = Channel{}
-	mi := &file_gochat_v1_types_proto_msgTypes[6]
+	mi := &file_gochat_v1_types_proto_msgTypes[8]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -868,7 +1009,7 @@ func (x *Channel) String() string {
 func (*Channel) ProtoMessage() {}
 
 func (x *Channel) ProtoReflect() protoreflect.Message {
-	mi := &file_gochat_v1_types_proto_msgTypes[6]
+	mi := &file_gochat_v1_types_proto_msgTypes[8]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -881,7 +1022,7 @@ func (x *Channel) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Channel.ProtoReflect.Descriptor instead.
 func (*Channel) Descriptor() ([]byte, []int) {
-	return file_gochat_v1_types_proto_rawDescGZIP(), []int{6}
+	return file_gochat_v1_types_proto_rawDescGZIP(), []int{8}
 }
 
 func (x *Channel) GetId() string {
@@ -1021,7 +1162,7 @@ type ChannelMember struct {
 
 func (x *ChannelMember) Reset() {
 	*x = ChannelMember{}
-	mi := &file_gochat_v1_types_proto_msgTypes[7]
+	mi := &file_gochat_v1_types_proto_msgTypes[9]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1033,7 +1174,7 @@ func (x *ChannelMember) String() string {
 func (*ChannelMember) ProtoMessage() {}
 
 func (x *ChannelMember) ProtoReflect() protoreflect.Message {
-	mi := &file_gochat_v1_types_proto_msgTypes[7]
+	mi := &file_gochat_v1_types_proto_msgTypes[9]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1046,7 +1187,7 @@ func (x *ChannelMember) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ChannelMember.ProtoReflect.Descriptor instead.
 func (*ChannelMember) Descriptor() ([]byte, []int) {
-	return file_gochat_v1_types_proto_rawDescGZIP(), []int{7}
+	return file_gochat_v1_types_proto_rawDescGZIP(), []int{9}
 }
 
 func (x *ChannelMember) GetUser() *User {
@@ -1086,7 +1227,7 @@ type Attachment struct {
 
 func (x *Attachment) Reset() {
 	*x = Attachment{}
-	mi := &file_gochat_v1_types_proto_msgTypes[8]
+	mi := &file_gochat_v1_types_proto_msgTypes[10]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1098,7 +1239,7 @@ func (x *Attachment) String() string {
 func (*Attachment) ProtoMessage() {}
 
 func (x *Attachment) ProtoReflect() protoreflect.Message {
-	mi := &file_gochat_v1_types_proto_msgTypes[8]
+	mi := &file_gochat_v1_types_proto_msgTypes[10]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1111,7 +1252,7 @@ func (x *Attachment) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Attachment.ProtoReflect.Descriptor instead.
 func (*Attachment) Descriptor() ([]byte, []int) {
-	return file_gochat_v1_types_proto_rawDescGZIP(), []int{8}
+	return file_gochat_v1_types_proto_rawDescGZIP(), []int{10}
 }
 
 func (x *Attachment) GetId() string {
@@ -1184,7 +1325,7 @@ type Message struct {
 
 func (x *Message) Reset() {
 	*x = Message{}
-	mi := &file_gochat_v1_types_proto_msgTypes[9]
+	mi := &file_gochat_v1_types_proto_msgTypes[11]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1196,7 +1337,7 @@ func (x *Message) String() string {
 func (*Message) ProtoMessage() {}
 
 func (x *Message) ProtoReflect() protoreflect.Message {
-	mi := &file_gochat_v1_types_proto_msgTypes[9]
+	mi := &file_gochat_v1_types_proto_msgTypes[11]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1209,7 +1350,7 @@ func (x *Message) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Message.ProtoReflect.Descriptor instead.
 func (*Message) Descriptor() ([]byte, []int) {
-	return file_gochat_v1_types_proto_rawDescGZIP(), []int{9}
+	return file_gochat_v1_types_proto_rawDescGZIP(), []int{11}
 }
 
 func (x *Message) GetId() string {
@@ -1337,7 +1478,7 @@ type LinkPreview struct {
 
 func (x *LinkPreview) Reset() {
 	*x = LinkPreview{}
-	mi := &file_gochat_v1_types_proto_msgTypes[10]
+	mi := &file_gochat_v1_types_proto_msgTypes[12]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1349,7 +1490,7 @@ func (x *LinkPreview) String() string {
 func (*LinkPreview) ProtoMessage() {}
 
 func (x *LinkPreview) ProtoReflect() protoreflect.Message {
-	mi := &file_gochat_v1_types_proto_msgTypes[10]
+	mi := &file_gochat_v1_types_proto_msgTypes[12]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1362,7 +1503,7 @@ func (x *LinkPreview) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use LinkPreview.ProtoReflect.Descriptor instead.
 func (*LinkPreview) Descriptor() ([]byte, []int) {
-	return file_gochat_v1_types_proto_rawDescGZIP(), []int{10}
+	return file_gochat_v1_types_proto_rawDescGZIP(), []int{12}
 }
 
 func (x *LinkPreview) GetUrl() string {
@@ -1424,7 +1565,7 @@ type Markup struct {
 
 func (x *Markup) Reset() {
 	*x = Markup{}
-	mi := &file_gochat_v1_types_proto_msgTypes[11]
+	mi := &file_gochat_v1_types_proto_msgTypes[13]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1436,7 +1577,7 @@ func (x *Markup) String() string {
 func (*Markup) ProtoMessage() {}
 
 func (x *Markup) ProtoReflect() protoreflect.Message {
-	mi := &file_gochat_v1_types_proto_msgTypes[11]
+	mi := &file_gochat_v1_types_proto_msgTypes[13]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1449,7 +1590,7 @@ func (x *Markup) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Markup.ProtoReflect.Descriptor instead.
 func (*Markup) Descriptor() ([]byte, []int) {
-	return file_gochat_v1_types_proto_rawDescGZIP(), []int{11}
+	return file_gochat_v1_types_proto_rawDescGZIP(), []int{13}
 }
 
 func (x *Markup) GetRows() []*ButtonRow {
@@ -1468,7 +1609,7 @@ type ButtonRow struct {
 
 func (x *ButtonRow) Reset() {
 	*x = ButtonRow{}
-	mi := &file_gochat_v1_types_proto_msgTypes[12]
+	mi := &file_gochat_v1_types_proto_msgTypes[14]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1480,7 +1621,7 @@ func (x *ButtonRow) String() string {
 func (*ButtonRow) ProtoMessage() {}
 
 func (x *ButtonRow) ProtoReflect() protoreflect.Message {
-	mi := &file_gochat_v1_types_proto_msgTypes[12]
+	mi := &file_gochat_v1_types_proto_msgTypes[14]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1493,7 +1634,7 @@ func (x *ButtonRow) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ButtonRow.ProtoReflect.Descriptor instead.
 func (*ButtonRow) Descriptor() ([]byte, []int) {
-	return file_gochat_v1_types_proto_rawDescGZIP(), []int{12}
+	return file_gochat_v1_types_proto_rawDescGZIP(), []int{14}
 }
 
 func (x *ButtonRow) GetButtons() []*Button {
@@ -1519,7 +1660,7 @@ type Button struct {
 
 func (x *Button) Reset() {
 	*x = Button{}
-	mi := &file_gochat_v1_types_proto_msgTypes[13]
+	mi := &file_gochat_v1_types_proto_msgTypes[15]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1531,7 +1672,7 @@ func (x *Button) String() string {
 func (*Button) ProtoMessage() {}
 
 func (x *Button) ProtoReflect() protoreflect.Message {
-	mi := &file_gochat_v1_types_proto_msgTypes[13]
+	mi := &file_gochat_v1_types_proto_msgTypes[15]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1544,7 +1685,7 @@ func (x *Button) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Button.ProtoReflect.Descriptor instead.
 func (*Button) Descriptor() ([]byte, []int) {
-	return file_gochat_v1_types_proto_rawDescGZIP(), []int{13}
+	return file_gochat_v1_types_proto_rawDescGZIP(), []int{15}
 }
 
 func (x *Button) GetText() string {
@@ -1614,7 +1755,7 @@ type VoiceState struct {
 
 func (x *VoiceState) Reset() {
 	*x = VoiceState{}
-	mi := &file_gochat_v1_types_proto_msgTypes[14]
+	mi := &file_gochat_v1_types_proto_msgTypes[16]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1626,7 +1767,7 @@ func (x *VoiceState) String() string {
 func (*VoiceState) ProtoMessage() {}
 
 func (x *VoiceState) ProtoReflect() protoreflect.Message {
-	mi := &file_gochat_v1_types_proto_msgTypes[14]
+	mi := &file_gochat_v1_types_proto_msgTypes[16]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1639,7 +1780,7 @@ func (x *VoiceState) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use VoiceState.ProtoReflect.Descriptor instead.
 func (*VoiceState) Descriptor() ([]byte, []int) {
-	return file_gochat_v1_types_proto_rawDescGZIP(), []int{14}
+	return file_gochat_v1_types_proto_rawDescGZIP(), []int{16}
 }
 
 func (x *VoiceState) GetUser() *User {
@@ -1697,7 +1838,7 @@ type VoiceChannelState struct {
 
 func (x *VoiceChannelState) Reset() {
 	*x = VoiceChannelState{}
-	mi := &file_gochat_v1_types_proto_msgTypes[15]
+	mi := &file_gochat_v1_types_proto_msgTypes[17]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1709,7 +1850,7 @@ func (x *VoiceChannelState) String() string {
 func (*VoiceChannelState) ProtoMessage() {}
 
 func (x *VoiceChannelState) ProtoReflect() protoreflect.Message {
-	mi := &file_gochat_v1_types_proto_msgTypes[15]
+	mi := &file_gochat_v1_types_proto_msgTypes[17]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1722,7 +1863,7 @@ func (x *VoiceChannelState) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use VoiceChannelState.ProtoReflect.Descriptor instead.
 func (*VoiceChannelState) Descriptor() ([]byte, []int) {
-	return file_gochat_v1_types_proto_rawDescGZIP(), []int{15}
+	return file_gochat_v1_types_proto_rawDescGZIP(), []int{17}
 }
 
 func (x *VoiceChannelState) GetChannelId() string {
@@ -1757,7 +1898,7 @@ type Reaction struct {
 
 func (x *Reaction) Reset() {
 	*x = Reaction{}
-	mi := &file_gochat_v1_types_proto_msgTypes[16]
+	mi := &file_gochat_v1_types_proto_msgTypes[18]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1769,7 +1910,7 @@ func (x *Reaction) String() string {
 func (*Reaction) ProtoMessage() {}
 
 func (x *Reaction) ProtoReflect() protoreflect.Message {
-	mi := &file_gochat_v1_types_proto_msgTypes[16]
+	mi := &file_gochat_v1_types_proto_msgTypes[18]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1782,7 +1923,7 @@ func (x *Reaction) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Reaction.ProtoReflect.Descriptor instead.
 func (*Reaction) Descriptor() ([]byte, []int) {
-	return file_gochat_v1_types_proto_rawDescGZIP(), []int{16}
+	return file_gochat_v1_types_proto_rawDescGZIP(), []int{18}
 }
 
 func (x *Reaction) GetEmoji() string {
@@ -1830,7 +1971,18 @@ const file_gochat_v1_types_proto_rawDesc = "" +
 	"\x05token\x18\x01 \x01(\tR\x05token\x12\x0e\n" +
 	"\x02id\x18\x02 \x01(\tR\x02id\x129\n" +
 	"\n" +
-	"expires_at\x18\x03 \x01(\v2\x1a.google.protobuf.TimestampR\texpiresAt\"\xb3\x02\n" +
+	"expires_at\x18\x03 \x01(\v2\x1a.google.protobuf.TimestampR\texpiresAt\"1\n" +
+	"\vSSOProvider\x12\x0e\n" +
+	"\x02id\x18\x01 \x01(\tR\x02id\x12\x12\n" +
+	"\x04name\x18\x02 \x01(\tR\x04name\"\xd4\x01\n" +
+	"\vSSOIdentity\x12\x1f\n" +
+	"\vprovider_id\x18\x01 \x01(\tR\n" +
+	"providerId\x12#\n" +
+	"\rprovider_name\x18\x02 \x01(\tR\fproviderName\x12\x16\n" +
+	"\x06issuer\x18\x03 \x01(\tR\x06issuer\x12\x18\n" +
+	"\asubject\x18\x04 \x01(\tR\asubject\x12\x14\n" +
+	"\x05email\x18\x05 \x01(\tR\x05email\x127\n" +
+	"\tlinked_at\x18\x06 \x01(\v2\x1a.google.protobuf.TimestampR\blinkedAt\"\xb3\x02\n" +
 	"\vSessionInfo\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x1d\n" +
 	"\n" +
@@ -1996,7 +2148,7 @@ func file_gochat_v1_types_proto_rawDescGZIP() []byte {
 }
 
 var file_gochat_v1_types_proto_enumTypes = make([]protoimpl.EnumInfo, 5)
-var file_gochat_v1_types_proto_msgTypes = make([]protoimpl.MessageInfo, 17)
+var file_gochat_v1_types_proto_msgTypes = make([]protoimpl.MessageInfo, 19)
 var file_gochat_v1_types_proto_goTypes = []any{
 	(SystemRole)(0),               // 0: gochat.v1.SystemRole
 	(TeamRole)(0),                 // 1: gochat.v1.TeamRole
@@ -2006,64 +2158,67 @@ var file_gochat_v1_types_proto_goTypes = []any{
 	(*CustomStatus)(nil),          // 5: gochat.v1.CustomStatus
 	(*User)(nil),                  // 6: gochat.v1.User
 	(*Session)(nil),               // 7: gochat.v1.Session
-	(*SessionInfo)(nil),           // 8: gochat.v1.SessionInfo
-	(*Team)(nil),                  // 9: gochat.v1.Team
-	(*TeamMember)(nil),            // 10: gochat.v1.TeamMember
-	(*Channel)(nil),               // 11: gochat.v1.Channel
-	(*ChannelMember)(nil),         // 12: gochat.v1.ChannelMember
-	(*Attachment)(nil),            // 13: gochat.v1.Attachment
-	(*Message)(nil),               // 14: gochat.v1.Message
-	(*LinkPreview)(nil),           // 15: gochat.v1.LinkPreview
-	(*Markup)(nil),                // 16: gochat.v1.Markup
-	(*ButtonRow)(nil),             // 17: gochat.v1.ButtonRow
-	(*Button)(nil),                // 18: gochat.v1.Button
-	(*VoiceState)(nil),            // 19: gochat.v1.VoiceState
-	(*VoiceChannelState)(nil),     // 20: gochat.v1.VoiceChannelState
-	(*Reaction)(nil),              // 21: gochat.v1.Reaction
-	(*timestamppb.Timestamp)(nil), // 22: google.protobuf.Timestamp
+	(*SSOProvider)(nil),           // 8: gochat.v1.SSOProvider
+	(*SSOIdentity)(nil),           // 9: gochat.v1.SSOIdentity
+	(*SessionInfo)(nil),           // 10: gochat.v1.SessionInfo
+	(*Team)(nil),                  // 11: gochat.v1.Team
+	(*TeamMember)(nil),            // 12: gochat.v1.TeamMember
+	(*Channel)(nil),               // 13: gochat.v1.Channel
+	(*ChannelMember)(nil),         // 14: gochat.v1.ChannelMember
+	(*Attachment)(nil),            // 15: gochat.v1.Attachment
+	(*Message)(nil),               // 16: gochat.v1.Message
+	(*LinkPreview)(nil),           // 17: gochat.v1.LinkPreview
+	(*Markup)(nil),                // 18: gochat.v1.Markup
+	(*ButtonRow)(nil),             // 19: gochat.v1.ButtonRow
+	(*Button)(nil),                // 20: gochat.v1.Button
+	(*VoiceState)(nil),            // 21: gochat.v1.VoiceState
+	(*VoiceChannelState)(nil),     // 22: gochat.v1.VoiceChannelState
+	(*Reaction)(nil),              // 23: gochat.v1.Reaction
+	(*timestamppb.Timestamp)(nil), // 24: google.protobuf.Timestamp
 }
 var file_gochat_v1_types_proto_depIdxs = []int32{
-	22, // 0: gochat.v1.CustomStatus.expires_at:type_name -> google.protobuf.Timestamp
+	24, // 0: gochat.v1.CustomStatus.expires_at:type_name -> google.protobuf.Timestamp
 	0,  // 1: gochat.v1.User.role:type_name -> gochat.v1.SystemRole
-	22, // 2: gochat.v1.User.created_at:type_name -> google.protobuf.Timestamp
+	24, // 2: gochat.v1.User.created_at:type_name -> google.protobuf.Timestamp
 	3,  // 3: gochat.v1.User.status:type_name -> gochat.v1.Status
-	22, // 4: gochat.v1.User.dnd_until:type_name -> google.protobuf.Timestamp
+	24, // 4: gochat.v1.User.dnd_until:type_name -> google.protobuf.Timestamp
 	5,  // 5: gochat.v1.User.custom_status:type_name -> gochat.v1.CustomStatus
-	22, // 6: gochat.v1.Session.expires_at:type_name -> google.protobuf.Timestamp
-	22, // 7: gochat.v1.SessionInfo.created_at:type_name -> google.protobuf.Timestamp
-	22, // 8: gochat.v1.SessionInfo.last_seen_at:type_name -> google.protobuf.Timestamp
-	22, // 9: gochat.v1.SessionInfo.expires_at:type_name -> google.protobuf.Timestamp
-	1,  // 10: gochat.v1.Team.role:type_name -> gochat.v1.TeamRole
-	22, // 11: gochat.v1.Team.created_at:type_name -> google.protobuf.Timestamp
-	6,  // 12: gochat.v1.TeamMember.user:type_name -> gochat.v1.User
-	1,  // 13: gochat.v1.TeamMember.role:type_name -> gochat.v1.TeamRole
-	22, // 14: gochat.v1.TeamMember.joined_at:type_name -> google.protobuf.Timestamp
-	4,  // 15: gochat.v1.Channel.type:type_name -> gochat.v1.ChannelType
-	2,  // 16: gochat.v1.Channel.role:type_name -> gochat.v1.ChannelRole
-	6,  // 17: gochat.v1.Channel.peer:type_name -> gochat.v1.User
-	22, // 18: gochat.v1.Channel.created_at:type_name -> google.protobuf.Timestamp
-	6,  // 19: gochat.v1.Channel.peers:type_name -> gochat.v1.User
-	22, // 20: gochat.v1.Channel.archived_at:type_name -> google.protobuf.Timestamp
-	6,  // 21: gochat.v1.ChannelMember.user:type_name -> gochat.v1.User
-	2,  // 22: gochat.v1.ChannelMember.role:type_name -> gochat.v1.ChannelRole
-	22, // 23: gochat.v1.ChannelMember.joined_at:type_name -> google.protobuf.Timestamp
-	6,  // 24: gochat.v1.Message.author:type_name -> gochat.v1.User
-	13, // 25: gochat.v1.Message.attachments:type_name -> gochat.v1.Attachment
-	22, // 26: gochat.v1.Message.created_at:type_name -> google.protobuf.Timestamp
-	22, // 27: gochat.v1.Message.edited_at:type_name -> google.protobuf.Timestamp
-	22, // 28: gochat.v1.Message.last_reply_at:type_name -> google.protobuf.Timestamp
-	21, // 29: gochat.v1.Message.reactions:type_name -> gochat.v1.Reaction
-	16, // 30: gochat.v1.Message.markup:type_name -> gochat.v1.Markup
-	15, // 31: gochat.v1.Message.link_preview:type_name -> gochat.v1.LinkPreview
-	17, // 32: gochat.v1.Markup.rows:type_name -> gochat.v1.ButtonRow
-	18, // 33: gochat.v1.ButtonRow.buttons:type_name -> gochat.v1.Button
-	6,  // 34: gochat.v1.VoiceState.user:type_name -> gochat.v1.User
-	19, // 35: gochat.v1.VoiceChannelState.states:type_name -> gochat.v1.VoiceState
-	36, // [36:36] is the sub-list for method output_type
-	36, // [36:36] is the sub-list for method input_type
-	36, // [36:36] is the sub-list for extension type_name
-	36, // [36:36] is the sub-list for extension extendee
-	0,  // [0:36] is the sub-list for field type_name
+	24, // 6: gochat.v1.Session.expires_at:type_name -> google.protobuf.Timestamp
+	24, // 7: gochat.v1.SSOIdentity.linked_at:type_name -> google.protobuf.Timestamp
+	24, // 8: gochat.v1.SessionInfo.created_at:type_name -> google.protobuf.Timestamp
+	24, // 9: gochat.v1.SessionInfo.last_seen_at:type_name -> google.protobuf.Timestamp
+	24, // 10: gochat.v1.SessionInfo.expires_at:type_name -> google.protobuf.Timestamp
+	1,  // 11: gochat.v1.Team.role:type_name -> gochat.v1.TeamRole
+	24, // 12: gochat.v1.Team.created_at:type_name -> google.protobuf.Timestamp
+	6,  // 13: gochat.v1.TeamMember.user:type_name -> gochat.v1.User
+	1,  // 14: gochat.v1.TeamMember.role:type_name -> gochat.v1.TeamRole
+	24, // 15: gochat.v1.TeamMember.joined_at:type_name -> google.protobuf.Timestamp
+	4,  // 16: gochat.v1.Channel.type:type_name -> gochat.v1.ChannelType
+	2,  // 17: gochat.v1.Channel.role:type_name -> gochat.v1.ChannelRole
+	6,  // 18: gochat.v1.Channel.peer:type_name -> gochat.v1.User
+	24, // 19: gochat.v1.Channel.created_at:type_name -> google.protobuf.Timestamp
+	6,  // 20: gochat.v1.Channel.peers:type_name -> gochat.v1.User
+	24, // 21: gochat.v1.Channel.archived_at:type_name -> google.protobuf.Timestamp
+	6,  // 22: gochat.v1.ChannelMember.user:type_name -> gochat.v1.User
+	2,  // 23: gochat.v1.ChannelMember.role:type_name -> gochat.v1.ChannelRole
+	24, // 24: gochat.v1.ChannelMember.joined_at:type_name -> google.protobuf.Timestamp
+	6,  // 25: gochat.v1.Message.author:type_name -> gochat.v1.User
+	15, // 26: gochat.v1.Message.attachments:type_name -> gochat.v1.Attachment
+	24, // 27: gochat.v1.Message.created_at:type_name -> google.protobuf.Timestamp
+	24, // 28: gochat.v1.Message.edited_at:type_name -> google.protobuf.Timestamp
+	24, // 29: gochat.v1.Message.last_reply_at:type_name -> google.protobuf.Timestamp
+	23, // 30: gochat.v1.Message.reactions:type_name -> gochat.v1.Reaction
+	18, // 31: gochat.v1.Message.markup:type_name -> gochat.v1.Markup
+	17, // 32: gochat.v1.Message.link_preview:type_name -> gochat.v1.LinkPreview
+	19, // 33: gochat.v1.Markup.rows:type_name -> gochat.v1.ButtonRow
+	20, // 34: gochat.v1.ButtonRow.buttons:type_name -> gochat.v1.Button
+	6,  // 35: gochat.v1.VoiceState.user:type_name -> gochat.v1.User
+	21, // 36: gochat.v1.VoiceChannelState.states:type_name -> gochat.v1.VoiceState
+	37, // [37:37] is the sub-list for method output_type
+	37, // [37:37] is the sub-list for method input_type
+	37, // [37:37] is the sub-list for extension type_name
+	37, // [37:37] is the sub-list for extension extendee
+	0,  // [0:37] is the sub-list for field type_name
 }
 
 func init() { file_gochat_v1_types_proto_init() }
@@ -2071,7 +2226,7 @@ func file_gochat_v1_types_proto_init() {
 	if File_gochat_v1_types_proto != nil {
 		return
 	}
-	file_gochat_v1_types_proto_msgTypes[13].OneofWrappers = []any{
+	file_gochat_v1_types_proto_msgTypes[15].OneofWrappers = []any{
 		(*Button_CallbackData)(nil),
 		(*Button_Url)(nil),
 	}
@@ -2081,7 +2236,7 @@ func file_gochat_v1_types_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_gochat_v1_types_proto_rawDesc), len(file_gochat_v1_types_proto_rawDesc)),
 			NumEnums:      5,
-			NumMessages:   17,
+			NumMessages:   19,
 			NumExtensions: 0,
 			NumServices:   0,
 		},

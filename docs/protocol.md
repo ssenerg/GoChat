@@ -57,7 +57,8 @@ client may also send `Up.ping` and gets `Down.pong` with the same id.
 
 A hello without a token opens an anonymous socket, to sign in over: its
 welcome names no user, and it may only call `AuthService.GetSignupInfo`,
-`SignUp`, `Login` and `VerifyMFA`, and `TeamService.GetInvite`. Once signed
+`SignUp`, `Login`, `VerifyMFA`, `ListSSOProviders` and `RedeemSSO`, and
+`TeamService.GetInvite`. Once signed
 in, the client says hello again on the same socket, with the session's
 token.
 

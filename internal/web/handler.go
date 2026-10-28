@@ -57,6 +57,7 @@ type Handler struct {
 	zipped map[string][]byte
 	// botPolls holds the bots' getUpdates that wait.
 	botPolls *botPolls
+	sso      ssoList
 }
 
 func NewHandler(logger *zap.Logger, cfg *Config, client *drpc.Client, r *render.Renderer, engine *actor.Engine, gw *gateway.Deps) *Handler {
@@ -135,6 +136,10 @@ func (h *Handler) Routes() http.Handler {
 	mux.Handle("POST /login", h.limited(h.csrf(http.HandlerFunc(h.login))))
 	mux.HandleFunc("GET /login/mfa", h.mfaPage)
 	mux.Handle("POST /login/mfa", h.limited(h.csrf(http.HandlerFunc(h.mfa))))
+	mux.Handle("GET "+ssoCallback, h.limited(http.HandlerFunc(h.ssoCallbackPage)))
+	mux.HandleFunc("GET /login/sso/link", h.ssoLinkPage)
+	mux.Handle("POST /login/sso/link", h.csrf(http.HandlerFunc(h.ssoLinkConfirm)))
+	mux.Handle("GET /login/sso/{provider}", h.limited(http.HandlerFunc(h.ssoStart)))
 	mux.HandleFunc("GET /signup", h.signupPage)
 	mux.Handle("POST /signup", h.limited(h.csrf(http.HandlerFunc(h.signup))))
 	mux.Handle("POST /logout", h.csrf(http.HandlerFunc(h.logout)))
@@ -224,6 +229,8 @@ func (h *Handler) Routes() http.Handler {
 	mux.Handle("POST /settings/totp/disable", h.csrf(http.HandlerFunc(h.disableTOTP)))
 	mux.Handle("POST /settings/sessions/{id}/revoke", h.csrf(http.HandlerFunc(h.revokeSession)))
 	mux.Handle("POST /settings/sessions/revoke", h.csrf(http.HandlerFunc(h.revokeOtherSessions)))
+	mux.Handle("POST /settings/sso/{provider}/link", h.csrf(http.HandlerFunc(h.ssoLink)))
+	mux.Handle("POST /settings/sso/unlink", h.csrf(http.HandlerFunc(h.ssoUnlink)))
 	mux.Handle("POST /settings/bots", h.csrf(http.HandlerFunc(h.createBot)))
 	mux.Handle("POST /settings/bots/{bot}", h.csrf(http.HandlerFunc(h.updateBot)))
 	mux.Handle("POST /settings/bots/{bot}/token", h.csrf(http.HandlerFunc(h.resetBotToken)))
@@ -234,6 +241,8 @@ func (h *Handler) Routes() http.Handler {
 	mux.Handle("POST /admin/users/{user}/deactivate", h.csrf(http.HandlerFunc(h.adminDeactivate)))
 	mux.Handle("POST /admin/users/{user}/sessions/revoke", h.csrf(http.HandlerFunc(h.adminRevokeSessions)))
 	mux.Handle("POST /admin/users/{user}/quota", h.csrf(http.HandlerFunc(h.adminQuota)))
+	mux.Handle("POST /admin/users/{user}/sso/unlink", h.csrf(http.HandlerFunc(h.adminUnlinkSSO)))
+	mux.HandleFunc("GET /admin/sso/{provider}", h.adminSSOAccounts)
 
 	mux.HandleFunc("GET /ws", h.websocket)
 

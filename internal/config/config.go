@@ -2,6 +2,7 @@ package config
 
 import (
 	"bytes"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io/fs"
@@ -53,7 +54,7 @@ func LoadConfig(cfg Config, envPrefix, path, name string, defaultConfig []byte) 
 	var metadata mapstructure.Metadata
 	if err := v.Unmarshal(cfg, func(dc *mapstructure.DecoderConfig) {
 		dc.Metadata = &metadata
-		dc.DecodeHook = mapstructure.ComposeDecodeHookFunc(unitlessDurations, dc.DecodeHook)
+		dc.DecodeHook = mapstructure.ComposeDecodeHookFunc(unitlessDurations, jsonLists, dc.DecodeHook)
 	}); err != nil {
 		slog.Error("failed to unmarshal config", "error", err)
 		return fmt.Errorf("failed to unmarshal config: %w", err)
@@ -68,6 +69,23 @@ func LoadConfig(cfg Config, envPrefix, path, name string, defaultConfig []byte) 
 	}
 	slog.Info("config loaded")
 	return nil
+}
+
+// jsonLists reads a list of structs given as a string, as an environment
+// variable gives it, as JSON.
+func jsonLists(from, to reflect.Type, data any) (any, error) {
+	if from.Kind() != reflect.String || to.Kind() != reflect.Slice || to.Elem().Kind() != reflect.Struct {
+		return data, nil
+	}
+	s := strings.TrimSpace(data.(string))
+	if s == "" {
+		return []any{}, nil
+	}
+	var out []any
+	if err := json.Unmarshal([]byte(s), &out); err != nil {
+		return nil, fmt.Errorf("a list needs to be JSON: %w", err)
+	}
+	return out, nil
 }
 
 // unitlessDurations refuses a bare number for a duration: YAML 30 would decode

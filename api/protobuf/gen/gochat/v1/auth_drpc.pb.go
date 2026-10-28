@@ -51,6 +51,14 @@ type DRPCAuthServiceClient interface {
 	ListSessions(ctx context.Context, in *ListSessionsRequest) (*ListSessionsResponse, error)
 	RevokeSession(ctx context.Context, in *RevokeSessionRequest) (*RevokeSessionResponse, error)
 	RevokeSessions(ctx context.Context, in *RevokeSessionsRequest) (*RevokeSessionsResponse, error)
+	ListSSOProviders(ctx context.Context, in *ListSSOProvidersRequest) (*ListSSOProvidersResponse, error)
+	BeginSSO(ctx context.Context, in *BeginSSORequest) (*BeginSSOResponse, error)
+	FinishSSO(ctx context.Context, in *FinishSSORequest) (*FinishSSOResponse, error)
+	RedeemSSO(ctx context.Context, in *RedeemSSORequest) (*RedeemSSOResponse, error)
+	GetSSOLink(ctx context.Context, in *GetSSOLinkRequest) (*GetSSOLinkResponse, error)
+	LinkSSO(ctx context.Context, in *LinkSSORequest) (*LinkSSOResponse, error)
+	ListSSOIdentities(ctx context.Context, in *ListSSOIdentitiesRequest) (*ListSSOIdentitiesResponse, error)
+	UnlinkSSO(ctx context.Context, in *UnlinkSSORequest) (*UnlinkSSOResponse, error)
 }
 
 type drpcAuthServiceClient struct {
@@ -180,6 +188,78 @@ func (c *drpcAuthServiceClient) RevokeSessions(ctx context.Context, in *RevokeSe
 	return out, nil
 }
 
+func (c *drpcAuthServiceClient) ListSSOProviders(ctx context.Context, in *ListSSOProvidersRequest) (*ListSSOProvidersResponse, error) {
+	out := new(ListSSOProvidersResponse)
+	err := c.cc.Invoke(ctx, "/gochat.v1.AuthService/ListSSOProviders", drpcEncoding_File_gochat_v1_auth_proto{}, in, out)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *drpcAuthServiceClient) BeginSSO(ctx context.Context, in *BeginSSORequest) (*BeginSSOResponse, error) {
+	out := new(BeginSSOResponse)
+	err := c.cc.Invoke(ctx, "/gochat.v1.AuthService/BeginSSO", drpcEncoding_File_gochat_v1_auth_proto{}, in, out)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *drpcAuthServiceClient) FinishSSO(ctx context.Context, in *FinishSSORequest) (*FinishSSOResponse, error) {
+	out := new(FinishSSOResponse)
+	err := c.cc.Invoke(ctx, "/gochat.v1.AuthService/FinishSSO", drpcEncoding_File_gochat_v1_auth_proto{}, in, out)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *drpcAuthServiceClient) RedeemSSO(ctx context.Context, in *RedeemSSORequest) (*RedeemSSOResponse, error) {
+	out := new(RedeemSSOResponse)
+	err := c.cc.Invoke(ctx, "/gochat.v1.AuthService/RedeemSSO", drpcEncoding_File_gochat_v1_auth_proto{}, in, out)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *drpcAuthServiceClient) GetSSOLink(ctx context.Context, in *GetSSOLinkRequest) (*GetSSOLinkResponse, error) {
+	out := new(GetSSOLinkResponse)
+	err := c.cc.Invoke(ctx, "/gochat.v1.AuthService/GetSSOLink", drpcEncoding_File_gochat_v1_auth_proto{}, in, out)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *drpcAuthServiceClient) LinkSSO(ctx context.Context, in *LinkSSORequest) (*LinkSSOResponse, error) {
+	out := new(LinkSSOResponse)
+	err := c.cc.Invoke(ctx, "/gochat.v1.AuthService/LinkSSO", drpcEncoding_File_gochat_v1_auth_proto{}, in, out)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *drpcAuthServiceClient) ListSSOIdentities(ctx context.Context, in *ListSSOIdentitiesRequest) (*ListSSOIdentitiesResponse, error) {
+	out := new(ListSSOIdentitiesResponse)
+	err := c.cc.Invoke(ctx, "/gochat.v1.AuthService/ListSSOIdentities", drpcEncoding_File_gochat_v1_auth_proto{}, in, out)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *drpcAuthServiceClient) UnlinkSSO(ctx context.Context, in *UnlinkSSORequest) (*UnlinkSSOResponse, error) {
+	out := new(UnlinkSSOResponse)
+	err := c.cc.Invoke(ctx, "/gochat.v1.AuthService/UnlinkSSO", drpcEncoding_File_gochat_v1_auth_proto{}, in, out)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 type DRPCAuthServiceServer interface {
 	GetSignupInfo(context.Context, *GetSignupInfoRequest) (*GetSignupInfoResponse, error)
 	SignUp(context.Context, *SignUpRequest) (*SignUpResponse, error)
@@ -194,6 +274,14 @@ type DRPCAuthServiceServer interface {
 	ListSessions(context.Context, *ListSessionsRequest) (*ListSessionsResponse, error)
 	RevokeSession(context.Context, *RevokeSessionRequest) (*RevokeSessionResponse, error)
 	RevokeSessions(context.Context, *RevokeSessionsRequest) (*RevokeSessionsResponse, error)
+	ListSSOProviders(context.Context, *ListSSOProvidersRequest) (*ListSSOProvidersResponse, error)
+	BeginSSO(context.Context, *BeginSSORequest) (*BeginSSOResponse, error)
+	FinishSSO(context.Context, *FinishSSORequest) (*FinishSSOResponse, error)
+	RedeemSSO(context.Context, *RedeemSSORequest) (*RedeemSSOResponse, error)
+	GetSSOLink(context.Context, *GetSSOLinkRequest) (*GetSSOLinkResponse, error)
+	LinkSSO(context.Context, *LinkSSORequest) (*LinkSSOResponse, error)
+	ListSSOIdentities(context.Context, *ListSSOIdentitiesRequest) (*ListSSOIdentitiesResponse, error)
+	UnlinkSSO(context.Context, *UnlinkSSORequest) (*UnlinkSSOResponse, error)
 }
 
 type DRPCAuthServiceUnimplementedServer struct{}
@@ -250,9 +338,41 @@ func (s *DRPCAuthServiceUnimplementedServer) RevokeSessions(context.Context, *Re
 	return nil, drpcerr.WithCode(errors.New("Unimplemented"), drpcerr.Unimplemented)
 }
 
+func (s *DRPCAuthServiceUnimplementedServer) ListSSOProviders(context.Context, *ListSSOProvidersRequest) (*ListSSOProvidersResponse, error) {
+	return nil, drpcerr.WithCode(errors.New("Unimplemented"), drpcerr.Unimplemented)
+}
+
+func (s *DRPCAuthServiceUnimplementedServer) BeginSSO(context.Context, *BeginSSORequest) (*BeginSSOResponse, error) {
+	return nil, drpcerr.WithCode(errors.New("Unimplemented"), drpcerr.Unimplemented)
+}
+
+func (s *DRPCAuthServiceUnimplementedServer) FinishSSO(context.Context, *FinishSSORequest) (*FinishSSOResponse, error) {
+	return nil, drpcerr.WithCode(errors.New("Unimplemented"), drpcerr.Unimplemented)
+}
+
+func (s *DRPCAuthServiceUnimplementedServer) RedeemSSO(context.Context, *RedeemSSORequest) (*RedeemSSOResponse, error) {
+	return nil, drpcerr.WithCode(errors.New("Unimplemented"), drpcerr.Unimplemented)
+}
+
+func (s *DRPCAuthServiceUnimplementedServer) GetSSOLink(context.Context, *GetSSOLinkRequest) (*GetSSOLinkResponse, error) {
+	return nil, drpcerr.WithCode(errors.New("Unimplemented"), drpcerr.Unimplemented)
+}
+
+func (s *DRPCAuthServiceUnimplementedServer) LinkSSO(context.Context, *LinkSSORequest) (*LinkSSOResponse, error) {
+	return nil, drpcerr.WithCode(errors.New("Unimplemented"), drpcerr.Unimplemented)
+}
+
+func (s *DRPCAuthServiceUnimplementedServer) ListSSOIdentities(context.Context, *ListSSOIdentitiesRequest) (*ListSSOIdentitiesResponse, error) {
+	return nil, drpcerr.WithCode(errors.New("Unimplemented"), drpcerr.Unimplemented)
+}
+
+func (s *DRPCAuthServiceUnimplementedServer) UnlinkSSO(context.Context, *UnlinkSSORequest) (*UnlinkSSOResponse, error) {
+	return nil, drpcerr.WithCode(errors.New("Unimplemented"), drpcerr.Unimplemented)
+}
+
 type DRPCAuthServiceDescription struct{}
 
-func (DRPCAuthServiceDescription) NumMethods() int { return 13 }
+func (DRPCAuthServiceDescription) NumMethods() int { return 21 }
 
 func (DRPCAuthServiceDescription) Method(n int) (string, drpc.Encoding, drpc.Receiver, interface{}, bool) {
 	switch n {
@@ -373,6 +493,78 @@ func (DRPCAuthServiceDescription) Method(n int) (string, drpc.Encoding, drpc.Rec
 						in1.(*RevokeSessionsRequest),
 					)
 			}, DRPCAuthServiceServer.RevokeSessions, true
+	case 13:
+		return "/gochat.v1.AuthService/ListSSOProviders", drpcEncoding_File_gochat_v1_auth_proto{},
+			func(srv interface{}, ctx context.Context, in1, in2 interface{}) (drpc.Message, error) {
+				return srv.(DRPCAuthServiceServer).
+					ListSSOProviders(
+						ctx,
+						in1.(*ListSSOProvidersRequest),
+					)
+			}, DRPCAuthServiceServer.ListSSOProviders, true
+	case 14:
+		return "/gochat.v1.AuthService/BeginSSO", drpcEncoding_File_gochat_v1_auth_proto{},
+			func(srv interface{}, ctx context.Context, in1, in2 interface{}) (drpc.Message, error) {
+				return srv.(DRPCAuthServiceServer).
+					BeginSSO(
+						ctx,
+						in1.(*BeginSSORequest),
+					)
+			}, DRPCAuthServiceServer.BeginSSO, true
+	case 15:
+		return "/gochat.v1.AuthService/FinishSSO", drpcEncoding_File_gochat_v1_auth_proto{},
+			func(srv interface{}, ctx context.Context, in1, in2 interface{}) (drpc.Message, error) {
+				return srv.(DRPCAuthServiceServer).
+					FinishSSO(
+						ctx,
+						in1.(*FinishSSORequest),
+					)
+			}, DRPCAuthServiceServer.FinishSSO, true
+	case 16:
+		return "/gochat.v1.AuthService/RedeemSSO", drpcEncoding_File_gochat_v1_auth_proto{},
+			func(srv interface{}, ctx context.Context, in1, in2 interface{}) (drpc.Message, error) {
+				return srv.(DRPCAuthServiceServer).
+					RedeemSSO(
+						ctx,
+						in1.(*RedeemSSORequest),
+					)
+			}, DRPCAuthServiceServer.RedeemSSO, true
+	case 17:
+		return "/gochat.v1.AuthService/GetSSOLink", drpcEncoding_File_gochat_v1_auth_proto{},
+			func(srv interface{}, ctx context.Context, in1, in2 interface{}) (drpc.Message, error) {
+				return srv.(DRPCAuthServiceServer).
+					GetSSOLink(
+						ctx,
+						in1.(*GetSSOLinkRequest),
+					)
+			}, DRPCAuthServiceServer.GetSSOLink, true
+	case 18:
+		return "/gochat.v1.AuthService/LinkSSO", drpcEncoding_File_gochat_v1_auth_proto{},
+			func(srv interface{}, ctx context.Context, in1, in2 interface{}) (drpc.Message, error) {
+				return srv.(DRPCAuthServiceServer).
+					LinkSSO(
+						ctx,
+						in1.(*LinkSSORequest),
+					)
+			}, DRPCAuthServiceServer.LinkSSO, true
+	case 19:
+		return "/gochat.v1.AuthService/ListSSOIdentities", drpcEncoding_File_gochat_v1_auth_proto{},
+			func(srv interface{}, ctx context.Context, in1, in2 interface{}) (drpc.Message, error) {
+				return srv.(DRPCAuthServiceServer).
+					ListSSOIdentities(
+						ctx,
+						in1.(*ListSSOIdentitiesRequest),
+					)
+			}, DRPCAuthServiceServer.ListSSOIdentities, true
+	case 20:
+		return "/gochat.v1.AuthService/UnlinkSSO", drpcEncoding_File_gochat_v1_auth_proto{},
+			func(srv interface{}, ctx context.Context, in1, in2 interface{}) (drpc.Message, error) {
+				return srv.(DRPCAuthServiceServer).
+					UnlinkSSO(
+						ctx,
+						in1.(*UnlinkSSORequest),
+					)
+			}, DRPCAuthServiceServer.UnlinkSSO, true
 	default:
 		return "", nil, nil, nil, false
 	}
@@ -636,6 +828,166 @@ func (x *drpcAuthService_RevokeSessionsStream) GetStream() drpc.Stream {
 }
 
 func (x *drpcAuthService_RevokeSessionsStream) SendAndClose(m *RevokeSessionsResponse) error {
+	if err := x.MsgSend(m, drpcEncoding_File_gochat_v1_auth_proto{}); err != nil {
+		return err
+	}
+	return x.CloseSend()
+}
+
+type DRPCAuthService_ListSSOProvidersStream interface {
+	drpc.Stream
+	SendAndClose(*ListSSOProvidersResponse) error
+}
+
+type drpcAuthService_ListSSOProvidersStream struct {
+	drpc.Stream
+}
+
+func (x *drpcAuthService_ListSSOProvidersStream) GetStream() drpc.Stream {
+	return x.Stream
+}
+
+func (x *drpcAuthService_ListSSOProvidersStream) SendAndClose(m *ListSSOProvidersResponse) error {
+	if err := x.MsgSend(m, drpcEncoding_File_gochat_v1_auth_proto{}); err != nil {
+		return err
+	}
+	return x.CloseSend()
+}
+
+type DRPCAuthService_BeginSSOStream interface {
+	drpc.Stream
+	SendAndClose(*BeginSSOResponse) error
+}
+
+type drpcAuthService_BeginSSOStream struct {
+	drpc.Stream
+}
+
+func (x *drpcAuthService_BeginSSOStream) GetStream() drpc.Stream {
+	return x.Stream
+}
+
+func (x *drpcAuthService_BeginSSOStream) SendAndClose(m *BeginSSOResponse) error {
+	if err := x.MsgSend(m, drpcEncoding_File_gochat_v1_auth_proto{}); err != nil {
+		return err
+	}
+	return x.CloseSend()
+}
+
+type DRPCAuthService_FinishSSOStream interface {
+	drpc.Stream
+	SendAndClose(*FinishSSOResponse) error
+}
+
+type drpcAuthService_FinishSSOStream struct {
+	drpc.Stream
+}
+
+func (x *drpcAuthService_FinishSSOStream) GetStream() drpc.Stream {
+	return x.Stream
+}
+
+func (x *drpcAuthService_FinishSSOStream) SendAndClose(m *FinishSSOResponse) error {
+	if err := x.MsgSend(m, drpcEncoding_File_gochat_v1_auth_proto{}); err != nil {
+		return err
+	}
+	return x.CloseSend()
+}
+
+type DRPCAuthService_RedeemSSOStream interface {
+	drpc.Stream
+	SendAndClose(*RedeemSSOResponse) error
+}
+
+type drpcAuthService_RedeemSSOStream struct {
+	drpc.Stream
+}
+
+func (x *drpcAuthService_RedeemSSOStream) GetStream() drpc.Stream {
+	return x.Stream
+}
+
+func (x *drpcAuthService_RedeemSSOStream) SendAndClose(m *RedeemSSOResponse) error {
+	if err := x.MsgSend(m, drpcEncoding_File_gochat_v1_auth_proto{}); err != nil {
+		return err
+	}
+	return x.CloseSend()
+}
+
+type DRPCAuthService_GetSSOLinkStream interface {
+	drpc.Stream
+	SendAndClose(*GetSSOLinkResponse) error
+}
+
+type drpcAuthService_GetSSOLinkStream struct {
+	drpc.Stream
+}
+
+func (x *drpcAuthService_GetSSOLinkStream) GetStream() drpc.Stream {
+	return x.Stream
+}
+
+func (x *drpcAuthService_GetSSOLinkStream) SendAndClose(m *GetSSOLinkResponse) error {
+	if err := x.MsgSend(m, drpcEncoding_File_gochat_v1_auth_proto{}); err != nil {
+		return err
+	}
+	return x.CloseSend()
+}
+
+type DRPCAuthService_LinkSSOStream interface {
+	drpc.Stream
+	SendAndClose(*LinkSSOResponse) error
+}
+
+type drpcAuthService_LinkSSOStream struct {
+	drpc.Stream
+}
+
+func (x *drpcAuthService_LinkSSOStream) GetStream() drpc.Stream {
+	return x.Stream
+}
+
+func (x *drpcAuthService_LinkSSOStream) SendAndClose(m *LinkSSOResponse) error {
+	if err := x.MsgSend(m, drpcEncoding_File_gochat_v1_auth_proto{}); err != nil {
+		return err
+	}
+	return x.CloseSend()
+}
+
+type DRPCAuthService_ListSSOIdentitiesStream interface {
+	drpc.Stream
+	SendAndClose(*ListSSOIdentitiesResponse) error
+}
+
+type drpcAuthService_ListSSOIdentitiesStream struct {
+	drpc.Stream
+}
+
+func (x *drpcAuthService_ListSSOIdentitiesStream) GetStream() drpc.Stream {
+	return x.Stream
+}
+
+func (x *drpcAuthService_ListSSOIdentitiesStream) SendAndClose(m *ListSSOIdentitiesResponse) error {
+	if err := x.MsgSend(m, drpcEncoding_File_gochat_v1_auth_proto{}); err != nil {
+		return err
+	}
+	return x.CloseSend()
+}
+
+type DRPCAuthService_UnlinkSSOStream interface {
+	drpc.Stream
+	SendAndClose(*UnlinkSSOResponse) error
+}
+
+type drpcAuthService_UnlinkSSOStream struct {
+	drpc.Stream
+}
+
+func (x *drpcAuthService_UnlinkSSOStream) GetStream() drpc.Stream {
+	return x.Stream
+}
+
+func (x *drpcAuthService_UnlinkSSOStream) SendAndClose(m *UnlinkSSOResponse) error {
 	if err := x.MsgSend(m, drpcEncoding_File_gochat_v1_auth_proto{}); err != nil {
 		return err
 	}

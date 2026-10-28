@@ -99,6 +99,17 @@ services:
     allow_open_bootstrap: false
     login_failures: 10
     login_window: 15m
+    # Single sign-on with identity providers over OpenID Connect, off
+    # without providers. Each is
+    #   {id, name, issuer, client_id, client_secret or client_secret_file,
+    #    scopes, allowed_domains}
+    # and the provider redirects back to <web public_url>/login/sso/callback.
+    # SERVICES_ACCOUNTS_SSO_PROVIDERS takes the list as JSON.
+    sso:
+      # How long a sign-in may spend at the provider.
+      flow_ttl: 10m
+      timeout: 10s
+      providers: []
   directory:
     workers: 16
     op_timeout: 10s

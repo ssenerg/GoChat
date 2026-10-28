@@ -11,6 +11,9 @@ service AdminService {
   // theirs out, or reactivates one.
   rpc SetUserDeactivated(SetUserDeactivatedRequest) returns (SetUserDeactivatedResponse);
   rpc SetStorageQuota(SetStorageQuotaRequest) returns (SetStorageQuotaResponse);
+  // ListSSOAccounts lists the accounts linked through an identity provider,
+  // by user.
+  rpc ListSSOAccounts(ListSSOAccountsRequest) returns (ListSSOAccountsResponse);
 }
 
 message FindUserRequest {
@@ -42,3 +45,22 @@ message SetStorageQuotaRequest {
 }
 
 message SetStorageQuotaResponse {}
+
+message ListSSOAccountsRequest {
+  string provider_id = 1;
+  // The next of the page before; empty for the first.
+  string after = 2;
+}
+
+message ListSSOAccountsResponse {
+  repeated SSOAccount accounts = 1;
+  // Continues the listing; empty at its end.
+  string next = 2;
+}
+
+message SSOAccount {
+  User user = 1;
+  // The account's email in GoChat.
+  string email = 2;
+  SSOIdentity identity = 3;
+}

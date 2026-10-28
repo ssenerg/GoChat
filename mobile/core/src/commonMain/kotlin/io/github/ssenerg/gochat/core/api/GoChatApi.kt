@@ -38,6 +38,13 @@ class GoChatApi(val client: ApiClient) {
 
     suspend fun me() = auth("Me", MeRequest(), MeResponse.ADAPTER)
 
+    // Single sign-on: the page in the browser signs in, the app redeems its code.
+
+    suspend fun ssoProviders() = auth("ListSSOProviders", ListSSOProvidersRequest(), ListSSOProvidersResponse.ADAPTER).providers
+
+    suspend fun redeemSso(code: String, verifier: String) =
+        auth("RedeemSSO", RedeemSSORequest(code = code, verifier = verifier), RedeemSSOResponse.ADAPTER)
+
     /** Ties the device's push token to the session; false when the server pushes nowhere. */
     suspend fun registerDevice(platform: PushPlatform, token: String, sandbox: Boolean) =
         client.call(

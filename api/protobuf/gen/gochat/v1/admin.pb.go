@@ -341,6 +341,173 @@ func (*SetStorageQuotaResponse) Descriptor() ([]byte, []int) {
 	return file_gochat_v1_admin_proto_rawDescGZIP(), []int{5}
 }
 
+type ListSSOAccountsRequest struct {
+	state      protoimpl.MessageState `protogen:"open.v1"`
+	ProviderId string                 `protobuf:"bytes,1,opt,name=provider_id,json=providerId,proto3" json:"provider_id,omitempty"`
+	// The next of the page before; empty for the first.
+	After         string `protobuf:"bytes,2,opt,name=after,proto3" json:"after,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ListSSOAccountsRequest) Reset() {
+	*x = ListSSOAccountsRequest{}
+	mi := &file_gochat_v1_admin_proto_msgTypes[6]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ListSSOAccountsRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ListSSOAccountsRequest) ProtoMessage() {}
+
+func (x *ListSSOAccountsRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_gochat_v1_admin_proto_msgTypes[6]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ListSSOAccountsRequest.ProtoReflect.Descriptor instead.
+func (*ListSSOAccountsRequest) Descriptor() ([]byte, []int) {
+	return file_gochat_v1_admin_proto_rawDescGZIP(), []int{6}
+}
+
+func (x *ListSSOAccountsRequest) GetProviderId() string {
+	if x != nil {
+		return x.ProviderId
+	}
+	return ""
+}
+
+func (x *ListSSOAccountsRequest) GetAfter() string {
+	if x != nil {
+		return x.After
+	}
+	return ""
+}
+
+type ListSSOAccountsResponse struct {
+	state    protoimpl.MessageState `protogen:"open.v1"`
+	Accounts []*SSOAccount          `protobuf:"bytes,1,rep,name=accounts,proto3" json:"accounts,omitempty"`
+	// Continues the listing; empty at its end.
+	Next          string `protobuf:"bytes,2,opt,name=next,proto3" json:"next,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ListSSOAccountsResponse) Reset() {
+	*x = ListSSOAccountsResponse{}
+	mi := &file_gochat_v1_admin_proto_msgTypes[7]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ListSSOAccountsResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ListSSOAccountsResponse) ProtoMessage() {}
+
+func (x *ListSSOAccountsResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_gochat_v1_admin_proto_msgTypes[7]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ListSSOAccountsResponse.ProtoReflect.Descriptor instead.
+func (*ListSSOAccountsResponse) Descriptor() ([]byte, []int) {
+	return file_gochat_v1_admin_proto_rawDescGZIP(), []int{7}
+}
+
+func (x *ListSSOAccountsResponse) GetAccounts() []*SSOAccount {
+	if x != nil {
+		return x.Accounts
+	}
+	return nil
+}
+
+func (x *ListSSOAccountsResponse) GetNext() string {
+	if x != nil {
+		return x.Next
+	}
+	return ""
+}
+
+type SSOAccount struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	User  *User                  `protobuf:"bytes,1,opt,name=user,proto3" json:"user,omitempty"`
+	// The account's email in GoChat.
+	Email         string       `protobuf:"bytes,2,opt,name=email,proto3" json:"email,omitempty"`
+	Identity      *SSOIdentity `protobuf:"bytes,3,opt,name=identity,proto3" json:"identity,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *SSOAccount) Reset() {
+	*x = SSOAccount{}
+	mi := &file_gochat_v1_admin_proto_msgTypes[8]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *SSOAccount) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*SSOAccount) ProtoMessage() {}
+
+func (x *SSOAccount) ProtoReflect() protoreflect.Message {
+	mi := &file_gochat_v1_admin_proto_msgTypes[8]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use SSOAccount.ProtoReflect.Descriptor instead.
+func (*SSOAccount) Descriptor() ([]byte, []int) {
+	return file_gochat_v1_admin_proto_rawDescGZIP(), []int{8}
+}
+
+func (x *SSOAccount) GetUser() *User {
+	if x != nil {
+		return x.User
+	}
+	return nil
+}
+
+func (x *SSOAccount) GetEmail() string {
+	if x != nil {
+		return x.Email
+	}
+	return ""
+}
+
+func (x *SSOAccount) GetIdentity() *SSOIdentity {
+	if x != nil {
+		return x.Identity
+	}
+	return nil
+}
+
 var File_gochat_v1_admin_proto protoreflect.FileDescriptor
 
 const file_gochat_v1_admin_proto_rawDesc = "" +
@@ -361,11 +528,24 @@ const file_gochat_v1_admin_proto_rawDesc = "" +
 	"\x16SetStorageQuotaRequest\x12\x17\n" +
 	"\auser_id\x18\x01 \x01(\tR\x06userId\x12\x14\n" +
 	"\x05quota\x18\x02 \x01(\x03R\x05quota\"\x19\n" +
-	"\x17SetStorageQuotaResponse2\x90\x02\n" +
+	"\x17SetStorageQuotaResponse\"O\n" +
+	"\x16ListSSOAccountsRequest\x12\x1f\n" +
+	"\vprovider_id\x18\x01 \x01(\tR\n" +
+	"providerId\x12\x14\n" +
+	"\x05after\x18\x02 \x01(\tR\x05after\"`\n" +
+	"\x17ListSSOAccountsResponse\x121\n" +
+	"\baccounts\x18\x01 \x03(\v2\x15.gochat.v1.SSOAccountR\baccounts\x12\x12\n" +
+	"\x04next\x18\x02 \x01(\tR\x04next\"{\n" +
+	"\n" +
+	"SSOAccount\x12#\n" +
+	"\x04user\x18\x01 \x01(\v2\x0f.gochat.v1.UserR\x04user\x12\x14\n" +
+	"\x05email\x18\x02 \x01(\tR\x05email\x122\n" +
+	"\bidentity\x18\x03 \x01(\v2\x16.gochat.v1.SSOIdentityR\bidentity2\xea\x02\n" +
 	"\fAdminService\x12C\n" +
 	"\bFindUser\x12\x1a.gochat.v1.FindUserRequest\x1a\x1b.gochat.v1.FindUserResponse\x12a\n" +
 	"\x12SetUserDeactivated\x12$.gochat.v1.SetUserDeactivatedRequest\x1a%.gochat.v1.SetUserDeactivatedResponse\x12X\n" +
-	"\x0fSetStorageQuota\x12!.gochat.v1.SetStorageQuotaRequest\x1a\".gochat.v1.SetStorageQuotaResponseB\x9f\x01\n" +
+	"\x0fSetStorageQuota\x12!.gochat.v1.SetStorageQuotaRequest\x1a\".gochat.v1.SetStorageQuotaResponse\x12X\n" +
+	"\x0fListSSOAccounts\x12!.gochat.v1.ListSSOAccountsRequest\x1a\".gochat.v1.ListSSOAccountsResponseB\x9f\x01\n" +
 	"\rcom.gochat.v1B\n" +
 	"AdminProtoP\x01Z=github.com/ssenerg/gochat/api/protobuf/gen/gochat/v1;gochatv1\xa2\x02\x03GXX\xaa\x02\tGochat.V1\xca\x02\tGochat\\V1\xe2\x02\x15Gochat\\V1\\GPBMetadata\xea\x02\n" +
 	"Gochat::V1b\x06proto3"
@@ -382,7 +562,7 @@ func file_gochat_v1_admin_proto_rawDescGZIP() []byte {
 	return file_gochat_v1_admin_proto_rawDescData
 }
 
-var file_gochat_v1_admin_proto_msgTypes = make([]protoimpl.MessageInfo, 6)
+var file_gochat_v1_admin_proto_msgTypes = make([]protoimpl.MessageInfo, 9)
 var file_gochat_v1_admin_proto_goTypes = []any{
 	(*FindUserRequest)(nil),            // 0: gochat.v1.FindUserRequest
 	(*FindUserResponse)(nil),           // 1: gochat.v1.FindUserResponse
@@ -390,22 +570,31 @@ var file_gochat_v1_admin_proto_goTypes = []any{
 	(*SetUserDeactivatedResponse)(nil), // 3: gochat.v1.SetUserDeactivatedResponse
 	(*SetStorageQuotaRequest)(nil),     // 4: gochat.v1.SetStorageQuotaRequest
 	(*SetStorageQuotaResponse)(nil),    // 5: gochat.v1.SetStorageQuotaResponse
-	(*User)(nil),                       // 6: gochat.v1.User
+	(*ListSSOAccountsRequest)(nil),     // 6: gochat.v1.ListSSOAccountsRequest
+	(*ListSSOAccountsResponse)(nil),    // 7: gochat.v1.ListSSOAccountsResponse
+	(*SSOAccount)(nil),                 // 8: gochat.v1.SSOAccount
+	(*User)(nil),                       // 9: gochat.v1.User
+	(*SSOIdentity)(nil),                // 10: gochat.v1.SSOIdentity
 }
 var file_gochat_v1_admin_proto_depIdxs = []int32{
-	6, // 0: gochat.v1.FindUserResponse.user:type_name -> gochat.v1.User
-	6, // 1: gochat.v1.SetUserDeactivatedResponse.user:type_name -> gochat.v1.User
-	0, // 2: gochat.v1.AdminService.FindUser:input_type -> gochat.v1.FindUserRequest
-	2, // 3: gochat.v1.AdminService.SetUserDeactivated:input_type -> gochat.v1.SetUserDeactivatedRequest
-	4, // 4: gochat.v1.AdminService.SetStorageQuota:input_type -> gochat.v1.SetStorageQuotaRequest
-	1, // 5: gochat.v1.AdminService.FindUser:output_type -> gochat.v1.FindUserResponse
-	3, // 6: gochat.v1.AdminService.SetUserDeactivated:output_type -> gochat.v1.SetUserDeactivatedResponse
-	5, // 7: gochat.v1.AdminService.SetStorageQuota:output_type -> gochat.v1.SetStorageQuotaResponse
-	5, // [5:8] is the sub-list for method output_type
-	2, // [2:5] is the sub-list for method input_type
-	2, // [2:2] is the sub-list for extension type_name
-	2, // [2:2] is the sub-list for extension extendee
-	0, // [0:2] is the sub-list for field type_name
+	9,  // 0: gochat.v1.FindUserResponse.user:type_name -> gochat.v1.User
+	9,  // 1: gochat.v1.SetUserDeactivatedResponse.user:type_name -> gochat.v1.User
+	8,  // 2: gochat.v1.ListSSOAccountsResponse.accounts:type_name -> gochat.v1.SSOAccount
+	9,  // 3: gochat.v1.SSOAccount.user:type_name -> gochat.v1.User
+	10, // 4: gochat.v1.SSOAccount.identity:type_name -> gochat.v1.SSOIdentity
+	0,  // 5: gochat.v1.AdminService.FindUser:input_type -> gochat.v1.FindUserRequest
+	2,  // 6: gochat.v1.AdminService.SetUserDeactivated:input_type -> gochat.v1.SetUserDeactivatedRequest
+	4,  // 7: gochat.v1.AdminService.SetStorageQuota:input_type -> gochat.v1.SetStorageQuotaRequest
+	6,  // 8: gochat.v1.AdminService.ListSSOAccounts:input_type -> gochat.v1.ListSSOAccountsRequest
+	1,  // 9: gochat.v1.AdminService.FindUser:output_type -> gochat.v1.FindUserResponse
+	3,  // 10: gochat.v1.AdminService.SetUserDeactivated:output_type -> gochat.v1.SetUserDeactivatedResponse
+	5,  // 11: gochat.v1.AdminService.SetStorageQuota:output_type -> gochat.v1.SetStorageQuotaResponse
+	7,  // 12: gochat.v1.AdminService.ListSSOAccounts:output_type -> gochat.v1.ListSSOAccountsResponse
+	9,  // [9:13] is the sub-list for method output_type
+	5,  // [5:9] is the sub-list for method input_type
+	5,  // [5:5] is the sub-list for extension type_name
+	5,  // [5:5] is the sub-list for extension extendee
+	0,  // [0:5] is the sub-list for field type_name
 }
 
 func init() { file_gochat_v1_admin_proto_init() }
@@ -424,7 +613,7 @@ func file_gochat_v1_admin_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_gochat_v1_admin_proto_rawDesc), len(file_gochat_v1_admin_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   6,
+			NumMessages:   9,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

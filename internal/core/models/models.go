@@ -95,6 +95,53 @@ type MFAChallenge struct {
 	UserAgent string     `db:"user_agent"`
 }
 
+// SSOFlow is a sign-in with an identity provider that has yet to come back.
+type SSOFlow struct {
+	StateHash []byte `db:"state_hash"`
+	Provider  string `db:"provider"`
+	Nonce     string `db:"nonce"`
+	// Verifier is the PKCE verifier, sealed.
+	Verifier    []byte `db:"verifier"`
+	RedirectURI string `db:"redirect_uri"`
+	// LinkUser is who links the identity, when someone signed in started it.
+	LinkUser gocql.UUID `db:"link_user"`
+	// AppChallenge is the PKCE challenge of an app the sign-in hands off to.
+	AppChallenge string    `db:"app_challenge"`
+	ExpiresAt    time.Time `db:"expires_at"`
+}
+
+// The kinds of SSO tickets.
+const (
+	// SSOTicketApp lets an app redeem a sign-in that finished in a browser.
+	SSOTicketApp = "app"
+	// SSOTicketLink waits for an account's owner to link the identity.
+	SSOTicketLink = "link"
+)
+
+// SSOTicket is what a finished sign-in leaves for the step after it.
+type SSOTicket struct {
+	TokenHash []byte     `db:"token_hash"`
+	Kind      string     `db:"kind"`
+	UserID    gocql.UUID `db:"user_id"`
+	Challenge string     `db:"challenge"`
+	Provider  string     `db:"provider"`
+	Issuer    string     `db:"issuer"`
+	Subject   string     `db:"subject"`
+	Email     string     `db:"email"`
+	ExpiresAt time.Time  `db:"expires_at"`
+}
+
+// SSOIdentity links an account at an identity provider, known by its issuer
+// and subject, to a user.
+type SSOIdentity struct {
+	Issuer   string     `db:"issuer"`
+	Subject  string     `db:"subject"`
+	UserID   gocql.UUID `db:"user_id"`
+	Provider string     `db:"provider"`
+	Email    string     `db:"email"`
+	LinkedAt time.Time  `db:"linked_at"`
+}
+
 type Team struct {
 	ID          gocql.UUID `db:"id"`
 	Name        string     `db:"name"`

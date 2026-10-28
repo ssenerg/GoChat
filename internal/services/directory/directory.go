@@ -1130,7 +1130,7 @@ func (w *worker) me(ctx context.Context, p *models.Principal) (*MeResult, error)
 	if err != nil {
 		return nil, err
 	}
-	return &MeResult{User: convert.User(u), Email: u.Email}, nil
+	return &MeResult{User: convert.User(u), Email: u.Email, HasPassword: u.PasswordHash != ""}, nil
 }
 
 func (w *worker) listMuted(ctx context.Context, p *models.Principal) ([]string, error) {

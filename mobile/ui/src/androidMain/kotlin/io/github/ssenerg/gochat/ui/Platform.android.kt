@@ -19,6 +19,7 @@ import android.provider.OpenableColumns
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.browser.customtabs.CustomTabsIntent
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
@@ -90,6 +91,18 @@ class AndroidPlatform(private val context: Context, private val scope: Coroutine
     override fun copy(text: String) {
         val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
         clipboard.setPrimaryClip(ClipData.newPlainText("GoChat", text))
+    }
+
+    // The browser comes back through MainActivity, which claims the scheme.
+    override fun signInInBrowser(url: String, onReturn: (String) -> Unit) {
+        val tab = CustomTabsIntent.Builder().build()
+        tab.intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        try {
+            tab.launchUrl(context, Uri.parse(url))
+        } catch (e: ActivityNotFoundException) {
+            // No browser takes Custom Tabs: any browser will do.
+            context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+        }
     }
 }
 

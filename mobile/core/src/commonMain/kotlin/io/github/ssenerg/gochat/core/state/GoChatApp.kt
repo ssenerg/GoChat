@@ -1,12 +1,16 @@
 package io.github.ssenerg.gochat.core.state
 
+import gochat.v1.SSOProvider
 import gochat.v1.SignUpRequest
 import io.github.ssenerg.gochat.core.api.ApiClient
 import io.github.ssenerg.gochat.core.api.AppInfo
 import io.github.ssenerg.gochat.core.api.ApiException
 import io.github.ssenerg.gochat.core.api.GoChatApi
+import io.github.ssenerg.gochat.core.api.Pkce
 import io.github.ssenerg.gochat.core.api.normalizeServerUrl
+import io.github.ssenerg.gochat.core.api.parseSsoReturn
 import io.github.ssenerg.gochat.core.api.userMessage
+import io.ktor.http.encodeURLParameter
 import io.github.ssenerg.gochat.core.socket.Connection
 import io.github.ssenerg.gochat.core.voice.RtcEngine
 import io.ktor.client.engine.HttpClientEngine
@@ -215,6 +219,72 @@ class GoChatApp(
         }
     }
 
+    /** The identity providers [server] signs in with; none when it has none or cannot say. */
+    suspend fun ssoProviders(server: String): List<SSOProvider> {
+        val api = api(normalizeServerUrl(server))
+        return try {
+            api.ssoProviders()
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            emptyList()
+        } finally {
+            api.client.close()
+        }
+    }
+
+    /**
+     * The page that signs in at [provider] in the system browser, with an
+     * invite for a new account. It comes back to [SSO_REDIRECT], for
+     * [ssoReturned]; the verifier it keeps meanwhile outlives the process.
+     */
+    fun ssoUrl(server: String, provider: String, invite: String = ""): String {
+        val url = normalizeServerUrl(server)
+        val pkce = Pkce.create()
+        store.put(KEY_SSO, url + "\n" + pkce.verifier)
+        val token = inviteToken(invite)
+        return "$url/login/sso/${provider.encodeURLParameter()}?app=${pkce.challenge}" +
+            if (token.isEmpty()) "" else "&invite=${token.encodeURLParameter()}"
+    }
+
+    /** Finishes a sign-in the browser came back from at [callback], unless someone is signed in. */
+    fun ssoReturned(callback: String) {
+        val ret = parseSsoReturn(callback, SSO_REDIRECT) ?: return
+        if (_state.value is AppState.SignedIn) return
+        val pending = store.get(KEY_SSO)?.split('\n', limit = 2)
+        store.put(KEY_SSO, null)
+        if (pending?.size != 2) {
+            _state.value = AppState.SignedOut(lastServer, "The sign-in expired. Sign in again.")
+            return
+        }
+        val (server, verifier) = pending
+        val code = ret.code
+        if (ret.error != null || code == null) {
+            _state.value = AppState.SignedOut(server, ret.error.orEmpty().replaceFirstChar { it.uppercase() }.ifEmpty { "The sign-in failed." })
+            return
+        }
+        _state.value = AppState.Starting
+        scope.launch {
+            val api = api(server)
+            tooOld(api)?.let { notice -> return@launch signedOut(api, server, notice) }
+            try {
+                val res = api.redeemSso(code, verifier)
+                when {
+                    res.mfa_token != null -> {
+                        api.client.close()
+                        _state.value = AppState.Verifying(server, res.mfa_token)
+                    }
+                    res.session != null -> signedIn(api, server, res.session.token)
+                    else -> signedOut(api, server, "The server answered in a way this app does not understand.")
+                }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                signedOut(api, server, e.userMessage())
+            }
+        }
+    }
+
     /** Signs out of this device. */
     suspend fun signOut() {
         val s = session ?: return
@@ -288,6 +358,11 @@ class GoChatApp(
         private const val KEY_TOKEN = "token"
         private const val KEY_ME = "me"
         private const val KEY_PTS = ChatSession.KEY_PTS
+        private const val KEY_SSO = "sso"
+
+        /** The scheme the apps claim, where a sign-in in the browser comes back. */
+        const val SSO_SCHEME = "io.github.ssenerg.gochat"
+        const val SSO_REDIRECT = "$SSO_SCHEME:/sso"
 
         /** Takes an invite link or its bare token. */
         fun inviteToken(input: String): String = input.trim().substringAfterLast("/join/").substringBefore('?').trim('/')

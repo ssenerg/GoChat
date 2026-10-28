@@ -172,6 +172,8 @@ services:
       SERVICES_PUSH_APNS_KEY_ID: ${SERVICES_PUSH_APNS_KEY_ID:-}
       SERVICES_PUSH_APNS_TEAM_ID: ${SERVICES_PUSH_APNS_TEAM_ID:-}
       SERVICES_PUSH_APNS_TOPIC: ${SERVICES_PUSH_APNS_TOPIC:-}
+      # Single sign-on, off while empty: a JSON list of providers.
+      SERVICES_ACCOUNTS_SSO_PROVIDERS: ${SERVICES_ACCOUNTS_SSO_PROVIDERS:-}
     read_only: true
     cap_drop: [ALL]
     security_opt: ["no-new-privileges:true"]

@@ -24,6 +24,28 @@ service AuthService {
   // RevokeSessions signs out the caller's other sessions, or every session
   // of a user for a system admin.
   rpc RevokeSessions(RevokeSessionsRequest) returns (RevokeSessionsResponse);
+  // ListSSOProviders lists the identity providers people may sign in with.
+  rpc ListSSOProviders(ListSSOProvidersRequest) returns (ListSSOProvidersResponse);
+  // BeginSSO starts a sign-in at a provider for a gateway, which sends the
+  // browser to the URL it answers. With a session, it links the account
+  // the provider signs in to the caller's instead.
+  rpc BeginSSO(BeginSSORequest) returns (BeginSSOResponse);
+  // FinishSSO finishes it, for the gateway the provider sent the browser
+  // back to.
+  rpc FinishSSO(FinishSSORequest) returns (FinishSSOResponse);
+  // RedeemSSO hands an app the sign-in that finished in a browser.
+  rpc RedeemSSO(RedeemSSORequest) returns (RedeemSSOResponse);
+  // GetSSOLink tells what a link token links.
+  rpc GetSSOLink(GetSSOLinkRequest) returns (GetSSOLinkResponse);
+  // LinkSSO links the account at a provider a link token holds to the
+  // caller's.
+  rpc LinkSSO(LinkSSORequest) returns (LinkSSOResponse);
+  // ListSSOIdentities lists the accounts at providers linked to the
+  // caller's, or to a user's for a system admin.
+  rpc ListSSOIdentities(ListSSOIdentitiesRequest) returns (ListSSOIdentitiesResponse);
+  // UnlinkSSO unlinks one of them. An account without a password keeps its
+  // last one, unless a system admin unlinks it.
+  rpc UnlinkSSO(UnlinkSSORequest) returns (UnlinkSSOResponse);
 }
 
 message GetSignupInfoRequest {
@@ -92,6 +114,8 @@ message MeResponse {
   User user = 1;
   string email = 2;
   string session_id = 3;
+  // False for an account that signs in only with single sign-on.
+  bool has_password = 4;
 }
 
 message ChangePasswordRequest {
@@ -149,3 +173,103 @@ message RevokeSessionsRequest {
 message RevokeSessionsResponse {
   int32 revoked = 1;
 }
+
+message ListSSOProvidersRequest {}
+
+message ListSSOProvidersResponse {
+  repeated SSOProvider providers = 1;
+}
+
+message BeginSSORequest {
+  string provider_id = 1;
+  // Where the provider sends the browser back: the gateway's
+  // /login/sso/callback.
+  string redirect_uri = 2;
+  // For an app: the S256 PKCE challenge of a verifier it keeps, which
+  // RedeemSSO takes.
+  string app_challenge = 3;
+}
+
+message BeginSSOResponse {
+  // Where to send the browser.
+  string url = 1;
+  // What the provider sends back, which the browser must hold too.
+  string state = 2;
+}
+
+message FinishSSORequest {
+  string state = 1;
+  string code = 2;
+  // The invite the person came with, for a new account.
+  string invite_token = 3;
+}
+
+message FinishSSOResponse {
+  oneof result {
+    Session session = 1;
+    // A short-lived challenge to answer with VerifyMFA.
+    string mfa_token = 2;
+    // For an app's sign-in: what it redeems with RedeemSSO.
+    string app_code = 3;
+    // The account at the provider is new and its email has a GoChat
+    // account, which links it with LinkSSO once its owner signs in.
+    string link_token = 4;
+    // The account at the provider is now linked to the caller's.
+    bool linked = 5;
+  }
+  string provider_name = 6;
+  // The team an invite joined, for a new account.
+  Team team = 7;
+}
+
+message RedeemSSORequest {
+  string code = 1;
+  // The PKCE verifier of the app_challenge the sign-in began with.
+  string verifier = 2;
+}
+
+message RedeemSSOResponse {
+  oneof result {
+    Session session = 1;
+    // A short-lived challenge to answer with VerifyMFA.
+    string mfa_token = 2;
+  }
+}
+
+message GetSSOLinkRequest {
+  string link_token = 1;
+}
+
+message GetSSOLinkResponse {
+  string provider_name = 1;
+  // The account's email at the provider.
+  string email = 2;
+}
+
+message LinkSSORequest {
+  string link_token = 1;
+}
+
+message LinkSSOResponse {
+  string provider_name = 1;
+  string email = 2;
+}
+
+message ListSSOIdentitiesRequest {
+  // Empty for the caller.
+  string user_id = 1;
+}
+
+message ListSSOIdentitiesResponse {
+  // The first linked first.
+  repeated SSOIdentity identities = 1;
+}
+
+message UnlinkSSORequest {
+  // Empty for the caller.
+  string user_id = 1;
+  string issuer = 2;
+  string subject = 3;
+}
+
+message UnlinkSSOResponse {}

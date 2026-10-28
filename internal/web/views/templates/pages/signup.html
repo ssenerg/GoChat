@@ -34,6 +34,12 @@
       </label>
       <button class="btn primary block" type="submit">Create account</button>
     </form>
+    {{if and .Providers (not .Bootstrap)}}
+    <p class="or">or</p>
+    <div class="stack">
+      {{range .Providers}}<a class="btn block" href="/login/sso/{{.Id}}?{{with $.Invite}}invite={{.}}&amp;{{end}}{{with $.Next}}next={{.}}{{end}}">Sign up with {{.Name}}</a>{{end}}
+    </div>
+    {{end}}
     {{else if .SetupClosed}}
     <h1>Setup needed</h1>
     <p class="muted">No account exists yet. Whoever runs this server must give it a setup token before the first account can be created.</p>

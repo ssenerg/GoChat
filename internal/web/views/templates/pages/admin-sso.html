@@ -1,0 +1,22 @@
+{{define "content"}}
+<main class="page">
+  <header class="page-header">
+    <a class="btn" href="/admin/users">{{icon "back"}}Users</a>
+    <h1>{{.Provider.Name}} accounts</h1>
+  </header>
+  <section class="card">
+    <p class="muted">The accounts that sign in with {{.Provider.Name}}, and the {{.Provider.Name}} account each is linked to.</p>
+    {{if .Accounts}}
+    <ul class="list">
+      {{range .Accounts}}
+      <li>
+        <div class="person">{{template "avatar" (dict "User" .User "Size" "sm")}}<span><a href="/admin/users?q={{.User.Username}}"><strong>{{name .User}}</strong></a> <small class="muted">@{{.User.Username}} · {{.Email}}</small></span></div>
+        <small class="muted">{{with .Identity.Email}}{{.}} · {{end}}linked {{date .Identity.LinkedAt.AsTime}}</small>
+      </li>
+      {{end}}
+    </ul>
+    {{else}}<p class="muted">No account is linked{{if .Next}} on this page{{end}}.</p>{{end}}
+    {{with .Next}}<p><a class="btn" href="/admin/sso/{{$.Provider.Id}}?after={{.}}">More</a></p>{{end}}
+  </section>
+</main>
+{{end}}

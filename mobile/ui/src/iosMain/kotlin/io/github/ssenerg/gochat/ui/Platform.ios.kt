@@ -8,6 +8,7 @@ import androidx.compose.runtime.rememberUpdatedState
 import com.russhwolf.settings.KeychainSettings
 import io.github.ssenerg.gochat.core.api.AppInfo
 import io.github.ssenerg.gochat.core.media.OpusCaf
+import io.github.ssenerg.gochat.core.state.GoChatApp
 import io.github.ssenerg.gochat.core.state.KeyValueStore
 import io.github.ssenerg.gochat.core.voice.RtcEngine
 import kotlinx.cinterop.addressOf
@@ -39,6 +40,9 @@ import platform.AVFAudio.setActive
 import platform.AVFoundation.AVCaptureDevice
 import platform.AVFoundation.AVMediaTypeVideo
 import platform.AVFoundation.requestAccessForMediaType
+import platform.AuthenticationServices.ASPresentationAnchor
+import platform.AuthenticationServices.ASWebAuthenticationPresentationContextProvidingProtocol
+import platform.AuthenticationServices.ASWebAuthenticationSession
 import platform.CoreAudioTypes.kAudioFormatMPEG4AAC
 import platform.Foundation.CFBridgingRetain
 import platform.Foundation.NSBundle
@@ -73,6 +77,8 @@ import platform.UniformTypeIdentifiers.UTTypeJPEG
 import platform.UniformTypeIdentifiers.UTTypePNG
 import platform.UniformTypeIdentifiers.UTTypeWebP
 import platform.darwin.NSObject
+import platform.darwin.dispatch_async
+import platform.darwin.dispatch_get_main_queue
 import platform.posix.memcpy
 import kotlin.coroutines.resume
 import kotlin.math.pow
@@ -110,6 +116,29 @@ class IosPlatform(private val scope: CoroutineScope, override val rtc: RtcEngine
         UIPasteboard.generalPasteboard.string = text
     }
 
+    // Held while the sheet is up, which would go with them.
+    private var signIn: ASWebAuthenticationSession? = null
+    private var anchor: BrowserAnchor? = null
+
+    override fun signInInBrowser(url: String, onReturn: (String) -> Unit) {
+        val page = NSURL.URLWithString(url) ?: return
+        signIn?.cancel()
+        val session = ASWebAuthenticationSession(page, GoChatApp.SSO_SCHEME) { back, _ ->
+            // Cancelled, or failed, it says nothing: the sign-in form stays.
+            val returned = back?.absoluteString
+            dispatch_async(dispatch_get_main_queue()) {
+                signIn = null
+                anchor = null
+                returned?.let(onReturn)
+            }
+        }
+        val a = BrowserAnchor()
+        session.presentationContextProvider = a
+        signIn = session
+        anchor = a
+        session.start()
+    }
+
     private fun present(items: List<Any>) {
         val top = topController() ?: return
         val sheet = UIActivityViewController(activityItems = items, applicationActivities = null)
@@ -117,6 +146,12 @@ class IosPlatform(private val scope: CoroutineScope, override val rtc: RtcEngine
         sheet.popoverPresentationController?.sourceView = top.view
         top.presentViewController(sheet, animated = true, completion = null)
     }
+}
+
+/** Shows the sign-in sheet over the app's window. */
+private class BrowserAnchor : NSObject(), ASWebAuthenticationPresentationContextProvidingProtocol {
+    override fun presentationAnchorForWebAuthenticationSession(session: ASWebAuthenticationSession): ASPresentationAnchor =
+        UIApplication.sharedApplication.keyWindow
 }
 
 internal fun topController(): UIViewController? {
