@@ -31,7 +31,8 @@ iosApp/      the Xcode project: a SwiftUI shell that shows the shared screens
   and a thread's messages; `VoiceCall` talks in a voice channel, speaking the
   voice server's signaling protocol as the web's voice client does, over the
   platform's WebRTC (`RtcEngine`). Formatting and the message Markdown live
-  here too, so the screens only draw.
+  here too, so the screens only draw, and `OpusCaf`, which readies the
+  browsers' voice messages for iOS (below).
 - **ui** draws the app with Material 3 in the web's colors, light and dark,
   and two-factor's QR code with [QRose](https://github.com/alexzhirkevich/qrose).
   Each platform supplies storage (Android's private preferences, sealed with
@@ -68,7 +69,12 @@ iosApp/      the Xcode project: a SwiftUI shell that shows the shared screens
   threads, edits, deletes, pins and saves; typing indicators; search;
   followed threads; saved messages.
 - Voice messages: record, send and play. Both apps record AAC in MP4,
-  which the server takes and every platform plays.
+  which the server takes and every platform plays. They play the browsers'
+  recordings too: Chrome and Firefox record Opus in WebM (or Ogg). Android
+  plays that as it is; iOS's player decodes Opus but opens neither
+  container, so the iOS app first copies the Opus packets into CAF, which
+  it opens. Nothing is decoded or encoded again, and the server is not
+  involved.
 - Bots: a BOT badge, the buttons under their messages (a press tells the
   bot, whose answer shows as a notice or an alert; a link opens once the
   person saw where it leads), and their commands suggested as one types `/`.
@@ -88,11 +94,6 @@ iosApp/      the Xcode project: a SwiftUI shell that shows the shared screens
 - Push notifications while the app is closed, from servers that push to
   this build (below): direct and group messages, replies in their threads
   and mentions. A tap opens the conversation or the thread, in its team.
-
-Not in the apps yet:
-
-- Voice messages that Chrome or Firefox recorded (WebM) do not play on iOS,
-  whose player has no WebM. Android plays them.
 
 ## Building
 

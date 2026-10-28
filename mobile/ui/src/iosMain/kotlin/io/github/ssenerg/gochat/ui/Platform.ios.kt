@@ -7,6 +7,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.rememberUpdatedState
 import com.russhwolf.settings.KeychainSettings
 import io.github.ssenerg.gochat.core.api.AppInfo
+import io.github.ssenerg.gochat.core.media.OpusCaf
 import io.github.ssenerg.gochat.core.state.KeyValueStore
 import io.github.ssenerg.gochat.core.voice.RtcEngine
 import kotlinx.cinterop.addressOf
@@ -176,13 +177,11 @@ private class IosAudioPlayer(private val scope: CoroutineScope) : AudioPlayer {
             session.setActive(true, null)
         }
         // AVAudioPlayer plays the MP4 recordings of the apps and Safari; the
-        // WebM of other browsers it does not.
-        val p = runCatching { AVAudioPlayer(data = bytes.toNSData(), error = null) }.getOrNull()
+        // WebM or Ogg of other browsers it takes rewrapped in CAF.
+        val data = OpusCaf.rewrap(bytes) ?: bytes
+        val p = runCatching { AVAudioPlayer(data = data.toNSData(), error = null) }.getOrNull()
         if (p == null || !p.prepareToPlay() || !p.play()) {
-            _state.value = PlayerState(
-                id = id,
-                error = if ("webm" in mimeType) "Voice messages recorded in this browser format cannot play on iOS yet." else "This voice message cannot play.",
-            )
+            _state.value = PlayerState(id = id, error = "This voice message cannot play.")
             return
         }
         player = p
