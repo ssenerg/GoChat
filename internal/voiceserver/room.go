@@ -86,6 +86,9 @@ type (
 		session string
 		state   webrtc.PeerConnectionState
 	}
+	// moved says Pion handed a peer's track over again, as it does when
+	// the track comes on another SSRC.
+	moved  struct{ session string }
 	resync struct{}
 )
 
@@ -122,6 +125,23 @@ type peer struct {
 	mu      sync.Mutex
 	offered bool
 	early   []webrtc.ICECandidateInit
+	// read are the tracks the peer sends, each relayed once.
+	readMu sync.Mutex
+	read   map[*webrtc.TrackRemote]bool
+}
+
+// reading reports whether remote is new, and keeps it.
+func (p *peer) reading(remote *webrtc.TrackRemote) bool {
+	p.readMu.Lock()
+	defer p.readMu.Unlock()
+	if p.read[remote] {
+		return false
+	}
+	if p.read == nil {
+		p.read = map[*webrtc.TrackRemote]bool{}
+	}
+	p.read[remote] = true
+	return true
 }
 
 // candidate sends a candidate the peer's connection found, or keeps it
@@ -275,6 +295,14 @@ func (r *room) Receive(c *actor.Context) {
 		if p := r.peers[msg.session]; p != nil {
 			r.unlayer(c, p, msg)
 		}
+	case moved:
+		// Browsers keep a track on its SSRC. One that moves would have
+		// another reader of the layer for each SSRC, and Pion a stream for
+		// each, which no one reads.
+		if p := r.peers[msg.session]; p != nil {
+			r.drop(c, p, closeFailed, "a track changed its SSRC")
+			r.signal(c)
+		}
 	case pcState:
 		if p := r.peers[msg.session]; p != nil && (msg.state == webrtc.PeerConnectionStateFailed || msg.state == webrtc.PeerConnectionStateClosed) {
 			r.drop(c, p, closeFailed, "the connection failed")
@@ -335,6 +363,10 @@ func (r *room) add(c *actor.Context, msg addPeer) error {
 		engine.Send(self, pcState{session: p.session, state: s})
 	})
 	pc.OnTrack(func(remote *webrtc.TrackRemote, recv *webrtc.RTPReceiver) {
+		if !p.reading(remote) {
+			engine.Send(self, moved{session: p.session})
+			return
+		}
 		if source := p.source(recv); source == sourceMic {
 			forwardVoice(engine, self, p.session, p.userID, remote)
 		} else {
