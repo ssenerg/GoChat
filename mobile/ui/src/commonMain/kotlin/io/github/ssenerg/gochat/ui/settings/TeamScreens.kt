@@ -130,6 +130,8 @@ fun TeamSettingsScreen(session: ChatSession, teamId: String) {
         photos = true,
     )
     LaunchedEffect(teamId, reload) {
+        // So the next page loads again after a reload, even with the same token.
+        next = ""
         try {
             val page = session.api.invites(teamId)
             invites = page.invites
@@ -142,7 +144,7 @@ fun TeamSettingsScreen(session: ChatSession, teamId: String) {
     fun more() = scope.launch {
         try {
             val page = session.api.invites(teamId, next)
-            invites = invites.orEmpty() + page.invites
+            invites = invites.orEmpty() + page.invites.filter { i -> invites.orEmpty().none { it.id == i.id } }
             next = page.next
         } catch (e: Exception) {
             toasts.show(e.userMessage())
