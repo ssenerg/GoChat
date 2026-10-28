@@ -216,6 +216,7 @@ type voice struct {
 	versions map[gocql.UUID]uint64
 	members  *cache.Cache[gocql.UUID, []string]
 	sweeper  *actor.SendRepeater
+	writers  actors.Children
 }
 
 func New(d *Deps) actor.Producer {
@@ -242,6 +243,7 @@ func (v *voice) Receive(c *actor.Context) {
 		if v.sweeper != nil {
 			v.sweeper.Stop()
 		}
+		v.writers.Stop(c)
 		for _, s := range v.servers {
 			closeStream(s.stream)
 		}
@@ -579,7 +581,7 @@ func (v *voice) forget(hash string, p *pending) {
 
 func (v *voice) serverUp(c *actor.Context, msg ServerUp) {
 	s := &server{key: msg.Key, endpoint: msg.Endpoint, stream: msg.Stream, queued: new(atomic.Int64)}
-	s.pid = c.SpawnChild(newWriter(v.Logger, msg.Key, msg.Stream, s.queued), "server", actor.WithMiddleware(actors.Recover(v.Logger)))
+	s.pid = v.writers.Spawn(c, newWriter(v.Logger, msg.Key, msg.Stream, s.queued), "server", actor.WithMiddleware(actors.Recover(v.Logger)))
 	v.servers[msg.Key] = s
 	v.send(s, &pb.VoiceServerServiceConnectResponse{Frame: &pb.VoiceServerServiceConnectResponse_Welcome{Welcome: &pb.VoiceServerWelcome{}}})
 	v.Logger.Info("voice server connected", zap.String("server", msg.ID), zap.String("endpoint", msg.Endpoint))
@@ -609,7 +611,7 @@ func (v *voice) serverDown(c *actor.Context, key string) {
 			delete(v.rooms, id)
 		}
 	}
-	c.Engine().Poison(s.pid)
+	v.writers.Poison(c, s.pid)
 	v.Logger.Info("voice server disconnected", zap.String("server", key))
 }
 

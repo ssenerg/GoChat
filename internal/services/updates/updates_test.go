@@ -309,3 +309,33 @@ func TestBotsThatCanNoLongerActGetNoUpdates(t *testing.T) {
 		t.Fatalf("logged %d for the deleted bot, %d for the orphan, %d for the live one", len(repo.logs[deleted]), len(repo.logs[orphan]), len(repo.logs[live]))
 	}
 }
+
+// TestManagerStopsAsAnAccountPassivates stops the manager just as an
+// account asks to stop, which once left the manager waiting on that
+// account forever.
+func TestManagerStopsAsAnAccountPassivates(t *testing.T) {
+	for range 300 {
+		engine, err := actor.NewEngine(actor.NewEngineConfig())
+		if err != nil {
+			t.Fatal(err)
+		}
+		pid := engine.Spawn(New(&Deps{
+			Logger: zap.NewNop(), Repo: newMemRepo(), Engine: engine, Cfg: &Config{IdleTimeout: time.Minute, OpTimeout: time.Second},
+		}), "updates", actor.WithID("main"))
+		user := ids.New()
+		if _, err := actors.Ask[int64](context.Background(), engine, pid, State{UserID: user}); err != nil {
+			t.Fatal(err)
+		}
+		// As the account does once idle.
+		account := engine.Registry.GetPID("updates/main/account", user.String()+".1")
+		engine.Send(pid, passivate{id: user, pid: account, handled: 1})
+		select {
+		case <-engine.Poison(pid).Done():
+		case <-time.After(5 * time.Second):
+			t.Fatal("the manager never stopped")
+		}
+		if engine.Registry.GetPID("updates/main/account", user.String()+".1") != nil {
+			t.Fatal("the account outlived the manager")
+		}
+	}
+}

@@ -99,6 +99,7 @@ type (
 type manager struct {
 	*Deps
 	children  map[gocql.UUID]*child
+	spawned   actors.Children
 	gen       uint64
 	listeners map[gocql.UUID]*actor.PID
 }
@@ -113,10 +114,12 @@ func New(d *Deps) actor.Producer {
 
 func (m *manager) Receive(c *actor.Context) {
 	switch msg := c.Message().(type) {
+	case actor.Stopped:
+		m.spawned.Stop(c)
 	case passivate:
 		if ch, ok := m.children[msg.id]; ok && ch.pid.Equals(msg.pid) && ch.routed == msg.handled {
 			delete(m.children, msg.id)
-			c.Engine().Poison(ch.pid)
+			m.spawned.Poison(c, ch.pid)
 		}
 	case Push:
 		for _, id := range msg.UserIDs {
@@ -140,9 +143,9 @@ func (m *manager) Receive(c *actor.Context) {
 func (m *manager) route(c *actor.Context, req request) {
 	id := req.account()
 	ch, ok := m.children[id]
-	if !ok || c.Child(ch.pid.ID) == nil {
+	if !ok || !m.spawned.Alive(c, ch.pid) {
 		m.gen++
-		ch = &child{pid: c.SpawnChild(newAccount(m.Deps, id), "account",
+		ch = &child{pid: m.spawned.Spawn(c, newAccount(m.Deps, id, c.PID()), "account",
 			actor.WithID(id.String()+"."+strconv.FormatUint(m.gen, 36)),
 			actor.WithInboxSize(256),
 			actor.WithMiddleware(actors.Recover(m.Logger)))}
@@ -156,6 +159,7 @@ func (m *manager) route(c *actor.Context, req request) {
 type account struct {
 	*Deps
 	id       gocql.UUID
+	manager  *actor.PID
 	pts      int64
 	stamp    int64
 	loaded   bool
@@ -166,9 +170,9 @@ type account struct {
 	repeater *actor.SendRepeater
 }
 
-func newAccount(d *Deps, id gocql.UUID) actor.Producer {
+func newAccount(d *Deps, id gocql.UUID, manager *actor.PID) actor.Producer {
 	return func() actor.Receiver {
-		return &account{Deps: d, id: id}
+		return &account{Deps: d, id: id, manager: manager}
 	}
 }
 
@@ -189,7 +193,7 @@ func (a *account) Receive(c *actor.Context) {
 	case idleCheck:
 		if time.Since(a.active) >= a.Cfg.IdleTimeout && !a.asked {
 			a.asked = true
-			c.Send(c.Parent(), passivate{id: a.id, pid: c.PID(), handled: a.handled})
+			c.Send(a.manager, passivate{id: a.id, pid: c.PID(), handled: a.handled})
 		}
 	case request:
 		a.active = time.Now()
