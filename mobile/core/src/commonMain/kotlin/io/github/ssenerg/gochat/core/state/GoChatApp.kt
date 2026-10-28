@@ -87,11 +87,21 @@ class GoChatApp(
 
     private var session: ChatSession? = null
 
+    private val signOuts = SignOuts(store, scope) { server, token ->
+        val api = api(server, token)
+        try {
+            api.logout()
+        } finally {
+            api.client.close()
+        }
+    }
+
     /** The server people signed in to last, to fill the sign-in form. */
     val lastServer: String get() = store.get(KEY_SERVER) ?: ""
 
     /** Restores the saved session, if it is still valid. */
     fun start() {
+        signOuts.retry()
         val server = store.get(KEY_SERVER)
         val token = store.get(KEY_TOKEN)
         if (server == null || token == null) {
@@ -223,7 +233,8 @@ class GoChatApp(
         // Signing out forgets the device too; this says so first, should
         // signing out fail.
         if (push != null) runCatching { s.api.unregisterDevice() }
-        runCatching { s.api.logout() }
+        val token = s.api.client.token
+        if (!SignOuts.settled { s.api.logout() } && token != null) signOuts.add(s.api.client.baseUrl, token)
         close(null)
     }
 

@@ -28,6 +28,13 @@ object IosPush : PushService {
     private val _token = MutableStateFlow<PushToken?>(null)
     override val token: StateFlow<PushToken?> = _token.asStateFlow()
 
+    /**
+     * Whether someone is signed in: a push that comes after signing out,
+     * before APNs forgot the token, is someone else's.
+     */
+    var wanted: Boolean = false
+        private set
+
     /** A push tapped before the app was made, as at a cold start. */
     private var pending: PushTarget? = null
 
@@ -41,10 +48,12 @@ object IosPush : PushService {
         }
 
     override fun enable() {
+        wanted = true
         UIApplication.sharedApplication.registerForRemoteNotifications()
     }
 
     override fun disable() {
+        wanted = false
         _token.value = null
         UIApplication.sharedApplication.unregisterForRemoteNotifications()
     }
