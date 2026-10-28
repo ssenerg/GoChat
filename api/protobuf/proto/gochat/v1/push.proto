@@ -1,0 +1,58 @@
+syntax = "proto3";
+
+package gochat.v1;
+
+// PushService ties an app's device to the caller's session, so the server
+// can reach the app while it is closed: through Firebase Cloud Messaging on
+// Android, APNs on iOS.
+//
+// The server pushes what the app would show a notice for, by the web's
+// rules: messages in direct and group conversations, replies in threads the
+// person takes part in, and mentions of them, by name or @channel. It never
+// pushes while the person has a connection open anywhere, in a muted
+// channel, or while they do not want to be disturbed.
+//
+// A push shows a title and a body, the body a short excerpt of the message
+// as in-app notices show it, or "New message" when the server keeps
+// excerpts off. Its data, in FCM's data and as keys of the APNs payload:
+//   channel_id  the channel to open
+//   root_id     the thread to open, for a reply
+//   team_id     the channel's team, empty for a conversation of no team
+//   message_id  the message
+//
+// A device's token lasts as long as the session: signing out, revoking the
+// session or its expiry forgets it, and so does the provider saying the
+// token is no longer valid.
+service PushService {
+  // RegisterDevice replaces the session's device token. A token held by
+  // another session, such as an earlier sign-in on the same device, moves
+  // to this one.
+  rpc RegisterDevice(RegisterDeviceRequest) returns (RegisterDeviceResponse);
+  // UnregisterDevice forgets the session's device token.
+  rpc UnregisterDevice(UnregisterDeviceRequest) returns (UnregisterDeviceResponse);
+}
+
+enum PushPlatform {
+  PUSH_PLATFORM_UNSPECIFIED = 0;
+  PUSH_PLATFORM_FCM = 1;
+  PUSH_PLATFORM_APNS = 2;
+}
+
+message RegisterDeviceRequest {
+  PushPlatform platform = 1;
+  // The registration token FCM gave the app, or the APNs device token in
+  // hexadecimal.
+  string token = 2;
+  // APNs only: the token is of Apple's sandbox, as development builds'.
+  bool sandbox = 3;
+}
+
+message RegisterDeviceResponse {
+  // Whether the server pushes to the platform. Without its credentials it
+  // keeps no token, and the app gets no pushes.
+  bool enabled = 1;
+}
+
+message UnregisterDeviceRequest {}
+
+message UnregisterDeviceResponse {}

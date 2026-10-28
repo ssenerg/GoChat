@@ -10,6 +10,7 @@ import (
 
 	"github.com/ssenerg/gochat/internal/actors"
 	"github.com/ssenerg/gochat/internal/authz"
+	"github.com/ssenerg/gochat/internal/core/models"
 	"github.com/ssenerg/gochat/internal/repos/minio"
 	"github.com/ssenerg/gochat/internal/repos/scylla"
 	"github.com/ssenerg/gochat/internal/services/accounts"
@@ -20,6 +21,7 @@ import (
 	"github.com/ssenerg/gochat/internal/services/files"
 	"github.com/ssenerg/gochat/internal/services/hub"
 	"github.com/ssenerg/gochat/internal/services/index"
+	"github.com/ssenerg/gochat/internal/services/push"
 	"github.com/ssenerg/gochat/internal/services/updates"
 	"github.com/ssenerg/gochat/internal/services/users"
 	"github.com/ssenerg/gochat/internal/services/voice"
@@ -39,8 +41,10 @@ type System struct {
 	Search    *actor.PID
 	Voice     *actor.PID
 	// Updates numbers what happens to each account.
-	Updates  *actor.PID
-	Bots     *actor.PID
+	Updates *actor.PID
+	Bots    *actor.PID
+	// Push reaches closed apps; nil without a provider.
+	Push     *actor.PID
 	Sessions *accounts.Deps
 	Users    *users.Cache
 	janitor  *actor.PID
@@ -77,9 +81,21 @@ func Start(logger *zap.Logger, cfg *Config, repo *scylla.Repository, storage *mi
 	s.Voice = engine.Spawn(voice.New(&voice.Deps{
 		Logger: logger.Named("voice"), Cfg: cfg.Voice, Repo: repo, Engine: engine, Hub: s.Hub,
 	}), "voice", actor.WithID("main"), recovered)
+	providers, err := push.Providers(cfg.Push, push.Client())
+	if err != nil {
+		return nil, err
+	}
+	if len(providers) > 0 {
+		s.Push = engine.Spawn(push.Pool(&push.Deps{
+			Logger: logger.Named("push"), Cfg: cfg.Push, Repo: repo, Users: userCache, Engine: engine, Hub: s.Hub,
+			Providers: providers, IdleTimeout: cfg.Accounts.SessionIdleTimeout,
+		}), "push", actor.WithID("main"))
+		logger.Info("push notifications on", zap.Bool("fcm", providers[models.PushFCM] != nil), zap.Bool("apns", providers[models.PushAPNs] != nil))
+	}
 	channelDeps := &channels.Deps{
 		Logger: logger.Named("channels"), Cfg: cfg.Channels, Repo: repo, Storage: storage,
 		Authz: az, Users: userCache, Engine: engine, Hub: s.Hub, Search: s.filing, UpdatesCfg: cfg.Updates,
+		Push: s.Push,
 	}
 	s.Updates = engine.Spawn(updates.New(&updates.Deps{
 		Logger: logger.Named("updates"), Cfg: cfg.Updates, Repo: repo, Engine: engine, Hub: s.Hub,
@@ -104,7 +120,7 @@ func Start(logger *zap.Logger, cfg *Config, repo *scylla.Repository, storage *mi
 	if err != nil {
 		return nil, err
 	}
-	accountDeps.Voice = s.Voice
+	accountDeps.Voice, accountDeps.Push = s.Voice, s.Push
 	s.Sessions = accountDeps
 	checkCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	accountDeps.WarnIfSetupClosed(checkCtx)
@@ -131,7 +147,7 @@ func (s *System) Stop(timeout time.Duration) {
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
-	for _, pid := range []*actor.PID{s.Bots, s.webhooks, s.Accounts, s.Auth, s.Directory, s.Files, s.Search, s.backfill, s.adopter, s.janitor, s.Channels, s.Voice, s.callbacks, s.Updates, s.filing, s.Hub, s.events} {
+	for _, pid := range []*actor.PID{s.Bots, s.webhooks, s.Accounts, s.Auth, s.Directory, s.Files, s.Search, s.backfill, s.adopter, s.janitor, s.Channels, s.Push, s.Voice, s.callbacks, s.Updates, s.filing, s.Hub, s.events} {
 		if pid == nil {
 			continue
 		}

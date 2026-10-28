@@ -590,6 +590,7 @@ func (a *channel) post(msg Post) (*pb.Message, error) {
 
 	out := convert.Message(m, convert.PublicUser(author), atts)
 	a.broadcast(&pb.Event{Payload: &pb.Event_MessagePosted{MessagePosted: a.posted(out, nil)}}, m)
+	a.push(out, nil)
 	a.recordMentions(m)
 	a.file(index.Add{Doc: a.doc(m)})
 	return out, nil
@@ -690,6 +691,7 @@ func (a *channel) reply(ctx context.Context, root, m *models.Message, author *mo
 	}
 	out := convert.Message(m, convert.PublicUser(author), atts)
 	a.broadcast(&pb.Event{Payload: &pb.Event_MessagePosted{MessagePosted: a.posted(out, notify)}}, m, root)
+	a.push(out, notify)
 	a.recordMentions(m)
 	a.file(index.Add{Doc: a.doc(m)})
 

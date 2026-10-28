@@ -157,6 +157,28 @@ services:
     # Lets webhooks reach loopback and private addresses, and plain http:
     # for development only.
     allow_private_webhooks: false
+  # Push notifications to the apps while they are closed, off until a
+  # provider has its credentials.
+  push:
+    workers: 4
+    op_timeout: 10s
+    send_timeout: 10s
+    # Pushes show what a message says, cut short as in-app notices show
+    # it; false says "New message" alone, so FCM and APNs never read it.
+    excerpts: true
+    # Firebase Cloud Messaging, for Android: a service account's JSON key
+    # of the Firebase project the app is built with, inline or in a file.
+    fcm:
+      credentials: ""
+      credentials_file: ""
+    # APNs, for iOS: a token signing key (.p8), inline or in a file, its
+    # key id, the Apple team's id and the app's bundle id.
+    apns:
+      key: ""
+      key_file: ""
+      key_id: ""
+      team_id: ""
+      topic: ""
   hub:
     gateway_queue_limit: 65536
     presence_grace: 10s

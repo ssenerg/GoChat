@@ -21,6 +21,7 @@ import (
 	"github.com/ssenerg/gochat/internal/services/directory"
 	"github.com/ssenerg/gochat/internal/services/files"
 	"github.com/ssenerg/gochat/internal/services/index"
+	"github.com/ssenerg/gochat/internal/services/push"
 )
 
 type base struct {
@@ -50,6 +51,7 @@ func Mux(sys *services.System, storage *minio.Storage, cfg *services.Config) (*d
 		func() error { return pb.DRPCRegisterAdminService(mux, &adminService{b}) },
 		func() error { return pb.DRPCRegisterVoiceService(mux, &voiceService{b}) },
 		func() error { return pb.DRPCRegisterVoiceServerService(mux, &voiceServerService{b}) },
+		func() error { return pb.DRPCRegisterPushService(mux, &pushService{b}) },
 	} {
 		if err := reg(); err != nil {
 			return nil, err
@@ -242,6 +244,40 @@ func (s *authService) RevokeSessions(ctx context.Context, req *pb.RevokeSessions
 		return nil, err
 	}
 	return &pb.RevokeSessionsResponse{Revoked: int32(n)}, nil //nolint:gosec // bounded by the sessions one user holds
+}
+
+type pushService struct{ *base }
+
+// RegisterDevice keeps no token while the server pushes nowhere.
+func (s *pushService) RegisterDevice(ctx context.Context, req *pb.RegisterDeviceRequest) (*pb.RegisterDeviceResponse, error) {
+	p, err := Principal(ctx)
+	if err != nil {
+		return nil, err
+	}
+	if s.sys.Push == nil {
+		return &pb.RegisterDeviceResponse{}, nil
+	}
+	on, err := actors.Ask[push.Registered](ctx, s.sys.Engine, s.sys.Push, push.Register{
+		P: p, Platform: req.Platform, Token: req.Token, Sandbox: req.Sandbox,
+	})
+	if err != nil {
+		return nil, err
+	}
+	return &pb.RegisterDeviceResponse{Enabled: bool(on)}, nil
+}
+
+func (s *pushService) UnregisterDevice(ctx context.Context, _ *pb.UnregisterDeviceRequest) (*pb.UnregisterDeviceResponse, error) {
+	p, err := Principal(ctx)
+	if err != nil {
+		return nil, err
+	}
+	if s.sys.Push == nil {
+		return &pb.UnregisterDeviceResponse{}, nil
+	}
+	if _, err := actors.Ask[push.Done](ctx, s.sys.Engine, s.sys.Push, push.Unregister{P: p}); err != nil {
+		return nil, err
+	}
+	return &pb.UnregisterDeviceResponse{}, nil
 }
 
 type adminService struct{ *base }
