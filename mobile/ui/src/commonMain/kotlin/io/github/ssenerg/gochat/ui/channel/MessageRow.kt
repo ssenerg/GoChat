@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
@@ -50,6 +51,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.text.font.FontWeight
@@ -58,6 +61,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import gochat.v1.Attachment
+import gochat.v1.LinkPreview
 import gochat.v1.Markup
 import gochat.v1.Message
 import gochat.v1.User
@@ -124,6 +128,7 @@ fun MessageRow(
             if (m.content.isNotBlank()) MessageText(m.content)
             if (m.edited_at != null) Text("(edited)", color = colors.muted, fontSize = 11.sp)
             m.attachments.forEach { att -> AttachmentView(att, session) }
+            m.link_preview?.let { LinkPreviewCard(it) }
             m.markup?.takeIf { it.rows.isNotEmpty() }?.let { BotButtons(m, it, session) }
             if (m.reactions.isNotEmpty()) Reactions(m, me, session, onMore = onLongPress)
             if (m.reply_count > 0 && onOpenThread != null) {
@@ -211,6 +216,52 @@ private fun OpenLinkDialog(url: String, onDismiss: () -> Unit) {
         },
         dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
     )
+}
+
+/**
+ * What a linked page says of itself, under the message. A tap opens the
+ * link, as the link in the text does; its picture comes from the server,
+ * which fetched it.
+ */
+@Composable
+private fun LinkPreviewCard(p: LinkPreview) {
+    val colors = LocalChatColors.current
+    val uri = LocalUriHandler.current
+    val toasts = LocalToasts.current
+    val accent = MaterialTheme.colorScheme.primary
+    val image = p.image_id.takeIf { it.isNotEmpty() }?.let { LocalImages.current?.api?.linkImageUrl(it) }
+    // A wide picture goes under the text, any other beside it, as on the web.
+    val wide = image != null && p.image_width >= 320 && p.image_width * 2 >= p.image_height * 3
+    val shape = RoundedCornerShape(10.dp)
+    Row(
+        Modifier.padding(top = 6.dp).widthIn(max = 420.dp).clip(shape)
+            .background(MaterialTheme.colorScheme.surfaceVariant)
+            .drawBehind { drawRect(accent, size = Size(3.dp.toPx(), size.height)) }
+            .clickable { runCatching { uri.openUri(p.url) }.onFailure { toasts.show("No app here opens this link.") } }
+            .padding(start = 13.dp, top = 8.dp, end = 10.dp, bottom = 10.dp),
+    ) {
+        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+            if (p.site_name.isNotEmpty()) Text(p.site_name, color = colors.muted, fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            if (p.title.isNotEmpty()) {
+                Text(p.title, color = colors.link, fontWeight = FontWeight.SemiBold, fontSize = 14.sp, maxLines = 2, overflow = TextOverflow.Ellipsis)
+            }
+            if (p.description.isNotEmpty()) {
+                Text(p.description, color = colors.muted, fontSize = 13.sp, maxLines = 3, overflow = TextOverflow.Ellipsis)
+            }
+            if (image != null && wide) {
+                ServerImage(
+                    image,
+                    contentDescription = null,
+                    modifier = Modifier.padding(top = 6.dp).fillMaxWidth()
+                        .aspectRatio(p.image_width.toFloat() / p.image_height.coerceAtLeast(1)).clip(RoundedCornerShape(8.dp)),
+                )
+            }
+        }
+        if (image != null && !wide) {
+            Spacer(Modifier.width(10.dp))
+            ServerImage(image, contentDescription = null, modifier = Modifier.size(64.dp).clip(RoundedCornerShape(8.dp)))
+        }
+    }
 }
 
 /** A message on its way. */

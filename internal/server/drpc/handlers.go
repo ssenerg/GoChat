@@ -727,6 +727,7 @@ func (s *messageService) PostMessage(ctx context.Context, req *pb.PostMessageReq
 	}
 	m, err := actors.Ask[*pb.Message](ctx, s.sys.Engine, s.sys.Channels, channels.Post{
 		Target: t, Content: req.Content, AttachmentIDs: req.AttachmentIds, RootID: req.RootId, Markup: req.Markup,
+		NoLinkPreview: req.NoLinkPreview,
 	})
 	if err != nil {
 		return nil, err
@@ -741,6 +742,7 @@ func (s *messageService) EditMessage(ctx context.Context, req *pb.EditMessageReq
 	}
 	m, err := actors.Ask[*pb.Message](ctx, s.sys.Engine, s.sys.Channels, channels.Edit{
 		Target: t, MessageID: req.MessageId, RootID: req.RootId, Content: req.Content, Markup: req.Markup,
+		NoLinkPreview: req.NoLinkPreview,
 	})
 	if err != nil {
 		return nil, err
@@ -849,6 +851,20 @@ func (s *messageService) PinMessage(ctx context.Context, req *pb.PinMessageReque
 		return nil, err
 	}
 	return &pb.PinMessageResponse{Message: out}, nil
+}
+
+func (s *messageService) RemoveLinkPreview(ctx context.Context, req *pb.RemoveLinkPreviewRequest) (*pb.RemoveLinkPreviewResponse, error) {
+	t, err := channelTarget(ctx, req.ChannelId)
+	if err != nil {
+		return nil, err
+	}
+	out, err := actors.Ask[*pb.Message](ctx, s.sys.Engine, s.sys.Channels, channels.RemovePreview{
+		Target: t, MessageID: req.MessageId, RootID: req.RootId,
+	})
+	if err != nil {
+		return nil, err
+	}
+	return &pb.RemoveLinkPreviewResponse{Message: out}, nil
 }
 
 func (s *messageService) ListPinned(ctx context.Context, req *pb.ListPinnedRequest) (*pb.ListPinnedResponse, error) {

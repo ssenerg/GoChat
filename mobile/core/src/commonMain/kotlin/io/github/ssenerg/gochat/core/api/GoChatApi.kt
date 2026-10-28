@@ -256,6 +256,14 @@ class GoChatApi(val client: ApiClient) {
     suspend fun pin(m: Message, pinned: Boolean) =
         messages("PinMessage", PinMessageRequest(channel_id = m.channel_id, message_id = m.id, root_id = m.root_id, pinned = pinned), PinMessageResponse.ADAPTER).message
 
+    /** Takes the link preview off the caller's own message for good. */
+    suspend fun removeLinkPreview(m: Message) =
+        messages(
+            "RemoveLinkPreview",
+            RemoveLinkPreviewRequest(channel_id = m.channel_id, message_id = m.id, root_id = m.root_id),
+            RemoveLinkPreviewResponse.ADAPTER,
+        ).message
+
     suspend fun pinned(channelId: String) = messages("ListPinned", ListPinnedRequest(channel_id = channelId), ListPinnedResponse.ADAPTER).messages
 
     suspend fun save(m: Message, saved: Boolean) =

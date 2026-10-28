@@ -6,7 +6,6 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
-	"net/netip"
 	"sync"
 	"testing"
 	"time"
@@ -24,23 +23,6 @@ import (
 	"github.com/ssenerg/gochat/internal/services/hub"
 	"github.com/ssenerg/gochat/internal/services/updates"
 )
-
-func TestOnlyPublicAddressesTakeWebhooks(t *testing.T) {
-	for _, raw := range []string{
-		"127.0.0.1", "10.1.2.3", "172.16.0.1", "192.168.1.1", "169.254.169.254", "100.64.0.1", "0.0.0.0",
-		"::1", "fe80::1", "fc00::1", "::ffff:127.0.0.1", "::ffff:10.0.0.1", "64:ff9b::a00:1", "2002:a00:1::1",
-		"224.0.0.1", "255.255.255.255", "198.18.0.1",
-	} {
-		if Public(netip.MustParseAddr(raw)) {
-			t.Errorf("%s passed as public", raw)
-		}
-	}
-	for _, raw := range []string{"1.1.1.1", "93.184.216.34", "2606:4700:4700::1111", "2002:5db8:d822::1"} {
-		if !Public(netip.MustParseAddr(raw)) {
-			t.Errorf("%s did not pass as public", raw)
-		}
-	}
-}
 
 func TestWebhookURLs(t *testing.T) {
 	for _, raw := range []string{

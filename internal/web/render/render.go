@@ -19,6 +19,7 @@ import (
 	"unicode/utf8"
 
 	"github.com/yuin/goldmark"
+	"google.golang.org/protobuf/proto"
 
 	pb "github.com/ssenerg/gochat/api/protobuf/gen/gochat/v1"
 	"github.com/ssenerg/gochat/internal/core/cache"
@@ -122,8 +123,8 @@ func (r *Renderer) Fragment(w io.Writer, name string, data any) error {
 // MessageBytes renders a message fragment once per message, edit and
 // variant, for every socket that shows it. The bytes are shared: read only.
 func (r *Renderer) MessageBytes(name string, m *Message) ([]byte, error) {
-	key := fmt.Sprintf("%s/%s/%s/%t/%t/%t/%t/%t/%t/%d/%d/%s", name, m.Id, m.GetEditedAt().AsTime().Format(time.RFC3339Nano), m.Mine, m.CanDelete, m.Mentioned, m.OOB,
-		m.Pinned, m.Saved, m.ReplyCount, m.GetLastReplyAt().AsTime().UnixNano(), m.bar.key())
+	key := fmt.Sprintf("%s/%s/%s/%t/%t/%t/%t/%t/%t/%d/%d/%s/%s", name, m.Id, m.GetEditedAt().AsTime().Format(time.RFC3339Nano), m.Mine, m.CanDelete, m.Mentioned, m.OOB,
+		m.Pinned, m.Saved, m.ReplyCount, m.GetLastReplyAt().AsTime().UnixNano(), m.bar.key(), previewKey(m.GetLinkPreview()))
 	if b, ok := r.events.Get(key); ok {
 		return b, nil
 	}
@@ -133,6 +134,17 @@ func (r *Renderer) MessageBytes(name string, m *Message) ([]byte, error) {
 	}
 	r.events.Set(key, b)
 	return b, nil
+}
+
+// previewKey tells link previews apart: one comes and goes without an edit.
+func previewKey(p *pb.LinkPreview) string {
+	if p == nil {
+		return ""
+	}
+	b, _ := proto.MarshalOptions{Deterministic: true}.Marshal(p)
+	h := fnv.New64a()
+	_, _ = h.Write(b)
+	return strconv.FormatUint(h.Sum64(), 36)
 }
 
 // FragmentBytes renders a partial into a new buffer.
@@ -161,10 +173,14 @@ func (r *Renderer) funcs() template.FuncMap {
 		"mib":     MiB,
 		"clockMS": ClockMS,
 		"isImage": IsImage,
-		"iso":     func(t time.Time) string { return t.UTC().Format(time.RFC3339) },
-		"clock":   func(t time.Time) string { return t.UTC().Format("15:04") },
-		"date":    func(t time.Time) string { return t.UTC().Format("Jan 2, 2006") },
-		"name":    DisplayName,
+		// A wide picture goes under a preview's text, any other beside it.
+		"wideImage": func(p *pb.LinkPreview) bool {
+			return p.GetImageId() != "" && p.GetImageWidth() >= 320 && p.GetImageWidth()*2 >= p.GetImageHeight()*3
+		},
+		"iso":   func(t time.Time) string { return t.UTC().Format(time.RFC3339) },
+		"clock": func(t time.Time) string { return t.UTC().Format("15:04") },
+		"date":  func(t time.Time) string { return t.UTC().Format("Jan 2, 2006") },
+		"name":  DisplayName,
 		"channelName": func(ch *pb.Channel) string {
 			if ch == nil {
 				return ""

@@ -1045,6 +1045,26 @@ func (h *Handler) editMessage(w http.ResponseWriter, r *http.Request) {
 	h.fragment(w, r, http.StatusOK, "message", h.render.Message(res.Message, u, false))
 }
 
+// removeLinkPreview takes the preview off the caller's message.
+func (h *Handler) removeLinkPreview(w http.ResponseWriter, r *http.Request) {
+	u := h.signedIn(w, r)
+	if u == nil {
+		return
+	}
+	chID, msgID, rootID, ok := h.messageTarget(w, r)
+	if !ok {
+		return
+	}
+	ctx, cancel := h.ctx(r)
+	defer cancel()
+	res, err := h.client.Messages.RemoveLinkPreview(ctx, &pb.RemoveLinkPreviewRequest{ChannelId: chID, MessageId: msgID, RootId: rootID})
+	if err != nil {
+		h.fail(w, r, err)
+		return
+	}
+	h.fragment(w, r, http.StatusOK, "message", h.render.Message(res.Message, u, false))
+}
+
 func (h *Handler) deleteMessage(w http.ResponseWriter, r *http.Request) {
 	if h.signedIn(w, r) == nil {
 		return

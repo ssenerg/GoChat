@@ -49,16 +49,49 @@ type Post struct {
 	AttachmentIDs []string
 	RootID        string
 	Markup        *pb.Markup
+	NoLinkPreview bool
 }
 
 // Edit, Delete and GetMessage name a reply by its RootID as well.
 type Edit struct {
 	Target
+	MessageID     string
+	RootID        string
+	Content       string
+	Markup        *pb.Markup
+	NoLinkPreview bool
+}
+
+// RemovePreview takes the link preview off the caller's own message for
+// good, replying with the message.
+type RemovePreview struct {
+	Target
 	MessageID string
 	RootID    string
-	Content   string
-	Markup    *pb.Markup
 }
+
+// Unfurl asks a Previewer for the preview of a message's first link.
+type Unfurl struct {
+	ChannelID gocql.UUID
+	MessageID gocql.UUID
+	RootID    gocql.UUID
+	URL       string
+}
+
+// Previewer makes the previews of links, handing each to the channels as
+// a Previewed.
+type Previewer interface {
+	Preview(Unfurl)
+}
+
+// Previewed gives a message the preview of its link, unless the link is no
+// longer its first or its author removed the preview.
+type Previewed struct {
+	Unfurl
+	Preview *pb.LinkPreview
+}
+
+func (p Previewed) channel() gocql.UUID { return p.ChannelID }
 
 type Delete struct {
 	Target

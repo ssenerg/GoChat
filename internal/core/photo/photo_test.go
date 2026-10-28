@@ -113,3 +113,41 @@ func TestVersion(t *testing.T) {
 		t.Fatal("version shape")
 	}
 }
+
+func TestFit(t *testing.T) {
+	wide := picture(800, 400, func(x, _ int) color.Color { return color.RGBA{uint8(x), 90, 160, 255} })
+	data, ctype, size, err := Fit(encoded(t, wide, true), 400, 400)
+	if err != nil || ctype != "image/jpeg" || size != image.Pt(400, 200) {
+		t.Fatalf("wide: %q %v %v", ctype, size, err)
+	}
+	if cfg, err := jpeg.DecodeConfig(bytes.NewReader(data)); err != nil || cfg.Width != 400 || cfg.Height != 200 {
+		t.Fatalf("stored %+v %v", cfg, err)
+	}
+	small := picture(100, 50, func(int, int) color.Color { return color.NRGBA{10, 20, 30, 100} })
+	if _, ctype, size, err := Fit(encoded(t, small, true), 400, 400); err != nil || ctype != "image/png" || size != image.Pt(100, 50) {
+		t.Fatalf("small: %q %v %v", ctype, size, err)
+	}
+	// Red on the left of a wide picture turned clockwise: a tall one, red on top.
+	src := picture(300, 100, func(x, _ int) color.Color {
+		if x < 100 {
+			return color.RGBA{220, 30, 30, 255}
+		}
+		return color.RGBA{30, 30, 220, 255}
+	})
+	data, _, size, err = Fit(withOrientation(encoded(t, src, false), 6), 640, 640)
+	if err != nil || size != image.Pt(100, 300) {
+		t.Fatalf("turned: %v %v", size, err)
+	}
+	img, err := jpeg.Decode(bytes.NewReader(data))
+	if err != nil {
+		t.Fatal(err)
+	}
+	top, _, _, _ := img.At(50, 30).RGBA()
+	bottom, _, _, _ := img.At(50, 270).RGBA()
+	if top>>8 < 150 || bottom>>8 > 100 {
+		t.Fatalf("not turned upright: top red %d, bottom red %d", top>>8, bottom>>8)
+	}
+	if _, _, _, err := Fit([]byte("<svg/>"), 100, 100); !errors.Is(err, ErrUnsupported) {
+		t.Fatalf("svg: %v", err)
+	}
+}

@@ -3,6 +3,7 @@
   {{template "avatar" (dict "User" .Author "Size" "")}}
   <div class="msg-main">
     {{template "msg-content" .}}
+    {{with .LinkPreview}}{{template "link-preview" (dict "Msg" $ "Preview" .)}}{{end}}
     {{with .Markup}}{{template "buttons" (dict "Msg" $ "Markup" .)}}{{end}}
     {{template "reactions" .Bar}}
     {{if and (not .RootId) .ReplyCount}}
@@ -31,6 +32,18 @@
 </header>
 {{if .Content}}<div class="body">{{.Body}}</div>{{end}}
 {{with .Attachments}}<ul class="files">{{range .}}{{template "attachment" .}}{{end}}</ul>{{end}}
+{{end}}
+
+{{define "link-preview"}}{{$m := .Msg}}{{$p := .Preview}}
+<div class="link-card{{if wideImage $p}} wide{{end}}">
+  <a class="link-text" href="{{$p.Url}}" target="_blank" rel="nofollow noopener noreferrer">
+    {{with $p.SiteName}}<span class="link-site">{{.}}</span>{{end}}
+    {{with $p.Title}}<strong class="link-title">{{.}}</strong>{{end}}
+    {{with $p.Description}}<span class="link-desc">{{.}}</span>{{end}}
+  </a>
+  {{with $p.ImageId}}<a class="link-image" href="{{$p.Url}}" target="_blank" rel="nofollow noopener noreferrer" tabindex="-1" aria-hidden="true"><img src="/previews/{{.}}" alt="" width="{{$p.ImageWidth}}" height="{{$p.ImageHeight}}" loading="lazy" decoding="async"></a>{{end}}
+  {{if $m.Mine}}<button class="icon-btn sm link-remove" hx-post="/m/{{$m.ChannelId}}/{{$m.Id}}/preview/remove{{with $m.RootId}}?root={{.}}{{end}}" hx-target="#msg-{{$m.Id}}" hx-swap="outerHTML" hx-confirm="Remove this preview? It will not come back." aria-label="Remove the link preview" title="Remove preview">{{icon "close"}}</button>{{end}}
+</div>
 {{end}}
 
 {{define "message-new"}}<div id="msgs-{{.ChannelId}}" hx-swap-oob="afterbegin">{{template "message" .}}</div>{{end}}

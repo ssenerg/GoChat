@@ -18,6 +18,7 @@ import (
 	"github.com/ssenerg/gochat/internal/core/ids"
 	"github.com/ssenerg/gochat/internal/core/mention"
 	"github.com/ssenerg/gochat/internal/core/models"
+	"github.com/ssenerg/gochat/internal/core/unfurl"
 	"github.com/ssenerg/gochat/internal/core/validate"
 	ierrors "github.com/ssenerg/gochat/internal/errors"
 	"github.com/ssenerg/gochat/internal/repos/scylla"
@@ -319,6 +320,10 @@ func (a *channel) handle(c *actor.Context, req Request) {
 		out, err = a.press(msg)
 	case BotMembers:
 		out, err = a.botIDs(msg)
+	case RemovePreview:
+		out, err = a.removePreview(msg)
+	case Previewed:
+		a.previewed(msg)
 	default:
 		return
 	}
@@ -340,7 +345,8 @@ func (a *channel) voiceRefuses(req Request) error {
 		return nil
 	}
 	switch req.(type) {
-	case Post, Edit, Delete, History, GetMessage, Thread, ThreadRead, Typing, React, Pin, Pins, Save, Follow, Mute, MarkRead, SetVoice, Difference, Press:
+	case Post, Edit, Delete, History, GetMessage, Thread, ThreadRead, Typing, React, Pin, Pins, Save, Follow, Mute, MarkRead, SetVoice, Difference, Press,
+		RemovePreview, Previewed:
 		return ierrors.FailedPrecondition("voice channels carry no messages")
 	case Join, AddMember:
 		return ierrors.FailedPrecondition("everyone in the team may talk in a voice channel: join the talk instead")
@@ -548,13 +554,14 @@ func (a *channel) post(msg Post) (*pb.Message, error) {
 	}
 	id := ids.NewTime()
 	m := &models.Message{
-		ChannelID:   a.id,
-		Bucket:      ids.BucketOf(id),
-		ID:          id,
-		UserID:      msg.P.UserID,
-		Content:     content,
-		Attachments: attIDs,
-		Markup:      markup,
+		ChannelID:     a.id,
+		Bucket:        ids.BucketOf(id),
+		ID:            id,
+		UserID:        msg.P.UserID,
+		Content:       content,
+		Attachments:   attIDs,
+		Markup:        markup,
+		NoLinkPreview: msg.NoLinkPreview,
 	}
 	for i, att := range atts {
 		ok, err := a.Repo.ClaimAttachment(ctx, att, id)
@@ -594,6 +601,7 @@ func (a *channel) post(msg Post) (*pb.Message, error) {
 	a.push(out, nil)
 	a.recordMentions(m)
 	a.file(index.Add{Doc: a.doc(m)})
+	a.askPreview(m)
 	return out, nil
 }
 
@@ -695,6 +703,7 @@ func (a *channel) reply(ctx context.Context, root, m *models.Message, author *mo
 	a.push(out, notify)
 	a.recordMentions(m)
 	a.file(index.Add{Doc: a.doc(m)})
+	a.askPreview(m)
 
 	root.ReplyCount++
 	root.LastReplyAt = m.ID.Time()
@@ -859,12 +868,25 @@ func (a *channel) edit(msg Edit) (*pb.Message, error) {
 		}
 		m.Markup = markup
 	}
+	// Another first link drops the preview of the last, until its own
+	// comes.
+	link, oldLink := unfurl.FirstLink(content), unfurl.FirstLink(m.Content)
+	off := m.NoLinkPreview || msg.NoLinkPreview
+	if off != m.NoLinkPreview || (link != oldLink && len(m.LinkPreview) > 0) {
+		if err := a.Repo.SetLinkPreview(ctx, a.id, m.RootID, m.ID, nil, off); err != nil {
+			return nil, err
+		}
+		m.LinkPreview, m.NoLinkPreview = nil, off
+	}
 	old := m.Content
 	m.Content, m.EditedAt = content, now
 	a.file(index.Update{Doc: a.doc(m), Old: old})
 	out := convert.Message(m, convert.PublicUser(author), orderAttachments(m.Attachments, atts))
 	mine := proto.CloneOf(out)
 	a.broadcast(&pb.Event{Payload: &pb.Event_MessageEdited{MessageEdited: &pb.MessageEdited{Message: out}}}, m)
+	if link != oldLink {
+		a.askPreview(m)
+	}
 	return mine, a.markSaved(ctx, msg.P.UserID, []*pb.Message{mine})
 }
 

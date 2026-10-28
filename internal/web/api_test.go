@@ -180,3 +180,27 @@ func TestAPITeamPhotoRefusals(t *testing.T) {
 		t.Errorf("a team that is no id: %d %v", w.Code, e)
 	}
 }
+
+func TestAPILinkImageRefusals(t *testing.T) {
+	h := &Handler{logger: zap.NewNop()}
+	mux := http.NewServeMux()
+	mux.HandleFunc("GET /api/v2/previews/{id}", h.apiLinkImage)
+	do := func(id, auth string) (*httptest.ResponseRecorder, *pb.ApiError) {
+		r := httptest.NewRequest(http.MethodGet, "/api/v2/previews/"+id, nil)
+		r.Header.Set("Accept", "application/proto")
+		if auth != "" {
+			r.Header.Set("Authorization", auth)
+		}
+		w := httptest.NewRecorder()
+		mux.ServeHTTP(w, r)
+		e := &pb.ApiError{}
+		_ = proto.Unmarshal(w.Body.Bytes(), e)
+		return w, e
+	}
+	if w, e := do("0123456789abcdef0123456789abcdef", ""); w.Code != http.StatusUnauthorized || e.Code != 16 {
+		t.Errorf("without a token: %d %v", w.Code, e)
+	}
+	if w, e := do("..%2F..%2Fphotos", "Bearer "+strings.Repeat("A", 43)); w.Code != http.StatusNotFound || e.Code != 5 {
+		t.Errorf("an id that is no picture's: %d %v", w.Code, e)
+	}
+}

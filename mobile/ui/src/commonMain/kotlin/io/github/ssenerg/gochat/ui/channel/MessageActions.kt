@@ -22,6 +22,7 @@ import androidx.compose.material.icons.filled.BookmarkBorder
 import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.LinkOff
 import androidx.compose.material.icons.filled.PushPin
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.HorizontalDivider
@@ -52,7 +53,7 @@ import io.github.ssenerg.gochat.core.state.ChatSession
 import io.github.ssenerg.gochat.ui.LocalPlatform
 import io.github.ssenerg.gochat.ui.main.LocalToasts
 
-/** What can be done with a message: react, reply, copy, edit, delete, pin, save. */
+/** What can be done with a message: react, reply, copy, edit, remove its preview, delete, pin, save. */
 @Composable
 fun MessageActions(
     m: Message,
@@ -134,6 +135,11 @@ fun MessageActions(
                 Action(Icons.Filled.Edit, "Edit") {
                     onDismiss()
                     onEdit()
+                }
+            }
+            if (mine && m.link_preview != null) {
+                Action(Icons.Filled.LinkOff, "Remove link preview") {
+                    act { session.removeLinkPreview(m) }
                 }
             }
             Action(Icons.Filled.PushPin, if (m.pinned) "Unpin" else "Pin to channel") {
