@@ -16,6 +16,19 @@ service FileService {
   // DiscardUploads deletes uploads of the caller's that are not posted, such
   // as those an upload sent before one of its files failed.
   rpc DiscardUploads(DiscardUploadsRequest) returns (DiscardUploadsResponse);
+  // GetLinkImage returns the picture of a link preview, which the server
+  // fetched and made safe to show.
+  rpc GetLinkImage(GetLinkImageRequest) returns (GetLinkImageResponse);
+}
+
+message GetLinkImageRequest {
+  // A LinkPreview's image_id.
+  string id = 1;
+}
+
+message GetLinkImageResponse {
+  bytes image = 1;
+  string content_type = 2;
 }
 
 message UploadHeader {

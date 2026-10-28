@@ -24,6 +24,7 @@ import (
 	pb "github.com/ssenerg/gochat/api/protobuf/gen/gochat/v1"
 	"github.com/ssenerg/gochat/internal/actors"
 	"github.com/ssenerg/gochat/internal/core/models"
+	"github.com/ssenerg/gochat/internal/core/netguard"
 	ierrors "github.com/ssenerg/gochat/internal/errors"
 	"github.com/ssenerg/gochat/internal/services/updates"
 )
@@ -131,45 +132,10 @@ func checkWebhook(raw string, allowPrivate bool) error {
 	case u.Scheme != "https" && (!allowPrivate || u.Scheme != "http"):
 		return ierrors.InvalidArgument("the webhook is an https URL")
 	}
-	if addr, err := netip.ParseAddr(u.Hostname()); err == nil && !allowPrivate && !Public(addr) {
+	if addr, err := netip.ParseAddr(u.Hostname()); err == nil && !allowPrivate && !netguard.Public(addr) {
 		return ierrors.InvalidArgument("the webhook must reach a public address")
 	}
 	return nil
-}
-
-// blocked are the ranges no webhook may reach besides those Public tests
-// by kind: shared, benchmark, reserved and translated addresses.
-var blocked = []netip.Prefix{
-	netip.MustParsePrefix("0.0.0.0/8"),
-	netip.MustParsePrefix("100.64.0.0/10"),
-	netip.MustParsePrefix("192.0.0.0/24"),
-	netip.MustParsePrefix("198.18.0.0/15"),
-	netip.MustParsePrefix("240.0.0.0/4"),
-	netip.MustParsePrefix("64:ff9b::/96"),
-	netip.MustParsePrefix("64:ff9b:1::/48"),
-	netip.MustParsePrefix("2001:db8::/32"),
-}
-
-// Public reports whether addr is a public unicast address a webhook may
-// reach: not loopback, private, link-local, multicast or reserved, nor one
-// of those wrapped in IPv6.
-func Public(addr netip.Addr) bool {
-	addr = addr.Unmap()
-	if !addr.IsValid() || addr.IsLoopback() || addr.IsPrivate() || addr.IsLinkLocalUnicast() || addr.IsLinkLocalMulticast() ||
-		addr.IsInterfaceLocalMulticast() || addr.IsMulticast() || addr.IsUnspecified() {
-		return false
-	}
-	for _, p := range blocked {
-		if p.Contains(addr) {
-			return false
-		}
-	}
-	// 6to4 carries an IPv4 address that must be public too.
-	if addr.Is6() && addr.As16()[0] == 0x20 && addr.As16()[1] == 0x02 {
-		b := addr.As16()
-		return Public(netip.AddrFrom4([4]byte{b[2], b[3], b[4], b[5]}))
-	}
-	return true
 }
 
 // errNotPublic refuses a connection to an address webhooks may not reach.
@@ -184,7 +150,7 @@ func Client(timeout time.Duration, allowPrivate bool) *http.Client {
 			return nil
 		}
 		ap, err := netip.ParseAddrPort(address)
-		if err != nil || !Public(ap.Addr()) {
+		if err != nil || !netguard.Public(ap.Addr()) {
 			return errNotPublic
 		}
 		return nil
