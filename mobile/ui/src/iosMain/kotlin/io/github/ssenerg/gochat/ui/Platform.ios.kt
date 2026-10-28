@@ -167,18 +167,27 @@ private class IosAudioPlayer(private val scope: CoroutineScope) : AudioPlayer {
     override val state: StateFlow<PlayerState> = _state.asStateFlow()
     private var player: AVAudioPlayer? = null
     private var ticker: Job? = null
+    private var opening: Job? = null
 
     override fun play(id: String, bytes: ByteArray, mimeType: String) {
         stop()
+        _state.value = PlayerState(id = id)
+        // AVAudioPlayer plays the MP4 recordings of the apps and Safari; the
+        // WebM or Ogg of other browsers it takes rewrapped in CAF, off the
+        // main thread, as someone else's file may be large.
+        opening = scope.launch {
+            val data = withContext(Dispatchers.Default) { OpusCaf.rewrap(bytes) } ?: bytes
+            start(id, data)
+        }
+    }
+
+    private fun start(id: String, data: ByteArray) {
         val session = AVAudioSession.sharedInstance()
         // In a voice channel's call the session already plays, and records.
         if (session.category != AVAudioSessionCategoryPlayAndRecord) {
             session.setCategory(AVAudioSessionCategoryPlayback, null)
             session.setActive(true, null)
         }
-        // AVAudioPlayer plays the MP4 recordings of the apps and Safari; the
-        // WebM or Ogg of other browsers it takes rewrapped in CAF.
-        val data = OpusCaf.rewrap(bytes) ?: bytes
         val p = runCatching { AVAudioPlayer(data = data.toNSData(), error = null) }.getOrNull()
         if (p == null || !p.prepareToPlay() || !p.play()) {
             _state.value = PlayerState(id = id, error = "This voice message cannot play.")
@@ -207,6 +216,7 @@ private class IosAudioPlayer(private val scope: CoroutineScope) : AudioPlayer {
     }
 
     override fun pause() {
+        opening?.cancel()
         player?.pause()
         ticker?.cancel()
         _state.value = _state.value.copy(playing = false)
@@ -225,6 +235,7 @@ private class IosAudioPlayer(private val scope: CoroutineScope) : AudioPlayer {
     }
 
     override fun stop() {
+        opening?.cancel()
         ticker?.cancel()
         player?.stop()
         player = null

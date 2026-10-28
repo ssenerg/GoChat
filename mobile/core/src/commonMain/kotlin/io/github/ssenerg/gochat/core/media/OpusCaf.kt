@@ -37,6 +37,11 @@ object OpusCaf {
     private val SILK = intArrayOf(480, 960, 1920, 2880)
     private const val MAX_SAMPLES = 5760
 
+    // What a recording may make the parser hold, as others send them: over
+    // ten minutes of Opus's shortest packets, and more tracks than any has.
+    private const val MAX_PACKETS = 1 shl 18
+    private const val MAX_TRACKS = 16
+
     private val WEBM = byteArrayOf(0x1A, 0x45, 0xDF.toByte(), 0xA3.toByte())
     private val OGG = "OggS".encodeToByteArray()
     private val OPUS_HEAD = "OpusHead".encodeToByteArray()
@@ -124,7 +129,10 @@ object OpusCaf {
                 while (r.pos < b.size) {
                     val id = r.vint(marker = true)
                     val size = r.size()
-                    if (id == TRACK_ENTRY) tracks += Track()
+                    if (id == TRACK_ENTRY) {
+                        if (tracks.size == MAX_TRACKS) break
+                        tracks += Track()
+                    }
                     if (id in parents) continue
                     if (size < 0 || size > b.size - r.pos) break
                     val start = r.pos
@@ -150,7 +158,7 @@ object OpusCaf {
             r.pos += 2
             val lacing = (r.u8() shr 1) and 3
             if (lacing == 0) {
-                out += track to r.b.copyOfRange(r.pos, r.end)
+                frame(out, track, r.b, r.pos, r.end)
                 return
             }
             val count = r.u8() + 1
@@ -171,9 +179,17 @@ object OpusCaf {
             if (lacing != 2) sizes[count - 1] = r.end - r.pos - sizes.sum()
             if (sizes.any { it < 0 } || sizes.sum() != r.end - r.pos) throw Malformed
             for (size in sizes) {
-                out += track to r.b.copyOfRange(r.pos, r.pos + size)
+                frame(out, track, r.b, r.pos, r.pos + size)
                 r.pos += size
             }
+        }
+
+        // Opus has no empty packets: laced by the hundred, they would only
+        // fill the memory.
+        private fun frame(out: MutableList<Pair<Long, ByteArray>>, track: Long, b: ByteArray, from: Int, to: Int) {
+            if (from == to) return
+            if (out.size == MAX_PACKETS) throw Malformed
+            out += track to b.copyOfRange(from, to)
         }
     }
 
@@ -202,7 +218,10 @@ object OpusCaf {
                         packet.bytes(b, at, at + len)
                         at += len
                         if (len < 255) {
-                            packets += packet.buf.copyOf(packet.size)
+                            if (packet.size > 0) {
+                                if (packets.size == MAX_PACKETS) throw Malformed
+                                packets += packet.buf.copyOf(packet.size)
+                            }
                             packet.size = 0
                         }
                     }
