@@ -21,6 +21,15 @@ import "github.com/pion/webrtc/v4"
 // stream id is the user id alone. A room forwards a few cameras and
 // screens at most: past them, the server answers a video message with its
 // own, on false and a reason, and the browser stops that source.
+//
+// A browser that also identifies with simulcast set is asked, in the first
+// offer, to send its camera in three layers, rids q, h and f, from a
+// quarter of its size to all of it; its answer decides. A screen comes in
+// one layer. One that identifies with layers set gets the least layer of
+// every camera but the one it says, with a focus message, it shows big,
+// by its stream id, or none with an empty one; one without gets the best
+// layer of each. Either way each comes as one stream, switched between
+// layers on keyframes.
 const (
 	opIdentify  = "identify"
 	opReady     = "ready"
@@ -29,6 +38,7 @@ const (
 	opCandidate = "candidate"
 	opSpeaking  = "speaking"
 	opVideo     = "video"
+	opFocus     = "focus"
 )
 
 // The sources a peer sends, as stream ids and video messages name them.
@@ -53,11 +63,17 @@ type inbound struct {
 	SDP       string                   `json:"sdp,omitempty"`
 	Candidate *webrtc.ICECandidateInit `json:"candidate,omitempty"`
 	Speaking  bool                     `json:"speaking,omitempty"`
-	// Video, on identify, says the browser sends and shows video.
-	Video bool `json:"video,omitempty"`
+	// Video, on identify, says the browser sends and shows video;
+	// Simulcast that it sends its camera in layers, and Layers that it
+	// takes small ones but for the video in focus.
+	Video     bool `json:"video,omitempty"`
+	Simulcast bool `json:"simulcast,omitempty"`
+	Layers    bool `json:"layers,omitempty"`
 	// Source and On, on video, say which the browser starts or stops.
 	Source string `json:"source,omitempty"`
 	On     bool   `json:"on,omitempty"`
+	// Stream, on focus, is the camera or screen the browser shows big.
+	Stream string `json:"stream,omitempty"`
 }
 
 type outbound struct {

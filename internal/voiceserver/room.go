@@ -21,10 +21,12 @@ import (
 // Messages for a room's actor. Session names one browser's connection.
 type (
 	// addPeer replies with joined or an error. video says the peer sends
-	// and shows video.
+	// and shows video, simulcast that it sends its camera in layers, and
+	// layers that it takes small ones of the others' but the one it
+	// focuses.
 	addPeer struct {
 		session, userID, channelID string
-		video                      bool
+		video, simulcast, layers   bool
 		out                        *sender
 	}
 	joined     struct{}
@@ -49,19 +51,36 @@ type (
 		session, source string
 		on              bool
 	}
-	// keyframe asks for a keyframe of a peer's camera or screen.
+	// keyframe asks for a keyframe of a layer of a peer's camera or
+	// screen, or of each when layer is -1.
 	keyframe struct {
 		session, source string
+		layer           int
 	}
-	// trackAdded says a peer's packets for a source started coming in,
-	// relayed to track; ssrc is the peer's.
+	// focus says which camera or screen a peer shows big, by stream id.
+	focus struct {
+		session, stream string
+	}
+	// trackAdded says a peer's voice started coming in, relayed to track.
 	trackAdded struct {
-		session, source string
-		track           *webrtc.TrackLocalStaticRTP
-		ssrc            webrtc.SSRC
+		session string
+		track   *webrtc.TrackLocalStaticRTP
 	}
 	trackRemoved struct {
 		session, id string
+	}
+	// layerAdded says a layer of a peer's camera or screen started coming
+	// in from remote, layerRemoved that it stopped.
+	layerAdded struct {
+		session, source string
+		layer           int
+		remote          *webrtc.TrackRemote
+		ssrc            webrtc.SSRC
+	}
+	layerRemoved struct {
+		session, source string
+		layer           int
+		remote          *webrtc.TrackRemote
 	}
 	pcState struct {
 		session string
@@ -80,12 +99,20 @@ type peer struct {
 	speak           *rate.Limiter
 	// video says the peer sends and shows video: it alone has slots, the
 	// transceivers its camera and screen come in on, by source, and
-	// receives the others'. sending is what it says it sends, and incoming
-	// the sources whose packets have come.
+	// receives the others'. feeds are its camera and screen as the others
+	// get them, sending is what it says it sends, and incoming the layers
+	// of each source whose packets have come.
 	video    bool
 	slots    map[string]*webrtc.RTPTransceiver
+	feeds    map[string]*feed
 	sending  map[string]bool
-	incoming map[string]*incoming
+	incoming map[string]map[int]*incoming
+	// simulcast says it sends its camera in layers. layers says it shows
+	// the others' cameras small but the one in focus; views are theirs on
+	// its connection, by track id.
+	simulcast, layers bool
+	focus             string
+	views             map[string]*view
 	// needOffer is set when the peer's tracks changed while it could not
 	// take an offer, or before its first.
 	needOffer bool
@@ -129,10 +156,10 @@ func (p *peer) offer(sdp string) {
 	}
 }
 
-// incoming is a source of a peer whose packets come in.
+// incoming is a layer of a peer's camera or screen whose packets come in.
 type incoming struct {
-	track *webrtc.TrackLocalStaticRTP
-	ssrc  webrtc.SSRC
+	remote *webrtc.TrackRemote
+	ssrc   webrtc.SSRC
 	// keyframes spaces the requests for keyframes the peer gets: one
 	// keyframe serves every receiver.
 	keyframes *rate.Limiter
@@ -146,9 +173,12 @@ const (
 	askGap      = time.Second
 )
 
-// roomTrack is a peer's voice, camera or screen as the others receive it.
+// roomTrack is a peer's voice, camera or screen as the others receive it:
+// a voice as one track for all, a camera or screen as a feed, of which
+// each gets a view.
 type roomTrack struct {
 	local         *webrtc.TrackLocalStaticRTP
+	feed          *feed
 	owner, source string
 }
 
@@ -212,34 +242,38 @@ func (r *room) Receive(c *actor.Context) {
 		}
 	case keyframe:
 		if p := r.peers[msg.session]; p != nil {
-			r.keyframe(p, msg.source)
+			r.keyframe(p, msg.source, msg.layer)
+		}
+	case focus:
+		if p := r.peers[msg.session]; p != nil && p.layers {
+			p.focus = msg.stream
+			for _, v := range p.views {
+				v.setHigh(v.feed.streamID == p.focus)
+			}
 		}
 	case trackAdded:
-		p := r.peers[msg.session]
-		if p == nil {
-			return
-		}
-		if msg.source == sourceMic {
+		if p := r.peers[msg.session]; p != nil {
 			r.tracks[msg.track.ID()] = &roomTrack{local: msg.track, owner: p.session, source: sourceMic}
 			r.signal(c)
-			return
 		}
-		p.incoming[msg.source] = &incoming{track: msg.track, ssrc: msg.ssrc, keyframes: rate.NewLimiter(rate.Every(keyframeGap), 1)}
-		r.publish(c, p, msg.source)
 	case trackRemoved:
-		if p := r.peers[msg.session]; p != nil {
-			for source, in := range p.incoming {
-				if in.track.ID() == msg.id {
-					delete(p.incoming, source)
-				}
-			}
-		}
 		if t := r.tracks[msg.id]; t != nil && t.owner == msg.session {
 			delete(r.tracks, msg.id)
-			if p := r.peers[msg.session]; p != nil && t.source != sourceMic {
-				r.report(c, p)
-			}
 			r.signal(c)
+		}
+	case layerAdded:
+		p := r.peers[msg.session]
+		if p == nil || p.feeds[msg.source] == nil {
+			return
+		}
+		if p.incoming[msg.source] == nil {
+			p.incoming[msg.source] = make(map[int]*incoming)
+		}
+		p.incoming[msg.source][msg.layer] = &incoming{remote: msg.remote, ssrc: msg.ssrc, keyframes: rate.NewLimiter(rate.Every(keyframeGap), 1)}
+		r.publish(c, p, msg.source)
+	case layerRemoved:
+		if p := r.peers[msg.session]; p != nil {
+			r.unlayer(c, p, msg)
 		}
 	case pcState:
 		if p := r.peers[msg.session]; p != nil && (msg.state == webrtc.PeerConnectionStateFailed || msg.state == webrtc.PeerConnectionStateClosed) {
@@ -266,8 +300,10 @@ func (r *room) add(c *actor.Context, msg addPeer) error {
 	}
 	p := &peer{
 		session: msg.session, userID: msg.userID, pc: pc, out: msg.out, speak: rate.NewLimiter(10, 20), needOffer: true,
-		video: msg.video, sending: make(map[string]bool), incoming: make(map[string]*incoming),
+		video: msg.video, sending: make(map[string]bool), incoming: make(map[string]map[int]*incoming),
+		simulcast: msg.video && msg.simulcast, layers: msg.layers, views: make(map[string]*view),
 	}
+	self, engine := c.PID(), c.Engine()
 	// The peer's own voice comes in on this transceiver, and its camera
 	// and screen on these.
 	recvonly := webrtc.RTPTransceiverInit{Direction: webrtc.RTPTransceiverDirectionRecvonly}
@@ -277,6 +313,7 @@ func (r *room) add(c *actor.Context, msg addPeer) error {
 	}
 	if p.video {
 		p.slots = make(map[string]*webrtc.RTPTransceiver, 2)
+		p.feeds = make(map[string]*feed, 2)
 		for _, source := range []string{sourceCamera, sourceScreen} {
 			t, err := pc.AddTransceiverFromKind(webrtc.RTPCodecTypeVideo, recvonly)
 			if err != nil {
@@ -284,9 +321,11 @@ func (r *room) add(c *actor.Context, msg addPeer) error {
 				return err
 			}
 			p.slots[source] = t
+			p.feeds[source] = newFeed(source+"-"+p.session, p.userID+":"+source, maxRates[source], func(layer int) {
+				engine.Send(self, keyframe{session: p.session, source: source, layer: layer})
+			})
 		}
 	}
-	self, engine := c.PID(), c.Engine()
 	pc.OnICECandidate(func(cand *webrtc.ICECandidate) {
 		if cand != nil {
 			p.candidate(cand.ToJSON())
@@ -296,7 +335,11 @@ func (r *room) add(c *actor.Context, msg addPeer) error {
 		engine.Send(self, pcState{session: p.session, state: s})
 	})
 	pc.OnTrack(func(remote *webrtc.TrackRemote, recv *webrtc.RTPReceiver) {
-		forward(engine, self, p.session, p.userID, p.source(recv), remote)
+		if source := p.source(recv); source == sourceMic {
+			forwardVoice(engine, self, p.session, p.userID, remote)
+		} else {
+			forwardVideo(engine, self, p.session, source, p.feeds[source], remote)
+		}
 	})
 	r.peers[p.session] = p
 	p.out.send(outbound{Op: opReady, UserID: p.userID, ChannelID: r.channelID, Session: p.session, ICEServers: r.media.iceServers(p.userID, time.Now())})
@@ -318,30 +361,26 @@ func (p *peer) source(recv *webrtc.RTPReceiver) string {
 }
 
 // maxRates bound the bytes a peer's voice, camera and screen may each
-// carry per second, which the room repeats to everyone else: Opus tops out
-// at 510 kbit/s, and the clients send a camera at about 1 Mbit/s and a
-// screen at about 2.5; a peer sending more is flooding the room. Each may
-// send a second's worth at once, as a keyframe comes.
+// carry per second, a camera's layers together: Opus tops out at 510
+// kbit/s, and the clients send a camera at about 1.65 Mbit/s in layers and
+// a screen at about 2.5; a peer sending more is flooding the room. Each
+// may send a second's worth at once, as a keyframe comes.
 var maxRates = map[string]int{sourceMic: 64 << 10, sourceCamera: 320 << 10, sourceScreen: 640 << 10}
 
-// forward relays a peer's voice, camera or screen to the track the others
-// receive, until the peer goes. It runs on Pion's goroutine for the track.
-func forward(engine *actor.Engine, room *actor.PID, session, userID, source string, remote *webrtc.TrackRemote) {
-	if (source == sourceMic) != (remote.Kind() == webrtc.RTPCodecTypeAudio) {
+// forwardVoice relays a peer's voice to the track the others receive,
+// until the peer goes. It runs on Pion's goroutine for the track.
+func forwardVoice(engine *actor.Engine, room *actor.PID, session, userID string, remote *webrtc.TrackRemote) {
+	if remote.Kind() != webrtc.RTPCodecTypeAudio {
 		return
 	}
-	// The stream id tells receivers whose it is, and what.
-	id, stream := "voice-"+session, userID
-	if source != sourceMic {
-		id, stream = source+"-"+session, userID+":"+source
-	}
-	local, err := webrtc.NewTrackLocalStaticRTP(remote.Codec().RTPCodecCapability, id, stream)
+	// The stream id tells receivers whose it is.
+	local, err := webrtc.NewTrackLocalStaticRTP(remote.Codec().RTPCodecCapability, "voice-"+session, userID)
 	if err != nil {
 		return
 	}
-	engine.Send(room, trackAdded{session: session, source: source, track: local, ssrc: remote.SSRC()})
+	engine.Send(room, trackAdded{session: session, track: local})
 	defer engine.Send(room, trackRemoved{session: session, id: local.ID()})
-	limit := rate.NewLimiter(rate.Limit(maxRates[source]), maxRates[source])
+	limit := rate.NewLimiter(rate.Limit(maxRates[sourceMic]), maxRates[sourceMic])
 	buf := make([]byte, 1500)
 	for {
 		n, _, err := remote.Read(buf)
@@ -357,15 +396,36 @@ func forward(engine *actor.Engine, room *actor.PID, session, userID, source stri
 	}
 }
 
+// forwardVideo relays a layer of a peer's camera or screen to its feed,
+// until the peer goes. It runs on Pion's goroutine for the layer.
+func forwardVideo(engine *actor.Engine, room *actor.PID, session, source string, f *feed, remote *webrtc.TrackRemote) {
+	layer := layerOf(remote.RID())
+	if remote.Kind() != webrtc.RTPCodecTypeVideo || layer < 0 {
+		return
+	}
+	engine.Send(room, layerAdded{session: session, source: source, layer: layer, remote: remote, ssrc: remote.SSRC()})
+	defer engine.Send(room, layerRemoved{session: session, source: source, layer: layer, remote: remote})
+	buf := make([]byte, 1500)
+	for {
+		n, _, err := remote.Read(buf)
+		if err != nil {
+			return
+		}
+		if f.limit.AllowN(time.Now(), n) {
+			f.write(layer, buf[:n])
+		}
+	}
+}
+
 // publish puts a peer's camera or screen in the room, or takes it out, as
 // the peer says it sends it: its packets may come before or after it says
 // so, and it is published once both have.
 func (r *room) publish(c *actor.Context, p *peer, source string) {
-	in := p.incoming[source]
-	if in == nil {
+	f := p.feeds[source]
+	if f == nil || len(p.incoming[source]) == 0 {
 		return
 	}
-	id := in.track.ID()
+	id := f.id
 	_, published := r.tracks[id]
 	switch on := p.sending[source]; {
 	case on && !published && r.videos() >= r.cfg.MaxVideosPerRoom:
@@ -375,12 +435,33 @@ func (r *room) publish(c *actor.Context, p *peer, source string) {
 		off := false
 		p.out.send(outbound{Op: opVideo, Source: source, On: &off, Reason: fmt.Sprintf("this voice channel shows %d cameras and screens at most", r.cfg.MaxVideosPerRoom)})
 	case on && !published:
-		r.tracks[id] = &roomTrack{local: in.track, owner: p.session, source: source}
+		r.tracks[id] = &roomTrack{feed: f, owner: p.session, source: source}
 		r.report(c, p)
 		r.signal(c)
-		r.keyframe(p, source)
+		r.keyframe(p, source, -1)
 	case !on && published:
 		delete(r.tracks, id)
+		r.report(c, p)
+		r.signal(c)
+	}
+}
+
+// unlayer takes a layer of a peer's camera or screen out, and the source
+// with its last.
+func (r *room) unlayer(c *actor.Context, p *peer, msg layerRemoved) {
+	in := p.incoming[msg.source]
+	if l := in[msg.layer]; l == nil || l.remote != msg.remote {
+		return
+	}
+	delete(in, msg.layer)
+	f := p.feeds[msg.source]
+	f.forget(msg.layer)
+	if len(in) > 0 {
+		return
+	}
+	delete(p.incoming, msg.source)
+	if t := r.tracks[f.id]; t != nil && t.owner == p.session {
+		delete(r.tracks, f.id)
 		r.report(c, p)
 		r.signal(c)
 	}
@@ -410,15 +491,17 @@ func (r *room) report(c *actor.Context, p *peer) {
 	c.Send(r.link, m)
 }
 
-// keyframe asks a peer for a keyframe of its camera or screen, so those
-// who just started receiving it, or lost some, see a picture again.
-func (r *room) keyframe(p *peer, source string) {
-	in := p.incoming[source]
-	if in == nil || !in.keyframes.Allow() {
-		return
-	}
-	if err := p.pc.WriteRTCP([]rtcp.Packet{&rtcp.PictureLossIndication{MediaSSRC: uint32(in.ssrc)}}); err != nil {
-		r.logger.Debug("failed to ask for a keyframe", zap.String("session", p.session), zap.Error(err))
+// keyframe asks a peer for a keyframe of a layer of its camera or screen,
+// or of each when layer is -1, so those who just started receiving it,
+// switched to it, or lost some, see a picture again.
+func (r *room) keyframe(p *peer, source string, layer int) {
+	for l, in := range p.incoming[source] {
+		if (layer >= 0 && l != layer) || !in.keyframes.Allow() {
+			continue
+		}
+		if err := p.pc.WriteRTCP([]rtcp.Packet{&rtcp.PictureLossIndication{MediaSSRC: uint32(in.ssrc)}}); err != nil {
+			r.logger.Debug("failed to ask for a keyframe", zap.String("session", p.session), zap.Error(err))
+		}
 	}
 }
 
@@ -429,45 +512,50 @@ func (r *room) keyframe(p *peer, source string) {
 // send reports. A voice goes first on the transceiver the peer's own voice
 // comes in on, which browsers answer sendrecv.
 //
-// A camera or screen must never go on the peer's slots, which AddTrack
-// would take as free: the server never takes an offer, so Pion never
-// learns that browsers answer them sendonly. For the call, each slot holds
-// a stand-in sender that AddTrack passes over, and lets it go after.
-func (r *room) send(p *peer, t *roomTrack) (*webrtc.RTPSender, error) {
-	if t.source == sourceMic {
-		return p.pc.AddTrack(t.local)
+// A camera or screen goes as a view of its own, of the layer that fits how
+// big the peer shows it, and must never go on the peer's slots, which
+// AddTrack would take as free: the server never takes an offer, so Pion
+// never learns that browsers answer them sendonly. For the call, each slot
+// holds a stand-in sender that AddTrack passes over, and lets it go after.
+// ask, for a camera or screen, asks for a keyframe of the view's layer.
+func (r *room) send(p *peer, t *roomTrack) (s *webrtc.RTPSender, ask func(), err error) {
+	if t.feed == nil {
+		s, err = p.pc.AddTrack(t.local)
+		return s, nil, err
 	}
+	v := t.feed.view(!p.layers || t.feed.streamID == p.focus)
 	for _, slot := range p.slots {
-		stand, err := r.media.api.NewRTPSender(t.local, p.pc.SCTP().Transport())
+		stand, err := r.media.api.NewRTPSender(v, p.pc.SCTP().Transport())
 		if err != nil {
-			return nil, err
+			return nil, nil, err
 		}
-		err = slot.SetSender(stand, t.local)
+		err = slot.SetSender(stand, v)
 		// Back to receiving only, with no sender, before anything is offered.
 		defer func() { _ = slot.SetSender(stand, nil) }()
 		if err != nil {
-			return nil, err
+			return nil, nil, err
 		}
 	}
-	return p.pc.AddTrack(t.local)
+	if s, err = p.pc.AddTrack(v); err != nil {
+		return nil, nil, err
+	}
+	p.views[v.ID()] = v
+	return s, v.keyframe, nil
 }
 
 // readRTCP reads what a receiver reports on a track it gets, until the
 // track leaves it. Pion's interceptors answer its NACKs on the way; its
-// requests for a keyframe go to the room, for the track's sender, one per
-// askGap at most.
-func readRTCP(engine *actor.Engine, room *actor.PID, s *webrtc.RTPSender, want keyframe) {
+// requests for a keyframe of a camera or screen go to ask, one per askGap
+// at most.
+func readRTCP(s *webrtc.RTPSender, ask func()) {
 	asks := rate.NewLimiter(rate.Every(askGap), 1)
 	for {
 		pkts, _, err := s.ReadRTCP()
 		if err != nil {
 			return
 		}
-		if want.source == sourceMic {
-			continue
-		}
-		if slices.ContainsFunc(pkts, wantsKeyframe) && asks.Allow() {
-			engine.Send(room, want)
+		if ask != nil && slices.ContainsFunc(pkts, wantsKeyframe) && asks.Allow() {
+			ask()
 		}
 	}
 }
@@ -560,6 +648,7 @@ func (r *room) syncOnce(c *actor.Context) bool {
 				if err := p.pc.RemoveTrack(s); err != nil {
 					return true
 				}
+				delete(p.views, t.ID())
 				changed = true
 			}
 		}
@@ -567,11 +656,11 @@ func (r *room) syncOnce(c *actor.Context) bool {
 			if have[id] || t.owner == p.session || (t.source != sourceMic && !p.video) {
 				continue
 			}
-			s, err := r.send(p, t)
+			s, ask, err := r.send(p, t)
 			if err != nil {
 				return true
 			}
-			go readRTCP(c.Engine(), c.PID(), s, keyframe{session: t.owner, source: t.source})
+			go readRTCP(s, ask)
 			changed = true
 		}
 		if !changed && !p.needOffer {
@@ -589,7 +678,12 @@ func (r *room) syncOnce(c *actor.Context) bool {
 			return true
 		}
 		p.needOffer = false
-		p.offer(offer.SDP)
+		sdp := offer.SDP
+		// Pion offers no layers of its own: the first offer asks for them.
+		if p.simulcast && p.pc.CurrentRemoteDescription() == nil {
+			sdp = askLayers(sdp, p.slots[sourceCamera].Mid())
+		}
+		p.offer(sdp)
 	}
 	return false
 }
