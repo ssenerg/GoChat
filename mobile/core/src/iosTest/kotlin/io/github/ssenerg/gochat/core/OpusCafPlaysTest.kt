@@ -1,6 +1,7 @@
 package io.github.ssenerg.gochat.core
 
 import io.github.ssenerg.gochat.core.media.OpusCaf
+import kotlinx.cinterop.BetaInteropApi
 import kotlinx.cinterop.ExperimentalForeignApi
 import kotlinx.cinterop.addressOf
 import kotlinx.cinterop.convert
@@ -21,7 +22,7 @@ import kotlin.test.assertNotNull
 import kotlin.test.assertTrue
 
 /** Apple's own players take what OpusCaf makes of Chrome's recordings. */
-@OptIn(ExperimentalForeignApi::class)
+@OptIn(ExperimentalForeignApi::class, BetaInteropApi::class)
 class OpusCafPlaysTest {
     @Test
     fun avFoundationDecodesChromeRecordings() {
