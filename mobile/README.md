@@ -32,7 +32,8 @@ iosApp/      the Xcode project: a SwiftUI shell that shows the shared screens
   voice server's signaling protocol as the web's voice client does, over the
   platform's WebRTC (`RtcEngine`). Formatting and the message Markdown live
   here too, so the screens only draw.
-- **ui** draws the app with Material 3 in the web's colors, light and dark.
+- **ui** draws the app with Material 3 in the web's colors, light and dark,
+  and two-factor's QR code with [QRose](https://github.com/alexzhirkevich/qrose).
   Each platform supplies storage (Android's private preferences, sealed with
   a key the Android Keystore holds; the iOS Keychain), voice recording and playback (`MediaRecorder`/`MediaPlayer`,
   `AVAudioRecorder`/`AVAudioPlayer`), the file picker and sharing. Android
@@ -77,6 +78,13 @@ iosApp/      the Xcode project: a SwiftUI shell that shows the shared screens
   to the team they were opened in, as on the web.
 - Profile name and photo, status with do not disturb, custom status,
   password, sign-out.
+- Two-factor authentication: set it up with the password, a QR code or its
+  key, and a code, then keep the recovery codes; turn it off with the
+  password and a code or a recovery code.
+- Team admins change the team's photo, see and revoke its open invites,
+  and make members admins or remove them. As on the web, only the team's
+  owner or a system admin demotes or removes another admin. Photos are
+  JPEG, PNG, GIF or WebP pictures up to 10 MB, for people and teams alike.
 - Push notifications while the app is closed, from servers that push to
   this build (below): direct and group messages, replies in their threads
   and mentions. A tap opens the conversation or the thread, in its team.
@@ -85,7 +93,6 @@ Not in the apps yet:
 
 - Voice messages that Chrome or Firefox recorded (WebM) do not play on iOS,
   whose player has no WebM. Android plays them.
-- Two-factor setup, team settings and team photos stay on the web.
 
 ## Building
 

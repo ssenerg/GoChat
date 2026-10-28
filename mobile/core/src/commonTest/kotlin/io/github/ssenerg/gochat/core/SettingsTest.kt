@@ -2,6 +2,7 @@ package io.github.ssenerg.gochat.core
 
 import com.squareup.wire.Message
 import com.squareup.wire.ProtoAdapter
+import gochat.v1.ApiError
 import gochat.v1.BeginTOTPSetupRequest
 import gochat.v1.BeginTOTPSetupResponse
 import gochat.v1.ConfirmTOTPSetupRequest
@@ -154,6 +155,17 @@ class SettingsTest {
             respond(Team(id = "t1", photo = "v2").encode(), HttpStatusCode.OK, proto)
         }
         assertEquals("v2", ApiClient("https://chat.test", "tok", engine).setTeamPhoto("t1", picture).photo)
+    }
+
+    @Test
+    fun anOlderServerSaysItTakesNoTeamPhotos() = runTest {
+        val old = MockEngine { respond("404 page not found", HttpStatusCode.NotFound) }
+        val e = assertFailsWith<ApiException> { ApiClient("https://chat.test", "tok", old).setTeamPhoto("t1", byteArrayOf(1)) }
+        assertEquals(ApiException.NOT_FOUND, e.code)
+        assertTrue(e.message!!.contains("does not take team photos"))
+        // A team the server does not know is the server's own reason.
+        val current = MockEngine { respond(ApiError(code = 5, message = "no such team").encode(), HttpStatusCode.NotFound, proto) }
+        assertEquals("no such team", assertFailsWith<ApiException> { ApiClient("https://chat.test", "tok", current).setTeamPhoto("t1", byteArrayOf(1)) }.message)
     }
 
     @Test

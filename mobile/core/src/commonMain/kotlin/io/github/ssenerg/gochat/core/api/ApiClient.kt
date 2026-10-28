@@ -215,6 +215,10 @@ class ApiClient(
             contentType(ContentType.Application.OctetStream)
             setBody(picture)
         }
+        // A server older than the route answers a plain 404, not an ApiError.
+        if (res.status.value == 404 && res.headers[HttpHeaders.ContentType]?.startsWith("application/proto") != true) {
+            throw ApiException(ApiException.NOT_FOUND, "This server does not take team photos from the app yet.", 404)
+        }
         return decode(res, Team.ADAPTER)
     }
 

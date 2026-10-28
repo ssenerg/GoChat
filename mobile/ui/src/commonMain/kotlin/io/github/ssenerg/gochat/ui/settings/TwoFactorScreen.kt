@@ -142,7 +142,7 @@ private fun Confirm(session: ChatSession, setup: BeginTOTPSetupResponse, onCodes
         onValueChange = { v -> code = v.filter { it.isDigit() }.take(6) },
         label = { Text("Code") },
         singleLine = true,
-        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.NumberPassword),
+        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
         modifier = Modifier.fillMaxWidth(),
     )
     Button(
