@@ -180,8 +180,7 @@ func TestRedirects(t *testing.T) {
 	d.set("site.test", "127.0.0.1")
 	d.set("internal.test", "10.0.0.1")
 	d.set("denied.test", "127.0.0.1")
-	var s *site
-	s = serve(t, func(w http.ResponseWriter, r *http.Request) {
+	s := serve(t, func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case "/final":
 			html200("<title>Final</title>")(w, r)

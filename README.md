@@ -3,8 +3,8 @@
 A self-hosted team chat in the spirit of Mattermost: teams, public and private
 channels, voice channels to talk, show a camera and share a screen in as in
 Discord, direct messages, one-time
-invite links, attachments, voice messages, presence and typing indicators,
-all delivered in real time, and pushed to the phone apps while they are
+invite links, attachments, voice messages, link previews, presence and typing
+indicators, all delivered in real time, and pushed to the phone apps while they are
 closed. The whole application runs on
 the [hollywood](https://github.com/anthdm/hollywood) actor engine, on both the
 server and the web gateway, and the browser UI is server-rendered HTML driven
@@ -38,6 +38,7 @@ API and webhooks.
 | `bots` (pool) | bot accounts and tokens, commands, button answers, webhooks |
 | `voice` | who talks in which voice channel, join tokens, the voice servers |
 | `push` (pool) | the apps' device tokens, and pushes through FCM and APNs to apps that are closed |
+| `previews` (pool) | link previews: fetches the first link of each message, from public addresses only, and keeps its picture |
 
 A channel actor is the single writer for its channel, so ordering and
 membership checks never race. It loads lazily on first use and passivates when
@@ -213,6 +214,33 @@ pushed, and the apps run as before.
   and APNs never read what anyone wrote. Its data names the channel, the
   thread and the team, which the app opens when the push is tapped.
 
+### Link previews
+
+A message with a link gets a card under it, on the web and in the apps:
+the linked page's title, description, site name and picture, from its Open
+Graph or Twitter card tags, or else its `<title>` and meta description.
+
+- The server previews the first link of a message, as the web renders
+  links: Markdown links, `<autolinks>` and bare URLs, none inside code. It
+  fetches after the post is answered, so posting never waits on it.
+- The preview is stored with the message (`Message.link_preview`) and
+  reaches clients as a `MessageEdited` in the channel's numbered updates,
+  with `edited_at` unchanged: a client that was away gets it when it
+  catches up, and history always carries it.
+- The page's picture is fetched once, scaled to fit 640 pixels, turned
+  upright and encoded again, which drops its metadata and anything hidden
+  in it, and kept in MinIO under its hash. Clients load it from the server
+  (`/previews/<id>`, or `/api/v2/previews/<id>` with the app's token), so
+  readers never reach the linked site and it never learns who read.
+- Previews are cached by URL for a day (`services.previews.cache_ttl`), and
+  a link that gave none is left alone for an hour.
+- The author removes a preview from their message on the web (the × on
+  the card) or in the apps (the message's menu), with
+  `MessageService.RemoveLinkPreview`; edits bring none back. An edit that
+  changes the first link drops the old preview for the new link's. Bots
+  opt out per message with `no_link_preview` on `PostMessage` or
+  `EditMessage`, which people may set as well.
+
 ### Storage
 
 - **ScyllaDB** holds everything. Messages are partitioned by
@@ -220,7 +248,9 @@ pushed, and the apps run as before.
   partition at a time. Uniqueness (usernames, emails, team and channel names),
   invite consumption, the first-admin bootstrap and TOTP replay protection use
   lightweight transactions.
-- **MinIO** stores attachments under `attachments/<channel>/<id>`. Uploads
+- **MinIO** stores attachments under `attachments/<channel>/<id>`, photos
+  under `photos/`, and link previews' pictures under `previews/<id>`, named
+  by their content so a picture shared by many messages is kept once. Uploads
   stream through the server, which sniffs the content type and enforces the
   size limit and the uploader's quota; attachments never posted are deleted
   by a janitor. What each person stores is kept as a running total, updated
@@ -271,6 +301,19 @@ pushed, and the apps run as before.
   with `rel="nofollow noopener noreferrer"`. Attachments are served with
   `Content-Disposition: attachment` unless they are safe images or voice
   messages, which play in place with the audio type the server detected.
+- Link previews: the server fetches links people post, so it guards what
+  it reaches. Only `http` and `https` on ports 80 and 443
+  (`services.previews.ports`), with no credentials in the URL. Each hop's
+  host is resolved and refused when any of its addresses is loopback,
+  private, link-local (cloud metadata among them), multicast, reserved or
+  one of those wrapped in IPv6; the connection is pinned to the addresses
+  checked, so a name cannot resolve outward for the check and inward for
+  the fetch, and the socket checks its address again. Redirects are
+  followed by hand, at most 5, each hop checked again. A page is read up to
+  1 MiB, a picture up to 5 MiB, each fetch within 8 seconds, at most 4 at
+  once and 256 waiting. No cookies or credentials are sent, no proxy is
+  used, and the user agent says it is GoChat. Pictures are decoded within
+  limits and encoded again before anyone sees them.
 - Pushes: device tokens are tied to one session and forgotten with it; a
   push carries at most a one-line excerpt, as the notices show, or none
   with `services.push.excerpts` off, and goes only to sessions still in
@@ -528,6 +571,14 @@ a week by default), and `services.bots` how many bots a person may own and
 how webhooks are delivered. Webhooks go only to public addresses unless
 `services.bots.allow_private_webhooks` is set, for development.
 
+`services.previews` sets link previews: `enabled` (on by default), the
+fetch limits, and `allow_hosts` and `deny_hosts`, host names that cover
+their subdomains. With `allow_hosts`, only those hosts are previewed;
+`deny_hosts` are never fetched from, pictures included. In the environment
+a list is comma separated: `SERVICES_PREVIEWS_DENY_HOSTS=example.com,example.org`.
+The server needs to reach the web over HTTP and HTTPS for previews, as it
+does over the `frontend` network in the Docker stack.
+
 `services.push` turns on push notifications to the apps, each provider
 once it has its credentials:
 
@@ -605,7 +656,7 @@ internal/authz     casbin model and enforcer
 internal/core      ids, passwords, TOTP, sealing, validation, models, caches
 internal/repos     Scylla and MinIO repositories
 internal/server    DRPC handlers and the admin listener
-internal/services  hub, accounts, directory, channels, updates, bots, files, voice
+internal/services  hub, accounts, directory, channels, updates, bots, files, voice, push, previews
 internal/voiceserver  the voice server: signaling, rooms, media
 internal/web       HTTP handlers, gateway actors, templates and static assets
 migrations/scylla  CQL migrations

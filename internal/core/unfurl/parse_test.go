@@ -92,7 +92,7 @@ func TestParseCharset(t *testing.T) {
 
 func TestParseCuts(t *testing.T) {
 	long := strings.Repeat("word ", 200)
-	p := parsed(t, `<meta property="og:title" content="`+long+`"><meta property="og:description" content="a`+"\u0000‮"+`b">`, "text/html", "http://x.example/")
+	p := parsed(t, `<meta property="og:title" content="`+long+`"><meta property="og:description" content="a`+"\u0000\u202e"+`b">`, "text/html", "http://x.example/")
 	if n := len([]rune(p.Title)); n != maxTitle || !strings.HasSuffix(p.Title, "…") {
 		t.Fatalf("title of %d characters: %q", n, p.Title)
 	}

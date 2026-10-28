@@ -20,6 +20,7 @@ says what a client does with them.
 - [Calls](#calls)
 - [Updates](#updates)
 - [Catching up](#catching-up)
+- [Link previews](#link-previews)
 - [Bots](#bots)
 - [The HTTP Bot API](#the-http-bot-api)
 - [Webhooks](#webhooks)
@@ -105,11 +106,12 @@ their turn. Calls spend the session's request budget, as the HTTP API's do.
 People may make the unary calls the apps make over `/api/v1` (see
 [`internal/web/api.go`](../internal/web/api.go)), plus `UpdatesService` and
 the people's calls of `BotService`; apps tie their device's push token to
-the session with `PushService.RegisterDevice`. Files and photos still move over HTTP:
+the session with `PushService.RegisterDevice`. Files and pictures still move over HTTP:
 `POST /api/v2/files?channel_id=&name=` and `GET /api/v2/files/<id>` take the
 same bearer token as `/api/v1/files`, and `POST /api/v2/teams/<id>/photo`
 makes its body, any JPEG, PNG, GIF or WebP picture up to 10 MB, a team's
-photo for its admins, answering the `Team`. The calls open to bots are
+photo for its admins, answering the `Team`. `GET /api/v2/previews/<id>`
+serves the pictures of [link previews](#link-previews). The calls open to bots are
 [listed below](#what-bots-may-call).
 
 ## Updates
@@ -127,8 +129,8 @@ sequence and carries its number:
   everything it receives from its channels, and the button presses on its
   messages. These carry `pts` and `pts_count` and no `pts_channel_id`.
 - **A channel's sequence.** Things that happen in a channel a person
-  belongs to: messages posted, edited and deleted, reactions, pins, and
-  changes to the channel itself. These carry `pts`, `pts_count` and
+  belongs to: messages posted, edited and deleted, link previews, reactions,
+  pins, and changes to the channel itself. These carry `pts`, `pts_count` and
   `pts_channel_id`, and each channel numbers its own. `Channel.pts`, in
   `ListChannels`, `GetChannel` and `ChannelJoined`, is the number of the
   channel's latest update.
@@ -192,6 +194,32 @@ Replayed messages are as they are now: a message deleted since is left out
 (its `MessageDeleted` follows), an edited one comes edited. The server keeps
 updates for seven days by default (`services.updates.retention`).
 
+## Link previews
+
+A moment after a message with a link is posted, the server previews its
+first link: Markdown links, `<autolinks>` and bare URLs count, links inside
+code do not. The preview is the message's `link_preview` (`LinkPreview` in
+[`types.proto`](../api/protobuf/proto/gochat/v1/types.proto)): the link,
+the page's title, description and site name, and the id of its picture.
+
+- It arrives as a `MessageEdited` in the channel's sequence, the message
+  whole with its preview and its `edited_at` unchanged, so a client shows
+  no "edited" mark for it. A client that missed it gets it in the
+  channel's difference, and every later read of the message carries it.
+- An edit that changes the first link comes without the old preview, and
+  the new link's follows as another `MessageEdited`.
+- The picture is the server's copy: `GET /api/v2/previews/<image_id>` with
+  the session's bearer token, a JPEG or PNG of at most 640 by 640 pixels
+  (`image_width` and `image_height`), which never changes for an id.
+  Clients never fetch the linked site's own picture.
+- The author removes the preview with `MessageService.RemoveLinkPreview`,
+  which answers the message; the others get a `MessageEdited`. Edits bring
+  none back. `no_link_preview` on `PostMessage` posts without one, and on
+  `EditMessage` removes it in the same way.
+
+Bots are not sent `MessageEdited` for previews; they read them with the
+message. A bot opts its own messages out with `no_link_preview`.
+
 ## Bots
 
 A bot is an account a person owns. People make bots in the web's settings,
@@ -235,7 +263,7 @@ what the bot had when it was added; add it again to change it.
 | `UserService` | `GetUser`, `UpdateProfile` |
 | `TeamService` | `ListTeams`, `GetTeam`, `ListTeamMembers` |
 | `ChannelService` | `ListChannels`, `GetChannel`, `ListChannelMembers`, `JoinChannel`, `LeaveChannel` |
-| `MessageService` | `PostMessage`, `EditMessage`, `DeleteMessage` (its own), `GetMessage`, `ListMessages`, `ListThread` (with `sees_all`), `SendTyping`, `React` |
+| `MessageService` | `PostMessage`, `EditMessage`, `DeleteMessage` (its own), `GetMessage`, `ListMessages`, `ListThread` (with `sees_all`), `SendTyping`, `React`, `RemoveLinkPreview` (its own) |
 | `UpdatesService` | `GetState`, `GetDifference` |
 | `BotService` | `SetCommands`, `GetCommands`, `AnswerCallback`, `SetWebhook`, `DeleteWebhook`, `GetWebhookInfo`, `ConfirmUpdates` |
 | `FileService` | uploads and downloads, at `/api/v2/files` |

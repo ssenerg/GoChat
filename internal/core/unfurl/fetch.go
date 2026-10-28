@@ -133,7 +133,7 @@ func (f *Fetcher) check(raw string, allowed func(string) bool) (*url.URL, error)
 		return nil, ErrURL
 	}
 	name := strings.TrimSuffix(u.Hostname(), ".")
-	host := name
+	var host string
 	if addr, err := netip.ParseAddr(name); err == nil {
 		if addr.Zone() != "" {
 			return nil, ErrURL

@@ -66,8 +66,9 @@ iosApp/      the Xcode project: a SwiftUI shell that shows the shared screens
   three layers, as the web's does: cameras in tiles come in their smallest
   layer, and the one full screen in its best. The sidebar marks who has
   their camera on and who is live, as the web does.
-- Messages with Markdown, mentions, emoji, images, files, reactions,
-  threads, edits, deletes, pins and saves; typing indicators; search;
+- Messages with Markdown, mentions, emoji, images, files, link previews
+  (which their author may remove), reactions, threads, edits, deletes, pins
+  and saves; typing indicators; search;
   followed threads; saved messages.
 - Voice messages: record, send and play. Both apps record AAC in MP4,
   which the server takes and every platform plays. They play the browsers'

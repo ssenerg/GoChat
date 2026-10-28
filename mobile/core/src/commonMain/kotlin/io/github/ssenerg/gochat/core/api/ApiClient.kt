@@ -231,6 +231,9 @@ class ApiClient(
     fun teamPhotoUrl(teamId: String, photo: String): String? =
         photo.takeIf { it.isNotEmpty() }?.let { "$baseUrl/api/v1/photos/t/$teamId/$it" }
 
+    /** Where a link preview's picture is, which the server keeps. */
+    fun linkImageUrl(imageId: String) = "$baseUrl/api/v2/previews/$imageId"
+
     /** The socket's address. */
     val socketUrl: String
         get() = baseUrl.replaceFirst("https://", "wss://").replaceFirst("http://", "ws://") + "/api/v2/socket"
