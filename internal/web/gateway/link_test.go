@@ -27,8 +27,11 @@ type fakeCalls struct {
 	// diffs answers each difference in turn; gate holds them until closed.
 	diffs []*pb.GetDifferenceResponse
 	gate  chan struct{}
-	asked []int64
-	who   []drpc.Call
+	// hold holds test/Hold until closed; holding hears it start.
+	hold    chan struct{}
+	holding chan struct{}
+	asked   []int64
+	who     []drpc.Call
 }
 
 func (f *fakeCalls) Allow(_ drpc.Call, method string, anonymous bool) error {
@@ -41,7 +44,7 @@ func (f *fakeCalls) Allow(_ drpc.Call, method string, anonymous bool) error {
 func (f *fakeCalls) Invoke(_ context.Context, call drpc.Call, method string, payload []byte) ([]byte, error) {
 	f.mu.Lock()
 	f.who = append(f.who, call)
-	gate := f.gate
+	gate, hold := f.gate, f.hold
 	f.mu.Unlock()
 	switch method {
 	case "gochat.v1.UpdatesService/GetState":
@@ -64,6 +67,10 @@ func (f *fakeCalls) Invoke(_ context.Context, call drpc.Call, method string, pay
 		f.diffs = f.diffs[1:]
 		return proto.Marshal(d)
 	case "test/Echo":
+		return payload, nil
+	case "test/Hold":
+		f.holding <- struct{}{}
+		<-hold
 		return payload, nil
 	case "test/Fail":
 		return nil, ierrors.NotFound("nothing here")
@@ -373,6 +380,41 @@ func TestRevokedSocketCloses(t *testing.T) {
 	h.hello("tok", 0)
 	h.attach("tok")
 	h.next()
+	h.engine.Send(h.link, Revoked{})
+	h.closed(CloseRevoked)
+}
+
+func TestRevokedSocketAnswersItsCallsFirst(t *testing.T) {
+	calls := &fakeCalls{hold: make(chan struct{}), holding: make(chan struct{}, 1)}
+	h := newLinkHarness(t, calls)
+	h.hello("tok", 0)
+	h.attach("tok")
+	h.next()
+	// A logout revokes its own session before its reply is back.
+	h.up(&pb.Up{Frame: &pb.Up_Call{Call: &pb.Call{Id: 5, Method: "test/Hold", Payload: []byte("bye")}}})
+	<-calls.holding
+	h.engine.Send(h.link, Revoked{})
+	h.engine.Send(h.link, Event{Event: account(9)})
+	h.quiet()
+	close(calls.hold)
+	if r := h.next().GetResult(); r.GetId() != 5 || string(r.GetPayload()) != "bye" {
+		t.Fatalf("result %v", r)
+	}
+	h.closed(CloseRevoked)
+}
+
+func TestRevokedSocketClosesWhenACallHangs(t *testing.T) {
+	grace := revokeGrace
+	revokeGrace = 50 * time.Millisecond
+	t.Cleanup(func() { revokeGrace = grace })
+	calls := &fakeCalls{hold: make(chan struct{}), holding: make(chan struct{}, 1)}
+	t.Cleanup(func() { close(calls.hold) })
+	h := newLinkHarness(t, calls)
+	h.hello("tok", 0)
+	h.attach("tok")
+	h.next()
+	h.up(&pb.Up{Frame: &pb.Up_Call{Call: &pb.Call{Id: 5, Method: "test/Hold"}}})
+	<-calls.holding
 	h.engine.Send(h.link, Revoked{})
 	h.closed(CloseRevoked)
 }

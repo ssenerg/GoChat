@@ -41,6 +41,9 @@ const (
 	replayBatch = 50
 )
 
+// revokeGrace bounds how long a revoked socket waits for its calls.
+var revokeGrace = 2 * time.Second
+
 // Calls makes the chat API's calls for sockets.
 type Calls interface {
 	// Allow takes a call from its caller's budget, refusing what the caller
@@ -68,6 +71,7 @@ type (
 		reset   bool
 		err     error
 	}
+	graceOver struct{}
 )
 
 // link serves one socket of the GoChat protocol: the calls its client makes
@@ -97,6 +101,9 @@ type link struct {
 	inflight int
 	queued   []*pb.Call
 	closing  bool
+	// A revoked socket answers its calls in flight, then closes.
+	revoked  bool
+	grace    *time.Timer
 	stopPing context.CancelFunc
 	expiry   *time.Timer
 }
@@ -122,6 +129,9 @@ func (l *link) Receive(c *actor.Context) {
 		if l.expiry != nil {
 			l.expiry.Stop()
 		}
+		if l.grace != nil {
+			l.grace.Stop()
+		}
 		l.closing = true
 		l.out.close(websocket.StatusNormalClosure)
 	case Frame:
@@ -143,6 +153,8 @@ func (l *link) Receive(c *actor.Context) {
 			l.close(CloseUnauthenticated)
 		}
 	case Revoked, expired:
+		l.revoke(c)
+	case graceOver:
 		l.close(CloseRevoked)
 	case Event:
 		l.event(msg.Event)
@@ -275,7 +287,7 @@ func (l *link) catchUp(engine *actor.Engine, self *actor.PID, call drpc.Call, ge
 }
 
 func (l *link) caughtUp(c *actor.Context, msg caughtUp) {
-	if msg.gen != l.gen || l.ready == nil {
+	if msg.gen != l.gen || l.ready == nil || l.revoked {
 		return
 	}
 	if msg.err != nil {
@@ -316,6 +328,9 @@ func (l *link) caughtUp(c *actor.Context, msg caughtUp) {
 // event sends an update on: a numbered one of the account once, in order,
 // one without a number as ephemeral.
 func (l *link) event(ev *pb.Event) {
+	if l.revoked {
+		return
+	}
 	if l.catching {
 		if len(l.held) >= maxBuffered {
 			l.close(CloseTooSlow)
@@ -341,6 +356,9 @@ func (l *link) event(ev *pb.Event) {
 }
 
 func (l *link) enqueue(c *actor.Context, call *pb.Call) {
+	if l.revoked {
+		return
+	}
 	if l.inflight >= maxInflight {
 		if len(l.queued) >= maxQueued {
 			l.close(CloseTooSlow)
@@ -380,6 +398,9 @@ func (l *link) done(c *actor.Context, msg callDone) {
 		res.Outcome = &pb.Result_Payload{Payload: msg.payload}
 	}
 	l.send(&pb.Down{Frame: &pb.Down_Result{Result: res}})
+	if l.revoked && l.inflight == 0 {
+		l.close(CloseRevoked)
+	}
 	if len(l.queued) > 0 && !l.closing {
 		next := l.queued[0]
 		l.queued = l.queued[1:]
@@ -402,6 +423,21 @@ func (l *link) send(d *pb.Down) {
 		l.closing = true
 		l.out.close(0)
 		go func() { _ = l.ws.Close(CloseTooSlow, "too far behind") }()
+	}
+}
+
+// revoke closes the socket of a revoked or expired session once its calls
+// in flight are answered: a logout's reply comes before the close.
+func (l *link) revoke(c *actor.Context) {
+	l.revoked = true
+	l.queued = nil
+	if l.inflight == 0 {
+		l.close(CloseRevoked)
+		return
+	}
+	if l.grace == nil {
+		pid, engine := c.PID(), c.Engine()
+		l.grace = time.AfterFunc(revokeGrace, func() { engine.Send(pid, graceOver{}) })
 	}
 }
 

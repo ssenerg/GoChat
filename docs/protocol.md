@@ -67,7 +67,7 @@ A socket the server closes with a code of 4000 or more says why:
 | 4000 | The server could not attach the socket. | Reconnect after a backoff. |
 | 4001 | The token is not valid. | Sign in again; a bot's token was reset or the bot deleted. |
 | 4002 | A frame broke the protocol (no hello first, an unknown frame, a text message). | Fix the client. |
-| 4003 | The session was revoked or expired. | Sign in again; a bot reconnects with its token. |
+| 4003 | The session was revoked or expired. The calls in flight are answered first, so `AuthService.Logout` gets its reply. | Sign in again; a bot reconnects with its token. |
 | 4008 | The account holds too many sockets open. | Close another. |
 | 4009 | The client fell too far behind reading. | Reconnect with its `pts`. |
 | 4011 | The client's layer is older than the server takes. | Update the client. |
