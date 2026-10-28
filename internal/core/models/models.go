@@ -237,7 +237,7 @@ type PushDevice struct {
 	UserID      gocql.UUID `db:"user_id"`
 	SessionHash []byte     `db:"session_hash"`
 	Platform    string     `db:"platform"`
-	Token       string     `db:"token"`
+	Token       string     `db:"device_token"`
 	// Sandbox marks an APNs token of Apple's sandbox.
 	Sandbox   bool      `db:"sandbox"`
 	CreatedAt time.Time `db:"created_at"`

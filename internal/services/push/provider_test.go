@@ -17,10 +17,13 @@ import (
 	"math/big"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"sync/atomic"
 	"testing"
+	"time"
 
 	pb "github.com/ssenerg/gochat/api/protobuf/gen/gochat/v1"
 	"github.com/ssenerg/gochat/internal/core/models"
@@ -260,5 +263,48 @@ func TestExcerptMatchesTheWeb(t *testing.T) {
 		if got, want := excerpt(m), render.Excerpt(m); got != want {
 			t.Errorf("%v: push %q, web %q", m, got, want)
 		}
+	}
+}
+
+func TestProvidersFromConfig(t *testing.T) {
+	rsaKey, _ := rsa.GenerateKey(rand.Reader, 2048)
+	ecKey, _ := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	creds, _ := json.Marshal(map[string]string{"project_id": "p", "client_email": "a@p.iam.gserviceaccount.com", "private_key": pkcs8(t, rsaKey)})
+	keyFile := filepath.Join(t.TempDir(), "AuthKey.p8")
+	if err := os.WriteFile(keyFile, []byte(pkcs8(t, ecKey)), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	cfg := func() *Config {
+		return &Config{Workers: 1, OpTimeout: time.Second, SendTimeout: time.Second, FCM: &FCMConfig{}, APNs: &APNsConfig{}}
+	}
+
+	off := cfg()
+	if got, err := Providers(off, nil); err != nil || len(got) != 0 || off.Validate() != nil {
+		t.Fatalf("without credentials: %v %v", got, err)
+	}
+	on := cfg()
+	on.FCM.Credentials = string(creds)
+	on.APNs = &APNsConfig{KeyFile: keyFile, KeyID: "K", TeamID: "T", Topic: "io.example.app"}
+	if err := on.Validate(); err != nil {
+		t.Fatal(err)
+	}
+	got, err := Providers(on, nil)
+	if err != nil || got[models.PushFCM] == nil || got[models.PushAPNs] == nil {
+		t.Fatalf("with both: %v %v", got, err)
+	}
+
+	partial := cfg()
+	partial.APNs.Key = pkcs8(t, ecKey)
+	both := cfg()
+	both.FCM = &FCMConfig{Credentials: "{}", CredentialsFile: "x"}
+	for name, c := range map[string]*Config{"apns without its ids": partial, "fcm given twice": both} {
+		if c.Validate() == nil {
+			t.Errorf("%s passed", name)
+		}
+	}
+	missing := cfg()
+	missing.FCM.CredentialsFile = filepath.Join(t.TempDir(), "none.json")
+	if _, err := Providers(missing, nil); err == nil {
+		t.Error("a missing credentials file passed")
 	}
 }
