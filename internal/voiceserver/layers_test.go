@@ -99,7 +99,7 @@ func continuous(t *testing.T, sent []rtp.Packet) {
 
 func TestAViewSwitchesLayersOnKeyframesAsOneStream(t *testing.T) {
 	var asked []int
-	f := newFeed("camera-s", "u:camera", 1<<20, func(layer int) { asked = append(asked, layer) })
+	f := newFeed("camera-s", "u:camera", func(layer int) { asked = append(asked, layer) })
 	w := &recorder{}
 	v := f.view(false)
 	v.out, v.ssrc, v.pt = w, 7, 96
@@ -158,7 +158,7 @@ func TestAViewSwitchesLayersOnKeyframesAsOneStream(t *testing.T) {
 }
 
 func TestABigViewFallsBackWhenTheFullLayerStops(t *testing.T) {
-	f := newFeed("camera-s", "u:camera", 1<<20, func(int) {})
+	f := newFeed("camera-s", "u:camera", func(int) {})
 	w := &recorder{}
 	v := f.view(true)
 	v.out, v.ssrc, v.pt = w, 7, 96

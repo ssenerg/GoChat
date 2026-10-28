@@ -10,7 +10,6 @@ import (
 	"github.com/pion/rtp"
 	"github.com/pion/sdp/v3"
 	"github.com/pion/webrtc/v4"
-	"golang.org/x/time/rate"
 )
 
 // rids are the layers a camera comes in, as simulcast sends them, from the
@@ -63,8 +62,6 @@ func askLayers(offer, mid string) string {
 // gets one layer of it, on a view of its own.
 type feed struct {
 	id, streamID string
-	// limit bounds the bytes all its layers carry together.
-	limit *rate.Limiter
 	// ask asks the sender for a keyframe of a layer.
 	ask func(layer int)
 	// seen is when each layer last brought a frame, in unix nanoseconds.
@@ -73,12 +70,8 @@ type feed struct {
 	views map[*view]struct{}
 }
 
-func newFeed(id, streamID string, maxRate int, ask func(layer int)) *feed {
-	return &feed{
-		id: id, streamID: streamID, ask: ask,
-		limit: rate.NewLimiter(rate.Limit(maxRate), maxRate),
-		views: make(map[*view]struct{}),
-	}
+func newFeed(id, streamID string, ask func(layer int)) *feed {
+	return &feed{id: id, streamID: streamID, ask: ask, views: make(map[*view]struct{})}
 }
 
 // view makes the feed's view for one viewer, which shows it big when high

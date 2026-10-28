@@ -321,7 +321,7 @@ func (r *room) add(c *actor.Context, msg addPeer) error {
 				return err
 			}
 			p.slots[source] = t
-			p.feeds[source] = newFeed(source+"-"+p.session, p.userID+":"+source, maxRates[source], func(layer int) {
+			p.feeds[source] = newFeed(source+"-"+p.session, p.userID+":"+source, func(layer int) {
 				engine.Send(self, keyframe{session: p.session, source: source, layer: layer})
 			})
 		}
@@ -361,10 +361,11 @@ func (p *peer) source(recv *webrtc.RTPReceiver) string {
 }
 
 // maxRates bound the bytes a peer's voice, camera and screen may each
-// carry per second, a camera's layers together: Opus tops out at 510
-// kbit/s, and the clients send a camera at about 1.65 Mbit/s in layers and
-// a screen at about 2.5; a peer sending more is flooding the room. Each
-// may send a second's worth at once, as a keyframe comes.
+// carry per second, a camera's in each of its layers, which is what the
+// room repeats to each of the others: Opus tops out at 510 kbit/s, and the
+// clients send a camera at about 1 Mbit/s at most and a screen at about
+// 2.5; a peer sending more is flooding the room. Each may send a second's
+// worth at once, as a keyframe comes.
 var maxRates = map[string]int{sourceMic: 64 << 10, sourceCamera: 320 << 10, sourceScreen: 640 << 10}
 
 // forwardVoice relays a peer's voice to the track the others receive,
@@ -405,13 +406,14 @@ func forwardVideo(engine *actor.Engine, room *actor.PID, session, source string,
 	}
 	engine.Send(room, layerAdded{session: session, source: source, layer: layer, remote: remote, ssrc: remote.SSRC()})
 	defer engine.Send(room, layerRemoved{session: session, source: source, layer: layer, remote: remote})
+	limit := rate.NewLimiter(rate.Limit(maxRates[source]), maxRates[source])
 	buf := make([]byte, 1500)
 	for {
 		n, _, err := remote.Read(buf)
 		if err != nil {
 			return
 		}
-		if f.limit.AllowN(time.Now(), n) {
+		if limit.AllowN(time.Now(), n) {
 			f.write(layer, buf[:n])
 		}
 	}

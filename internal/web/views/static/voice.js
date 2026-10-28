@@ -18,6 +18,14 @@
   // What a camera and a screen may send, in bits per second: the voice
   // server drops a source that sends much more.
   var bitrates = { camera: 1000000, screen: 2500000 };
+  // The layers a camera goes out in, as the voice server asks for them:
+  // how much smaller than the camera each is, and what it may send. Each
+  // viewer gets the one that fits how big it shows the camera.
+  var cameraLayers = {
+    q: { scale: 4, bitrate: 150000 },
+    h: { scale: 2, bitrate: 500000 },
+    f: { scale: 1, bitrate: 1000000 }
+  };
   // The page's other files sit beside this one, versioned alike.
   var staticBase = document.currentScript ? document.currentScript.src.replace(/[^/]*$/, "") : "";
   var noiseModes = ["off", "standard", "strong"];
@@ -237,7 +245,12 @@
   function connect(state, ticket) {
     var ws = new WebSocket(ticket.endpoint);
     state.ws = ws;
-    ws.onopen = function () { send(state, { op: "identify", token: ticket.token, video: canVideo() }); };
+    // With video, the camera goes out in layers where the browser can, and
+    // the others' come small but for the one shown big.
+    ws.onopen = function () {
+      var video = canVideo();
+      send(state, { op: "identify", token: ticket.token, video: video, simulcast: video, layers: video });
+    };
     ws.onmessage = function (e) {
       var msg;
       try {
@@ -388,14 +401,19 @@
     }));
   }
 
-  // limit caps what a camera or the screen sends; a screen keeps its
-  // sharpness and gives up frames when the network is short.
+  // limit caps what a camera or the screen sends, a camera's layers each
+  // at their size; a screen keeps its sharpness and gives up frames when
+  // the network is short.
   function limit(state, source) {
     var t = slot(state, source);
     if (!t || !t.sender.getParameters) return;
     var p = t.sender.getParameters();
     if (!p.encodings || !p.encodings.length) return;
-    p.encodings[0].maxBitrate = bitrates[source];
+    p.encodings.forEach(function (e) {
+      var layer = source === "camera" && cameraLayers[e.rid];
+      if (layer) e.scaleResolutionDownBy = layer.scale;
+      e.maxBitrate = layer ? layer.bitrate : bitrates[source];
+    });
     if (source === "screen") p.degradationPreference = "maintain-resolution";
     t.sender.setParameters(p).catch(function () {});
   }
@@ -427,6 +445,17 @@
       });
     send(state, { op: "video", source: source, on: true });
     render();
+  }
+
+  // setFocus shows a camera big, by stream id, or none; the voice server
+  // sends the others' small. One's own is shown as it is captured.
+  function setFocus(state, id) {
+    state.focus = id;
+    var stream = id && id !== "self:camera" ? id : "";
+    if (stream !== (state.focusSent || "")) {
+      state.focusSent = stream;
+      send(state, { op: "focus", stream: stream });
+    }
   }
 
   function stopVideo(state, source) {
@@ -525,15 +554,26 @@
       if (call.camera && call.userID) cameras[call.userID] = { id: "self:camera", stream: call.camera, mirror: true };
       if (call.screen && call.userID) screens.unshift({ id: "self:screen", user: call.userID, stream: call.screen });
     }
+    // A camera that went is no longer big.
+    if (call && call.focus && !Object.keys(cameras).some(function (u) { return cameras[u].id === call.focus; })) setFocus(call, null);
     var shown = {};
     document.querySelectorAll(".voice-tile[data-user]").forEach(function (tile) {
       var cam = cameras[tile.dataset.user];
       var old = tile.querySelector(".vt-video");
+      var big = !!cam && call.focus === cam.id;
+      tile.classList.toggle("big", big);
+      tile.querySelectorAll(".vt-expand").forEach(function (b) {
+        b.setAttribute("aria-pressed", big ? "true" : "false");
+        b.setAttribute("aria-label", big ? "Shrink" : "Enlarge");
+        b.title = big ? "Shrink" : "Enlarge";
+      });
       if (!cam) {
         if (old) old.remove();
         tile.classList.remove("has-video");
+        delete tile.dataset.stream;
         return;
       }
+      tile.dataset.stream = cam.id;
       var el = videoEl(cam.id, cam.stream, function () {
         var v = document.createElement("video");
         v.className = "vt-video";
@@ -758,6 +798,16 @@
     }
     if (t.closest("[data-voice-screen]")) {
       toggleScreen();
+      return;
+    }
+    var grow = t.closest(".vt-expand");
+    if (grow) {
+      var tile = grow.closest(".voice-tile");
+      var id = tile && tile.dataset.stream;
+      if (call && id) {
+        setFocus(call, call.focus === id ? null : id);
+        showVideos();
+      }
       return;
     }
     var expand = t.closest(".vs-expand");

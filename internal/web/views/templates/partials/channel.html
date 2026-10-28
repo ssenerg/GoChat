@@ -202,6 +202,7 @@
   <div class="voice-tile" data-user="{{.User.Id}}" data-name="{{name .User}}">
     {{template "avatar" (dict "User" .User "Size" "lg")}}
     <span class="vt-name">{{name .User}}{{if .SelfStream}}<span class="vt-live" title="Sharing their screen">Live</span>{{end}}{{if .SelfVideo}}<span class="vt-cam" title="Camera on">{{icon "video"}}</span>{{end}}{{if .SelfDeaf}}<span class="vt-flag" title="Deafened">{{icon "headphones-off"}}</span>{{else if .SelfMute}}<span class="vt-flag" title="Muted">{{icon "mic-off"}}</span>{{end}}</span>
+    <button class="icon-btn sm vt-expand" type="button" aria-pressed="false" aria-label="Enlarge" title="Enlarge"><span class="when-small">{{icon "expand"}}</span><span class="when-big">{{icon "shrink"}}</span></button>
     {{if and $.Moderator (ne .User.Id $.MeID)}}<button class="icon-btn sm vt-kick" type="button" hx-post="/t/{{$.TeamName}}/ch/{{$.ChannelID}}/voice/{{.User.Id}}/disconnect" hx-swap="none" hx-confirm="Disconnect {{name .User}} from the voice channel?" aria-label="Disconnect {{name .User}}" title="Disconnect">{{icon "phone-off"}}</button>{{end}}
   </div>{{else}}
   <p class="voice-empty">Nobody is talking here yet.</p>{{end}}
