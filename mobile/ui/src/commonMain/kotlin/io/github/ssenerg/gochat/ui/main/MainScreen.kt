@@ -50,6 +50,9 @@ import io.github.ssenerg.gochat.ui.people.ChannelInfoScreen
 import io.github.ssenerg.gochat.ui.people.NewChannelScreen
 import io.github.ssenerg.gochat.ui.people.NewConversationScreen
 import io.github.ssenerg.gochat.ui.settings.SettingsScreen
+import io.github.ssenerg.gochat.ui.settings.TeamMembersScreen
+import io.github.ssenerg.gochat.ui.settings.TeamSettingsScreen
+import io.github.ssenerg.gochat.ui.settings.TwoFactorScreen
 import io.github.ssenerg.gochat.ui.thread.ThreadScreen
 import io.github.ssenerg.gochat.ui.voice.VoiceRoomScreen
 import kotlinx.coroutines.CoroutineScope
@@ -82,6 +85,12 @@ sealed interface Route {
     data class Voice(val id: String) : Route
 
     data object Settings : Route
+
+    data object TwoFactor : Route
+
+    data class TeamSettings(val teamId: String) : Route
+
+    data class TeamMembers(val teamId: String) : Route
 }
 
 /** The screens open, the sidebar at the bottom. */
@@ -235,5 +244,8 @@ private fun Screen(route: Route, session: ChatSession, app: GoChatApp) {
         is Route.ChannelInfo -> ChannelInfoScreen(session, route.id)
         is Route.Voice -> VoiceRoomScreen(session, route.id)
         Route.Settings -> SettingsScreen(session, app)
+        Route.TwoFactor -> TwoFactorScreen(session)
+        is Route.TeamSettings -> TeamSettingsScreen(session, route.teamId)
+        is Route.TeamMembers -> TeamMembersScreen(session, route.teamId)
     }
 }

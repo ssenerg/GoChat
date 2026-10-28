@@ -63,6 +63,8 @@ import gochat.v1.VoiceChannelState
 import io.github.ssenerg.gochat.core.api.userMessage
 import io.github.ssenerg.gochat.core.socket.Connection
 import io.github.ssenerg.gochat.core.model.displayName
+import io.github.ssenerg.gochat.core.model.initials
+import io.github.ssenerg.gochat.core.model.isAdmin
 import io.github.ssenerg.gochat.core.model.isPrivate
 import io.github.ssenerg.gochat.core.model.isUnread
 import io.github.ssenerg.gochat.core.model.title
@@ -155,7 +157,7 @@ private fun TeamIcon(team: Team, selected: Boolean, photo: String?, onClick: () 
             ServerImage(photo, contentDescription = team.display_name, modifier = Modifier.fillMaxSize())
         } else {
             Text(
-                team.display_name.split(' ').filter { it.isNotEmpty() }.take(2).joinToString("") { it.take(1) }.uppercase().ifEmpty { "?" },
+                team.initials(),
                 color = if (selected) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface,
                 fontWeight = FontWeight.SemiBold,
             )
@@ -187,18 +189,25 @@ private fun TeamHeader(st: ChatState, session: ChatSession) {
                 Icon(Icons.Filled.MoreVert, contentDescription = "Team menu")
             }
             DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
-                DropdownMenuItem(text = { Text("Invite people") }, onClick = {
-                    menu = false
-                    val team = st.team ?: return@DropdownMenuItem
-                    scope.launch {
-                        try {
-                            val invite = session.api.createInvite(team.id)
-                            platform.share("Join ${team.display_name} on GoChat: ${session.api.client.baseUrl}/join/${invite.token}")
-                        } catch (e: Exception) {
-                            toasts.show(e.userMessage())
+                val team = st.team
+                // As on the web: inviting and the team's settings are its admins'.
+                if (team?.isAdmin == true) {
+                    DropdownMenuItem(text = { Text("Invite people") }, onClick = {
+                        menu = false
+                        scope.launch {
+                            try {
+                                val invite = session.api.createInvite(team.id)
+                                platform.share("Join ${team.display_name} on GoChat: ${session.api.client.baseUrl}/join/${invite.token}")
+                            } catch (e: Exception) {
+                                toasts.show(e.userMessage())
+                            }
                         }
-                    }
-                })
+                    })
+                    DropdownMenuItem(text = { Text("Team settings") }, onClick = { menu = false; nav.open(Route.TeamSettings(team.id)) })
+                }
+                if (team != null) {
+                    DropdownMenuItem(text = { Text("Team members") }, onClick = { menu = false; nav.open(Route.TeamMembers(team.id)) })
+                }
                 DropdownMenuItem(text = { Text("Browse channels") }, onClick = { menu = false; nav.open(Route.Browse) })
                 DropdownMenuItem(text = { Text("Create a channel") }, onClick = { menu = false; nav.open(Route.NewChannel) })
                 DropdownMenuItem(text = { Text("New message") }, onClick = { menu = false; nav.open(Route.NewConversation) })

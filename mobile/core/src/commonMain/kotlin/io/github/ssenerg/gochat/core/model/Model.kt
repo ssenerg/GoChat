@@ -60,6 +60,10 @@ fun Channel.isUnread(): Boolean = when {
 fun Channel.moderatedBy(me: User, team: Team?): Boolean =
     role == ChannelRole.CHANNEL_ROLE_ADMIN || team?.role == TeamRole.TEAM_ROLE_ADMIN || me.role == SystemRole.SYSTEM_ROLE_ADMIN
 
+/** Up to two letters for a team without a photo. */
+fun Team.initials(): String =
+    display_name.split(' ').filter { it.isNotEmpty() }.take(2).joinToString("") { it.take(1) }.uppercase().ifEmpty { "?" }
+
 /** Whether the caller administers the team, as the web's team settings ask. */
 val Team.isAdmin: Boolean get() = role == TeamRole.TEAM_ROLE_ADMIN
 

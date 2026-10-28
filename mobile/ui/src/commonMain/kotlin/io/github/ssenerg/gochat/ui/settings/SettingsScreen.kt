@@ -19,6 +19,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Logout
 import androidx.compose.material.icons.filled.Key
+import androidx.compose.material.icons.filled.Security
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -56,6 +57,7 @@ import io.github.ssenerg.gochat.ui.BackButton
 import io.github.ssenerg.gochat.ui.LocalChatColors
 import io.github.ssenerg.gochat.ui.PresenceDot
 import io.github.ssenerg.gochat.ui.main.LocalNavigator
+import io.github.ssenerg.gochat.ui.main.Route
 import io.github.ssenerg.gochat.ui.main.LocalToasts
 import io.github.ssenerg.gochat.ui.rememberFilePicker
 import io.github.ssenerg.gochat.ui.statusLabel
@@ -80,6 +82,7 @@ fun SettingsScreen(session: ChatSession, app: GoChatApp) {
     val pickPhoto = rememberFilePicker(
         onPicked = { file -> session.launch({ session.setPhoto(file.bytes) }) { err -> err?.let { toasts.show(it) } } },
         onError = { toasts.show(it) },
+        photos = true,
     )
 
     fun run(block: suspend () -> String?) {
@@ -136,15 +139,15 @@ fun SettingsScreen(session: ChatSession, app: GoChatApp) {
                 modifier = Modifier.clickable { changePassword = true },
             )
             ListItem(
+                headlineContent = { Text("Two-factor authentication") },
+                supportingContent = { Text(if (me.totp_enabled) "On" else "Off") },
+                leadingContent = { Icon(Icons.Filled.Security, contentDescription = null) },
+                modifier = Modifier.clickable { nav.open(Route.TwoFactor) },
+            )
+            ListItem(
                 headlineContent = { Text("Sign out", color = MaterialTheme.colorScheme.error) },
                 leadingContent = { Icon(Icons.AutoMirrored.Filled.Logout, contentDescription = null, tint = MaterialTheme.colorScheme.error) },
                 modifier = Modifier.clickable { confirmSignOut = true },
-            )
-            Text(
-                "Two-factor authentication, team settings and photos of teams are on the web for now.",
-                color = LocalChatColors.current.muted,
-                fontSize = 12.sp,
-                modifier = Modifier.padding(16.dp),
             )
         }
     }
@@ -179,7 +182,7 @@ fun SettingsScreen(session: ChatSession, app: GoChatApp) {
 }
 
 @Composable
-private fun SectionTitle(text: String) {
+internal fun SectionTitle(text: String) {
     Text(
         text.uppercase(),
         color = LocalChatColors.current.muted,

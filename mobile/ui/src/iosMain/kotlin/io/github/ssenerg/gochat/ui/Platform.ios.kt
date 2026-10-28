@@ -66,7 +66,11 @@ import platform.UIKit.UIDocumentPickerViewController
 import platform.UIKit.UIPasteboard
 import platform.UIKit.UIViewController
 import platform.UIKit.popoverPresentationController
+import platform.UniformTypeIdentifiers.UTTypeGIF
 import platform.UniformTypeIdentifiers.UTTypeItem
+import platform.UniformTypeIdentifiers.UTTypeJPEG
+import platform.UniformTypeIdentifiers.UTTypePNG
+import platform.UniformTypeIdentifiers.UTTypeWebP
 import platform.darwin.NSObject
 import platform.posix.memcpy
 import kotlin.coroutines.resume
@@ -338,7 +342,7 @@ private class PickerDelegate(private val onPicked: (NSURL) -> Unit) : NSObject()
 }
 
 @Composable
-actual fun rememberFilePicker(onPicked: (PickedFile) -> Unit, onError: (String) -> Unit): () -> Unit {
+actual fun rememberFilePicker(onPicked: (PickedFile) -> Unit, onError: (String) -> Unit, photos: Boolean): () -> Unit {
     val picked by rememberUpdatedState(onPicked)
     val failed by rememberUpdatedState(onError)
     val scope = rememberCoroutineScope()
@@ -356,7 +360,8 @@ actual fun rememberFilePicker(onPicked: (PickedFile) -> Unit, onError: (String) 
         }
     }
     return {
-        val picker = UIDocumentPickerViewController(forOpeningContentTypes = listOf(UTTypeItem), asCopy = true)
+        val types = if (photos) listOf(UTTypeJPEG, UTTypePNG, UTTypeGIF, UTTypeWebP) else listOf(UTTypeItem)
+        val picker = UIDocumentPickerViewController(forOpeningContentTypes = types, asCopy = true)
         picker.delegate = delegate
         topController()?.presentViewController(picker, animated = true, completion = null)
     }
