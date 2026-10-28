@@ -107,7 +107,9 @@ People may make the unary calls the apps make over `/api/v1` (see
 the people's calls of `BotService`; apps tie their device's push token to
 the session with `PushService.RegisterDevice`. Files and photos still move over HTTP:
 `POST /api/v2/files?channel_id=&name=` and `GET /api/v2/files/<id>` take the
-same bearer token as `/api/v1/files`. The calls open to bots are
+same bearer token as `/api/v1/files`, and `POST /api/v2/teams/<id>/photo`
+makes its body, any JPEG, PNG, GIF or WebP picture up to 10 MB, a team's
+photo for its admins, answering the `Team`. The calls open to bots are
 [listed below](#what-bots-may-call).
 
 ## Updates

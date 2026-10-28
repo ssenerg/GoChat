@@ -406,7 +406,7 @@ actual fun rememberScreenShare(): suspend () -> Boolean {
 }
 
 @Composable
-actual fun rememberFilePicker(onPicked: (PickedFile) -> Unit, onError: (String) -> Unit): () -> Unit {
+actual fun rememberFilePicker(onPicked: (PickedFile) -> Unit, onError: (String) -> Unit, photos: Boolean): () -> Unit {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val picked by rememberUpdatedState(onPicked)
@@ -422,7 +422,7 @@ actual fun rememberFilePicker(onPicked: (PickedFile) -> Unit, onError: (String) 
             }
         }
     }
-    return { launcher.launch("*/*") }
+    return { launcher.launch(if (photos) "image/*" else "*/*") }
 }
 
 private suspend fun readPicked(context: Context, uri: Uri): PickedFile = withContext(Dispatchers.IO) {

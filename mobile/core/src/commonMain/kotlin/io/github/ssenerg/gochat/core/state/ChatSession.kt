@@ -22,6 +22,7 @@ import io.github.ssenerg.gochat.core.model.isConversation
 import io.github.ssenerg.gochat.core.model.isVoice
 import io.github.ssenerg.gochat.core.model.mentions
 import io.github.ssenerg.gochat.core.model.newer
+import io.github.ssenerg.gochat.core.model.photoProblem
 import io.github.ssenerg.gochat.core.model.inDnd
 import io.github.ssenerg.gochat.core.model.title
 import io.github.ssenerg.gochat.core.model.uuidTime
@@ -564,13 +565,42 @@ class ChatSession internal constructor(
         api.updateProfile(displayName)?.let { u -> _state.update { it.copy(me = u) } }
     }
 
-    suspend fun setPhoto(picture: ByteArray): String? = act {
+    suspend fun setPhoto(picture: ByteArray): String? = photoProblem(picture) ?: act {
         val u = api.client.setPhoto(picture)
         _state.update { it.copy(me = u) }
     }
 
     suspend fun removePhoto(): String? = act {
         api.removePhoto()?.let { u -> _state.update { it.copy(me = u) } }
+    }
+
+    /** Reads the person's account again, for what only its owner sees, such as two-factor. */
+    suspend fun refreshMe(): String? = act {
+        api.me().user?.let { u -> _state.update { it.copy(me = u) } }
+    }
+
+    /** Turns two-factor on with a code of the authenticator app; answers the recovery codes. */
+    suspend fun confirmTotp(code: String): List<String> {
+        val codes = api.confirmTotp(code)
+        _state.update { it.copy(me = it.me.copy(totp_enabled = true)) }
+        return codes
+    }
+
+    suspend fun disableTotp(password: String, code: String) {
+        api.disableTotp(password, code)
+        _state.update { it.copy(me = it.me.copy(totp_enabled = false)) }
+    }
+
+    suspend fun setTeamPhoto(teamId: String, picture: ByteArray): String? = photoProblem(picture) ?: act {
+        putTeam(api.client.setTeamPhoto(teamId, picture))
+    }
+
+    suspend fun removeTeamPhoto(teamId: String): String? = act {
+        api.removeTeamPhoto(teamId)?.let { putTeam(it) }
+    }
+
+    private fun putTeam(t: Team) {
+        _state.update { s -> s.copy(teams = s.teams.map { if (it.id == t.id) t else it }) }
     }
 
     private suspend fun act(block: suspend () -> Unit): String? = try {
@@ -713,7 +743,8 @@ class ChatSession internal constructor(
         ev.profile_changed?.user?.let { u ->
             _state.update { s ->
                 s.copy(
-                    me = if (u.id == s.me.id) u else s.me,
+                    // The event shows the person as others see them, without two-factor.
+                    me = if (u.id == s.me.id) u.copy(totp_enabled = s.me.totp_enabled) else s.me,
                     channels = s.channels.map { ch ->
                         when {
                             ch.peer?.id == u.id -> ch.copy(peer = u)

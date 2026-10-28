@@ -45,6 +45,7 @@ kotlin {
             implementation(libs.compose.icons.extended)
             implementation(libs.coil.compose)
             implementation(libs.coil.network.ktor)
+            implementation(libs.qrose)
         }
         androidMain.dependencies {
             implementation(libs.androidx.activity.compose)

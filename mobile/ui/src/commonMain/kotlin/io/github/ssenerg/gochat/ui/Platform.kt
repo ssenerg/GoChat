@@ -123,9 +123,9 @@ expect fun rememberScreenShare(): suspend () -> Boolean
 @Composable
 expect fun VideoView(video: CallVideo, modifier: Modifier = Modifier, fill: Boolean = true)
 
-/** Returns what opens the system's file picker; [onPicked] gets the file. */
+/** Returns what opens the system's file picker; [onPicked] gets the file. With [photos] it offers the pictures a photo may be. */
 @Composable
-expect fun rememberFilePicker(onPicked: (PickedFile) -> Unit, onError: (String) -> Unit): () -> Unit
+expect fun rememberFilePicker(onPicked: (PickedFile) -> Unit, onError: (String) -> Unit, photos: Boolean = false): () -> Unit
 
 /** Takes the system's back gesture while [enabled]. */
 @Composable

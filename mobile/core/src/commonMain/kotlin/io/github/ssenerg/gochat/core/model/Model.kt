@@ -6,6 +6,7 @@ import gochat.v1.ChannelType
 import gochat.v1.Message
 import gochat.v1.Status
 import gochat.v1.Team
+import gochat.v1.TeamMember
 import gochat.v1.TeamRole
 import gochat.v1.User
 import gochat.v1.SystemRole
@@ -58,6 +59,46 @@ fun Channel.isUnread(): Boolean = when {
 /** Whether the caller moderates the channel: its admin, or the team's, or the system's. */
 fun Channel.moderatedBy(me: User, team: Team?): Boolean =
     role == ChannelRole.CHANNEL_ROLE_ADMIN || team?.role == TeamRole.TEAM_ROLE_ADMIN || me.role == SystemRole.SYSTEM_ROLE_ADMIN
+
+/** Up to two letters for a team without a photo. */
+fun Team.initials(): String =
+    display_name.split(' ').filter { it.isNotEmpty() }.take(2).joinToString("") { it.take(1) }.uppercase().ifEmpty { "?" }
+
+/** Whether the caller administers the team, as the web's team settings ask. */
+val Team.isAdmin: Boolean get() = role == TeamRole.TEAM_ROLE_ADMIN
+
+/**
+ * Whether the caller may change [m]'s role or remove them, as the server
+ * allows: another admin only the team's owner may, the owner no one else.
+ */
+fun Team.canChange(me: User, m: TeamMember): Boolean {
+    val id = m.user?.id ?: return false
+    val system = me.role == SystemRole.SYSTEM_ROLE_ADMIN
+    return when {
+        !(isAdmin || system) || id == me.id -> false
+        system -> true
+        id == owner_id -> false
+        m.role == TeamRole.TEAM_ROLE_ADMIN -> me.id == owner_id
+        else -> true
+    }
+}
+
+/** The largest picture the server takes for a photo. */
+const val MAX_PHOTO_BYTES = 10 * 1024 * 1024
+
+/** Why the server would refuse [picture] as a photo, in its words, or null: it takes JPEG, PNG, GIF and WebP up to 10 MB. */
+fun photoProblem(picture: ByteArray): String? {
+    fun starts(vararg b: Int, at: Int = 0) = picture.size >= at + b.size && b.indices.all { picture[at + it] == b[it].toByte() }
+    fun startsText(t: String, at: Int = 0) = starts(*t.map { it.code }.toIntArray(), at = at)
+    val known = starts(0xFF, 0xD8) || starts(0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A) ||
+        startsText("GIF87a") || startsText("GIF89a") || (startsText("RIFF") && startsText("WEBPVP8", at = 8))
+    return when {
+        picture.isEmpty() -> "Choose a picture."
+        picture.size > MAX_PHOTO_BYTES -> "The picture is too large, use one under 10 MB and 24 megapixels."
+        !known -> "Use a JPEG, PNG, GIF or WebP picture."
+        else -> null
+    }
+}
 
 /** The time of a version 1 (time) UUID, in 100ns since 1582, or 0. */
 fun uuidTime(id: String): Long {

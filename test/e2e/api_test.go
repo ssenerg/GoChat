@@ -392,16 +392,17 @@ func testClientAPI(t *testing.T, bobName, bobPass, town string) {
 		}
 	})
 
-	t.Run("profile photo", func(t *testing.T) {
-		img := image.NewRGBA(image.Rect(0, 0, 300, 200))
-		for x := range 300 {
-			for y := range 200 {
-				img.Set(x, y, color.RGBA{R: uint8(x), G: 90, B: uint8(y), A: 255})
-			}
+	img := image.NewRGBA(image.Rect(0, 0, 300, 200))
+	for x := range 300 {
+		for y := range 200 {
+			img.Set(x, y, color.RGBA{R: uint8(x), G: 90, B: uint8(y), A: 255})
 		}
-		var buf bytes.Buffer
-		_ = png.Encode(&buf, img)
-		res, b := bob.raw(http.MethodPost, "/api/v1/photo", buf.Bytes(), http.Header{"Accept": {"application/proto"}})
+	}
+	var picture bytes.Buffer
+	_ = png.Encode(&picture, img)
+
+	t.Run("profile photo", func(t *testing.T) {
+		res, b := bob.raw(http.MethodPost, "/api/v1/photo", picture.Bytes(), http.Header{"Accept": {"application/proto"}})
 		u := &pb.User{}
 		if res.StatusCode != http.StatusOK || proto.Unmarshal(b, u) != nil || u.Photo == "" {
 			t.Fatalf("set photo: %d %q", res.StatusCode, b)
@@ -411,6 +412,39 @@ func testClientAPI(t *testing.T, bobName, bobPass, town string) {
 			t.Fatalf("get photo: %d %v", res.StatusCode, res.Header)
 		}
 		bob.must("gochat.v1.UserService/RemovePhoto", &pb.RemovePhotoRequest{}, &pb.RemovePhotoResponse{})
+	})
+
+	t.Run("team photo", func(t *testing.T) {
+		teams := &pb.ListTeamsResponse{}
+		admin.must("gochat.v1.TeamService/ListTeams", &pb.ListTeamsRequest{}, teams)
+		var teamID string
+		for _, tm := range teams.Teams {
+			if tm.Name == teamName {
+				teamID = tm.Id
+			}
+		}
+		path := "/api/v2/teams/" + teamID + "/photo"
+		accept := http.Header{"Accept": {"application/proto"}}
+		if res, b := bob.raw(http.MethodPost, path, picture.Bytes(), accept); res.StatusCode != http.StatusForbidden {
+			t.Fatalf("a member set the team photo: %d %q", res.StatusCode, b)
+		}
+		if res, b := admin.raw(http.MethodPost, path, []byte("not a picture"), accept); res.StatusCode != http.StatusBadRequest {
+			t.Fatalf("a team photo that is no picture: %d %q", res.StatusCode, b)
+		}
+		res, b := admin.raw(http.MethodPost, path, picture.Bytes(), accept)
+		team := &pb.Team{}
+		if res.StatusCode != http.StatusOK || proto.Unmarshal(b, team) != nil || team.Photo == "" || team.Id != teamID {
+			t.Fatalf("set the team photo: %d %q", res.StatusCode, b)
+		}
+		res, got := bob.raw(http.MethodGet, "/api/v1/photos/t/"+teamID+"/"+team.Photo, nil, nil)
+		if res.StatusCode != http.StatusOK || !strings.HasPrefix(res.Header.Get("Content-Type"), "image/") || len(got) == 0 {
+			t.Fatalf("get the team photo: %d %v", res.StatusCode, res.Header)
+		}
+		removed := &pb.RemoveTeamPhotoResponse{}
+		admin.must("gochat.v1.TeamService/RemoveTeamPhoto", &pb.RemoveTeamPhotoRequest{TeamId: teamID}, removed)
+		if removed.Team.GetPhoto() != "" {
+			t.Fatalf("the team photo stayed: %v", removed.Team)
+		}
 	})
 
 	t.Run("apps talk in voice channels", func(t *testing.T) {
