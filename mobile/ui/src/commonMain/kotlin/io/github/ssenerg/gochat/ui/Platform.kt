@@ -99,6 +99,10 @@ expect fun rememberMicrophoneAccess(): suspend () -> Boolean
 @Composable
 expect fun rememberCallAccess(): suspend () -> Boolean
 
+/** Returns what asks to show notices of messages that come while the app is closed; it answers whether they show. */
+@Composable
+expect fun rememberNotificationAccess(): suspend () -> Boolean
+
 /** Returns what asks for the camera when it is not allowed yet; it answers whether it is. */
 @Composable
 expect fun rememberCameraAccess(): suspend () -> Boolean

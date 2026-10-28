@@ -4,6 +4,20 @@ plugins {
     alias(libs.plugins.compose.compiler)
 }
 
+// Pushes come through Firebase Cloud Messaging once a build has the
+// settings of its Firebase app (Project settings, Your apps): as gochat.fcm.*
+// Gradle properties or GOCHAT_FCM_* variables. Firebase reads them as the
+// resources its own Gradle plugin would write; without them there are none,
+// and the app gets no pushes.
+val fcm = listOf(
+    Triple("google_app_id", "appId", "GOCHAT_FCM_APP_ID"),
+    Triple("google_api_key", "apiKey", "GOCHAT_FCM_API_KEY"),
+    Triple("project_id", "projectId", "GOCHAT_FCM_PROJECT_ID"),
+    Triple("gcm_defaultSenderId", "senderId", "GOCHAT_FCM_SENDER_ID"),
+).associate { (resource, property, variable) ->
+    resource to (providers.gradleProperty("gochat.fcm.$property").orNull ?: providers.environmentVariable(variable).orNull)
+}
+
 android {
     namespace = "io.github.ssenerg.gochat.android"
     compileSdk = libs.versions.android.compileSdk.get().toInt()
@@ -17,6 +31,9 @@ android {
         // Phones, and the 64-bit emulators; WebRTC's native code is large.
         ndk {
             abiFilters += listOf("arm64-v8a", "armeabi-v7a", "x86_64")
+        }
+        if (fcm.values.none { it.isNullOrBlank() }) {
+            fcm.forEach { (name, value) -> resValue("string", name, value!!) }
         }
     }
     signingConfigs {
@@ -60,6 +77,7 @@ android {
     }
     buildFeatures {
         compose = true
+        resValues = true
     }
 }
 

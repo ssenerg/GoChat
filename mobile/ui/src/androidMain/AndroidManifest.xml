@@ -19,6 +19,21 @@
             android:exported="false"
             android:foregroundServiceType="microphone|camera|mediaProjection" />
 
+        <!-- Pushes from the server, through Firebase Cloud Messaging. -->
+        <service
+            android:name="io.github.ssenerg.gochat.ui.GoChatMessagingService"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="com.google.firebase.MESSAGING_EVENT" />
+            </intent-filter>
+        </service>
+        <meta-data
+            android:name="com.google.firebase.messaging.default_notification_icon"
+            android:resource="@drawable/gochat_message" />
+        <meta-data
+            android:name="com.google.firebase.messaging.default_notification_channel_id"
+            android:value="messages" />
+
         <!-- Hands downloaded attachments to other apps to open. -->
         <provider
             android:name="androidx.core.content.FileProvider"

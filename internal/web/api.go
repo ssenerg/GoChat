@@ -78,6 +78,7 @@ var apiCalls = map[string][]string{
 		"SetCommands", "GetCommands", "AnswerCallback", "SetWebhook", "DeleteWebhook", "GetWebhookInfo", "ConfirmUpdates",
 	},
 	"gochat.v1.VoiceService": {"JoinVoice", "LeaveVoice", "UpdateVoiceState", "DisconnectVoiceMember", "ListVoiceStates"},
+	"gochat.v1.PushService":  {"RegisterDevice", "UnregisterDevice"},
 }
 
 // apiLimited are the calls on the stricter budget of the sign-in pages:

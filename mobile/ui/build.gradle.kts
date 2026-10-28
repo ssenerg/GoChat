@@ -50,6 +50,7 @@ kotlin {
             implementation(libs.androidx.activity.compose)
             implementation(libs.ktor.client.okhttp)
             implementation(libs.stream.webrtc)
+            implementation(libs.firebase.messaging)
         }
         iosMain.dependencies {
             implementation(libs.multiplatform.settings)

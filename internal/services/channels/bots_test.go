@@ -16,6 +16,7 @@ import (
 	ierrors "github.com/ssenerg/gochat/internal/errors"
 	"github.com/ssenerg/gochat/internal/services/callbacks"
 	"github.com/ssenerg/gochat/internal/services/hub"
+	"github.com/ssenerg/gochat/internal/services/push"
 	"github.com/ssenerg/gochat/internal/services/updates"
 )
 
@@ -267,5 +268,30 @@ func TestPressingAButtonAsksTheBot(t *testing.T) {
 	delete(a.bots, bot)
 	if _, err := press(presser, "yes"); !ierrors.Is(err, ierrors.CodeFailedPrecondition) {
 		t.Fatalf("pressing the button of a bot that left: %v", err)
+	}
+}
+
+func TestPushLeavesBotsOut(t *testing.T) {
+	a, _, _, person, bot := botChannel(t, models.ChannelPublic, false)
+	a.ch.DisplayName = "General"
+	got := make(chan push.Posted, 1)
+	a.Push = a.Engine.SpawnFunc(func(c *actor.Context) {
+		if p, ok := c.Message().(push.Posted); ok {
+			got <- p
+		}
+	}, "push")
+	m := &pb.Message{Id: ids.NewTime().String(), ChannelId: a.id.String(), RootId: ids.NewTime().String()}
+	a.push(m, []string{person.String()})
+	var p push.Posted
+	select {
+	case p = <-got:
+	case <-time.After(time.Second):
+		t.Fatal("nothing was handed to push")
+	}
+	_, hasBot := p.Members[bot.String()]
+	_, hasPerson := p.Members[person.String()]
+	if p.Message != m || p.TeamID != a.ch.TeamID || p.Conversation || p.ChannelName != "General" ||
+		hasBot || !hasPerson || len(p.Participants) != 1 {
+		t.Fatalf("handed %+v", p)
 	}
 }

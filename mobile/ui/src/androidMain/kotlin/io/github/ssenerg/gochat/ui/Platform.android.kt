@@ -328,6 +328,30 @@ actual fun rememberCallAccess(): suspend () -> Boolean {
 }
 
 @Composable
+actual fun rememberNotificationAccess(): suspend () -> Boolean {
+    val context = LocalContext.current
+    val pending = remember { arrayOfNulls<CompletableDeferred<Boolean>>(1) }
+    val launcher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+        pending[0]?.complete(granted)
+        pending[0] = null
+    }
+    val currentLauncher by rememberUpdatedState(launcher)
+    return remember(context) {
+        suspend {
+            // Asked for from Android 13; before, notices show.
+            Build.VERSION.SDK_INT < 33 ||
+                context.checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED ||
+                run {
+                    val d = CompletableDeferred<Boolean>()
+                    pending[0] = d
+                    currentLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+                    d.await()
+                }
+        }
+    }
+}
+
+@Composable
 actual fun rememberCameraAccess(): suspend () -> Boolean {
     val context = LocalContext.current
     val pending = remember { arrayOfNulls<CompletableDeferred<Boolean>>(1) }

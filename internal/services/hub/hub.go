@@ -153,6 +153,9 @@ type (
 	Statuses struct{ UserIDs []string }
 )
 
+// Disconnected replies with those of UserIDs who have no connection open.
+type Disconnected struct{ UserIDs []string }
+
 // SetStatus records the availability a connected user chose.
 type SetStatus struct {
 	UserID   string
@@ -325,6 +328,14 @@ func (h *hub) Receive(c *actor.Context) {
 		for _, id := range msg.UserIDs {
 			if s := h.status(id); s != pb.Status_STATUS_OFFLINE {
 				out[id] = s
+			}
+		}
+		actors.Reply(c, out)
+	case Disconnected:
+		out := make([]string, 0, len(msg.UserIDs))
+		for _, id := range msg.UserIDs {
+			if len(h.online[id]) == 0 {
+				out = append(out, id)
 			}
 		}
 		actors.Reply(c, out)

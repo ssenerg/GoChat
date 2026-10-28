@@ -39,6 +39,7 @@ import io.github.ssenerg.gochat.core.state.GoChatApp
 import io.github.ssenerg.gochat.ui.EmptyState
 import io.github.ssenerg.gochat.ui.LocalPlatform
 import io.github.ssenerg.gochat.ui.PlatformBackHandler
+import io.github.ssenerg.gochat.ui.rememberNotificationAccess
 import io.github.ssenerg.gochat.ui.channel.ChannelScreen
 import io.github.ssenerg.gochat.ui.lists.PinsScreen
 import io.github.ssenerg.gochat.ui.lists.SavedScreen
@@ -140,6 +141,26 @@ fun MainScreen(app: GoChatApp, session: ChatSession) {
         }
     }
 
+    // Notices of messages while the app is closed, asked for once.
+    val platform = LocalPlatform.current
+    val notifications = rememberNotificationAccess()
+    LaunchedEffect(session) {
+        if (platform.store.get(KEY_NOTIFICATIONS_ASKED) == null) {
+            notifications()
+            platform.store.put(KEY_NOTIFICATIONS_ASKED, "1")
+        }
+    }
+
+    // A push the person tapped opens its channel, or its thread.
+    val opening by app.opening.collectAsState()
+    LaunchedEffect(opening) {
+        val t = opening ?: return@LaunchedEffect
+        app.pushOpened(t)
+        session.showTeam(t.teamId)
+        nav.openChannel(t.channelId)
+        if (t.rootId.isNotEmpty()) nav.open(Route.Thread(t.channelId, t.rootId))
+    }
+
     // Why a call ended or could not start.
     LaunchedEffect(session) {
         session.voice.errors.collect { toasts.show(it) }
@@ -161,7 +182,7 @@ fun MainScreen(app: GoChatApp, session: ChatSession) {
 
     // What is on screen is what gets read; in the background nothing is.
     val top = nav.top
-    val foreground by LocalPlatform.current.foreground.collectAsState()
+    val foreground by platform.foreground.collectAsState()
     LaunchedEffect(foreground) { session.setForeground(foreground) }
     LaunchedEffect(top, foreground) {
         when {
@@ -195,6 +216,8 @@ fun MainScreen(app: GoChatApp, session: ChatSession) {
         }
     }
 }
+
+private const val KEY_NOTIFICATIONS_ASKED = "notifications_asked"
 
 @Composable
 private fun Screen(route: Route, session: ChatSession, app: GoChatApp) {

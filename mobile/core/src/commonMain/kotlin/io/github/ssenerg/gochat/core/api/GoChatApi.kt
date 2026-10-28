@@ -38,6 +38,18 @@ class GoChatApi(val client: ApiClient) {
 
     suspend fun me() = auth("Me", MeRequest(), MeResponse.ADAPTER)
 
+    /** Ties the device's push token to the session; false when the server pushes nowhere. */
+    suspend fun registerDevice(platform: PushPlatform, token: String, sandbox: Boolean) =
+        client.call(
+            "gochat.v1.PushService/RegisterDevice",
+            RegisterDeviceRequest(platform = platform, token = token, sandbox = sandbox),
+            RegisterDeviceResponse.ADAPTER,
+        ).enabled
+
+    suspend fun unregisterDevice() {
+        client.call("gochat.v1.PushService/UnregisterDevice", UnregisterDeviceRequest(), UnregisterDeviceResponse.ADAPTER)
+    }
+
     suspend fun changePassword(current: String, new: String) {
         auth("ChangePassword", ChangePasswordRequest(current_password = current, new_password = new), ChangePasswordResponse.ADAPTER)
     }

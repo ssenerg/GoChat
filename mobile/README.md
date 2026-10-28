@@ -77,12 +77,12 @@ iosApp/      the Xcode project: a SwiftUI shell that shows the shared screens
   to the team they were opened in, as on the web.
 - Profile name and photo, status with do not disturb, custom status,
   password, sign-out.
+- Push notifications while the app is closed, from servers that push to
+  this build (below): direct and group messages, replies in their threads
+  and mentions. A tap opens the conversation or the thread, in its team.
 
 Not in the apps yet:
 
-- **Push notifications while the app is closed.** The apps show notices
-  while they run. Web Push reaches browsers only: the apps would need
-  Firebase Cloud Messaging on Android and APNs on iOS.
 - Voice messages that Chrome or Firefox recorded (WebM) do not play on iOS,
   whose player has no WebM. Android plays them.
 - Two-factor setup, team settings and team photos stay on the web.
@@ -140,6 +140,43 @@ environment: `GOCHAT_RELEASE_KEYSTORE` (the keystore's path),
 `GOCHAT_RELEASE_KEYSTORE_PASSWORD`, `GOCHAT_RELEASE_KEY_ALIAS` and
 `GOCHAT_RELEASE_KEY_PASSWORD`; without them the release build comes out
 unsigned.
+
+## Push notifications
+
+The server pushes through Firebase Cloud Messaging on Android and APNs on
+iOS (see "Push notifications" in the [main README](../README.md)), to the
+builds of the app its credentials belong to: a build gets pushes from a
+server holding the service account of the build's Firebase project, or a
+signing key of the build's Apple team. After signing in, the app asks to
+show notifications, once, and registers its device's token with the
+session; signing out unregisters it and drops the token on the device too.
+`PushService` in the core is each platform's side, `AndroidPush` and
+`IosPush` in ui.
+
+**Android.** A build has FCM once it has its Firebase app's settings
+(Firebase console → Project settings → General → Your apps → the Android
+app of the package you build: `io.github.ssenerg.gochat`, or
+`io.github.ssenerg.gochat.debug` for debug builds). Give them as Gradle
+properties, in `~/.gradle/gradle.properties`, or as environment variables:
+
+```properties
+gochat.fcm.appId=1:123456789012:android:0123456789abcdef   # GOCHAT_FCM_APP_ID
+gochat.fcm.apiKey=AIza...                                  # GOCHAT_FCM_API_KEY
+gochat.fcm.projectId=my-gochat                             # GOCHAT_FCM_PROJECT_ID
+gochat.fcm.senderId=123456789012                           # GOCHAT_FCM_SENDER_ID
+```
+
+They are the values `google-services.json` holds, which the app does not
+need. Without them the app builds and runs as before, without pushes. A
+push that comes while the app runs shows as the system shows the others,
+in the Messages channel of the app's notification settings.
+
+**iOS.** The app has the Push Notifications capability: under your team,
+Xcode adds it to the App ID with the bundle id. The server's APNs `topic`
+is that bundle id (`GOCHAT_BUNDLE_ID`). Builds Xcode runs, and the
+simulator's, get tokens of Apple's sandbox and say so when they register;
+App Store and TestFlight builds get production ones. The simulator gets
+pushes on a Mac with Apple silicon.
 
 ## Trying it on a phone
 

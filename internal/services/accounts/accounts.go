@@ -31,6 +31,7 @@ import (
 	"github.com/ssenerg/gochat/internal/services/convert"
 	"github.com/ssenerg/gochat/internal/services/hub"
 	"github.com/ssenerg/gochat/internal/services/invites"
+	"github.com/ssenerg/gochat/internal/services/push"
 	"github.com/ssenerg/gochat/internal/services/users"
 	"github.com/ssenerg/gochat/internal/services/voice"
 )
@@ -88,8 +89,10 @@ type Deps struct {
 	Authz  *authz.Authorizer
 	Engine *actor.Engine
 	Hub    *actor.PID
-	// Voice hears of revoked sessions too, which may talk in voice channels.
+	// Voice hears of revoked sessions too, which may talk in voice channels,
+	// and Push, which forgets their devices.
 	Voice  *actor.PID
+	Push   *actor.PID
 	sealer *secure.Sealer
 	// recoveryKey keys the hashes of recovery codes, which are too short to
 	// be stored under a plain hash.
@@ -698,6 +701,9 @@ func (d *Deps) Revoked(userID gocql.UUID, hashes [][]byte, all bool) {
 	d.Engine.Send(d.Hub, hub.RevokeSessions{UserID: userID.String(), SessionIDs: idList, All: all})
 	if d.Voice != nil {
 		d.Engine.Send(d.Voice, voice.RevokeSessions{UserID: userID, SessionIDs: idList, All: all})
+	}
+	if d.Push != nil {
+		d.Engine.Send(d.Push, push.Forget{UserID: userID, Hashes: hashes, All: all})
 	}
 }
 

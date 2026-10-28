@@ -11,6 +11,7 @@ import (
 	"github.com/ssenerg/gochat/internal/core/models"
 	ierrors "github.com/ssenerg/gochat/internal/errors"
 	"github.com/ssenerg/gochat/internal/services/convert"
+	"github.com/ssenerg/gochat/internal/services/push"
 )
 
 // posted is the event of a message posted, with whom its thread notifies.
@@ -19,6 +20,22 @@ func (a *channel) posted(m *pb.Message, participants []string) *pb.MessagePosted
 		Message: m, ParticipantIds: participants,
 		TeamId: convert.ID(a.ch.TeamID), Conversation: a.ch.Kind.Conversation(),
 	}
+}
+
+// push hands a posted message to push, for the closed apps of whom it
+// calls for.
+func (a *channel) push(m *pb.Message, participants []string) {
+	if a.Push == nil {
+		return
+	}
+	name := ""
+	if !a.ch.Kind.Conversation() {
+		name = a.ch.DisplayName
+	}
+	a.Engine.Send(a.Push, push.Posted{
+		Message: m, TeamID: a.ch.TeamID, Conversation: a.ch.Kind.Conversation(),
+		ChannelName: name, Members: a.recipients, Participants: participants,
+	})
 }
 
 // inTeam reports whether userID belongs to teamID.

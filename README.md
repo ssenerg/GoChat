@@ -4,7 +4,8 @@ A self-hosted team chat in the spirit of Mattermost: teams, public and private
 channels, voice channels to talk, show a camera and share a screen in as in
 Discord, direct messages, one-time
 invite links, attachments, voice messages, presence and typing indicators,
-all delivered in real time. The whole application runs on
+all delivered in real time, and pushed to the phone apps while they are
+closed. The whole application runs on
 the [hollywood](https://github.com/anthdm/hollywood) actor engine, on both the
 server and the web gateway, and the browser UI is server-rendered HTML driven
 by [htmx](https://htmx.org) over a WebSocket. Native apps for Android and iOS,
@@ -36,6 +37,7 @@ API and webhooks.
 | `updates` → one actor per account | numbers the account's updates and keeps their log |
 | `bots` (pool) | bot accounts and tokens, commands, button answers, webhooks |
 | `voice` | who talks in which voice channel, join tokens, the voice servers |
+| `push` (pool) | the apps' device tokens, and pushes through FCM and APNs to apps that are closed |
 
 A channel actor is the single writer for its channel, so ordering and
 membership checks never race. It loads lazily on first use and passivates when
@@ -185,6 +187,34 @@ processed. [client.proto](api/protobuf/proto/gochat/v1/client.proto)
 documents it, close codes included. Newer apps still read `/api/v1/info` and
 photos there; [retiring-api-v1.md](docs/retiring-api-v1.md) plans the rest.
 
+### Push notifications
+
+The apps get pushes while they are closed: through Firebase Cloud
+Messaging on Android and APNs on iOS, once the server has the credentials
+of either (see [Configuration](#configuration)); without them nothing is
+pushed, and the apps run as before.
+
+- After signing in, an app ties its device's token to its session with
+  `PushService.RegisterDevice`
+  ([push.proto](api/protobuf/proto/gochat/v1/push.proto)). The token lasts
+  as long as the session: signing out, revoking the session from the
+  session list or deactivating the account forgets it, and so does the
+  provider saying the token is dead. A token moves to the session that
+  registers it last, so a phone signed in again never hears of the earlier
+  account.
+- The server pushes what the apps and the web show a notice for: messages
+  in direct and group conversations, replies in threads the person takes
+  part in, and mentions of them, by name or `@channel`. `@here` calls for
+  those online, so it pushes to no one.
+- It pushes only to people with no connection open anywhere, an app or a
+  tab: those see the message there. It never pushes in a channel they
+  muted, or while they do not want to be disturbed.
+- A push names the author and the channel, and says what the message says
+  as the notices do: one line, cut at 140 characters, or "Sent a file".
+  With `services.push.excerpts` off it says "New message" alone, and FCM
+  and APNs never read what anyone wrote. Its data names the channel, the
+  thread and the team, which the app opens when the push is tapped.
+
 ### Storage
 
 - **ScyllaDB** holds everything. Messages are partitioned by
@@ -243,6 +273,10 @@ photos there; [retiring-api-v1.md](docs/retiring-api-v1.md) plans the rest.
   with `rel="nofollow noopener noreferrer"`. Attachments are served with
   `Content-Disposition: attachment` unless they are safe images or voice
   messages, which play in place with the audio type the server detected.
+- Pushes: device tokens are tied to one session and forgotten with it; a
+  push carries at most a one-line excerpt, as the notices show, or none
+  with `services.push.excerpts` off, and goes only to sessions still in
+  use.
 - Voice: join tokens are single-use, short-lived, stored hashed and bound to
   one voice server; its websocket takes the web gateway's pages and no other
   site's (the apps, which are not pages, send no origin). Only
@@ -345,7 +379,8 @@ repository, in the setup the server has: the script,
 `docker-compose.yml` and `.env` belong to root, and the key cannot change
 them. When `deployments/docker/deploy.sh` or
 `deployments/docker/docker-compose.yml` change here, install them on the
-server again, as below; voice channels changed both.
+server again, as below; voice channels changed both, and push
+notifications the compose file.
 
 Once, on the server, as root, in a clone of this repository: a user to
 deploy as (in the `docker` group, which is as good as root on that server)
@@ -487,11 +522,46 @@ Secrets that should come from the environment:
 | `VOICE_ICE_TURN_SECRET` (optional) | voice |
 | `SERVICES_ACCOUNTS_SECRET_KEY` | server |
 | `SERVICES_ACCOUNTS_SETUP_TOKEN` (until the first account exists) | server |
+| `SERVICES_PUSH_FCM_CREDENTIALS` or `SERVICES_PUSH_FCM_CREDENTIALS_FILE` (optional) | server |
+| `SERVICES_PUSH_APNS_KEY` or `SERVICES_PUSH_APNS_KEY_FILE` (optional) | server |
 
 `services.updates` sets how long the update logs keep updates (`retention`,
 a week by default), and `services.bots` how many bots a person may own and
 how webhooks are delivered. Webhooks go only to public addresses unless
 `services.bots.allow_private_webhooks` is set, for development.
+
+`services.push` turns on push notifications to the apps, each provider
+once it has its credentials:
+
+- **FCM**, for Android: the JSON key of a service account of the Firebase
+  project the Android app is built with (Firebase console → Project
+  settings → Service accounts → Generate new private key), in
+  `services.push.fcm.credentials` or, as a path, `credentials_file`. The
+  account needs to send messages, as the Firebase Admin SDK's does.
+- **APNs**, for iOS: a token signing key (Apple Developer → Keys, with
+  Apple Push Notifications service), the `.p8` file in
+  `services.push.apns.key` or, as a path, `key_file`, with its `key_id`,
+  the team's `team_id` and the app's bundle id as `topic`. Each app says
+  whether its token is of Apple's sandbox, as development builds' are, or
+  of production.
+
+A push reaches only the builds of the app those credentials belong to, so
+a server pushes to the apps built with its Firebase project and its Apple
+team: see [mobile/README.md](mobile/README.md#push-notifications). The
+server must reach `fcm.googleapis.com`, `oauth2.googleapis.com` and
+`api.push.apple.com` (or `api.sandbox.push.apple.com`) over HTTPS; in the
+Docker stack it reaches them over the `frontend` network, where it
+publishes no port. `.env` passes the credentials through:
+
+```bash
+SERVICES_PUSH_FCM_CREDENTIALS='{"type":"service_account","project_id":...}'   # jq -c . key.json
+SERVICES_PUSH_APNS_KEY="-----BEGIN PRIVATE KEY-----
+...
+-----END PRIVATE KEY-----"
+SERVICES_PUSH_APNS_KEY_ID=ABC123DEFG
+SERVICES_PUSH_APNS_TEAM_ID=DEF123GHIJ
+SERVICES_PUSH_APNS_TOPIC=io.github.ssenerg.gochat
+```
 
 Set `web.public_url` to the origin browsers use; an `https` origin turns on
 `Secure` cookies and HSTS. Behind a reverse proxy, list its addresses in

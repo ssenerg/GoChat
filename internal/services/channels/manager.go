@@ -107,6 +107,9 @@ type Deps struct {
 	UpdatesCfg *updates.Config
 	// Callbacks holds the button presses bots have yet to answer.
 	Callbacks *actor.PID
+	// Push reaches the closed apps of those a message calls for; nil
+	// pushes nothing.
+	Push *actor.PID
 }
 
 // passivate asks to stop an idle channel actor that has handled requests.

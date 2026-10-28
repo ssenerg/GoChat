@@ -27,6 +27,7 @@ import (
 	"github.com/ssenerg/gochat/internal/core/window"
 	ierrors "github.com/ssenerg/gochat/internal/errors"
 	"github.com/ssenerg/gochat/internal/services/hub"
+	"github.com/ssenerg/gochat/internal/services/push"
 	"github.com/ssenerg/gochat/internal/services/users"
 )
 
@@ -229,12 +230,18 @@ func (f *fakeRepo) ReleaseInvite(context.Context, *models.Invite, gocql.UUID, ti
 	return errUnused
 }
 
-// recorder keeps what the accounts send the hub.
-type recorder struct{ got chan hub.RevokeSessions }
+// recorder keeps what the accounts send the hub, and push.
+type recorder struct {
+	got    chan hub.RevokeSessions
+	forget chan push.Forget
+}
 
 func (r *recorder) Receive(c *actor.Context) {
-	if msg, ok := c.Message().(hub.RevokeSessions); ok {
+	switch msg := c.Message().(type) {
+	case hub.RevokeSessions:
 		r.got <- msg
+	case push.Forget:
+		r.forget <- msg
 	}
 }
 
@@ -246,6 +253,7 @@ type fixture struct {
 	engine *actor.Engine
 	pid    *actor.PID
 	hub    chan hub.RevokeSessions
+	push   chan push.Forget
 	deps   *Deps
 }
 
@@ -267,12 +275,15 @@ func newFixture(t *testing.T, mutate func(*Config)) *fixture {
 	}
 	repo := newFakeRepo()
 	got := make(chan hub.RevokeSessions, 16)
+	forget := make(chan push.Forget, 16)
 	hubPID := engine.Spawn(func() actor.Receiver { return &recorder{got: got} }, "hub")
+	pushPID := engine.Spawn(func() actor.Receiver { return &recorder{forget: forget} }, "push")
 	deps, err := NewDeps(zap.NewNop(), cfg, repo, users.NewCache(repo, 100, time.Minute), authztest.New(t), engine, hubPID)
 	if err != nil {
 		t.Fatal(err)
 	}
-	f := &fixture{t: t, repo: repo, engine: engine, hub: got, deps: deps}
+	deps.Push = pushPID
+	f := &fixture{t: t, repo: repo, engine: engine, hub: got, push: forget, deps: deps}
 	f.pid = engine.Spawn(Pool(deps), "accounts")
 	t.Cleanup(func() { <-engine.Poison(f.pid).Done() })
 	return f
@@ -316,6 +327,50 @@ func (f *fixture) revocation() hub.RevokeSessions {
 	case <-time.After(5 * time.Second):
 		f.t.Fatal("the hub was not told of a revocation")
 		return hub.RevokeSessions{}
+	}
+}
+
+// forgotten is what push was told to forget next.
+func (f *fixture) forgotten() push.Forget {
+	f.t.Helper()
+	select {
+	case msg := <-f.push:
+		return msg
+	case <-time.After(5 * time.Second):
+		f.t.Fatal("push was not told of a revocation")
+		return push.Forget{}
+	}
+}
+
+func TestRevocationsForgetDevices(t *testing.T) {
+	f := newFixture(t, nil)
+	admin := f.user("ada", models.SystemRoleAdmin)
+	bob := f.user("bob", models.SystemRoleUser)
+	ap, _ := f.login(admin, "10.0.0.1")
+	phone, _ := f.login(bob, "10.0.0.2")
+	tablet, _ := f.login(bob, "10.0.0.3")
+	laptop, _ := f.login(bob, "10.0.0.4")
+	same := func(got push.Forget, all bool, want ...[]byte) bool {
+		return got.UserID == bob.ID && got.All == all && slices.EqualFunc(got.Hashes, want, bytes.Equal)
+	}
+
+	if _, err := ask[Done](f, Logout{P: phone}); err != nil {
+		t.Fatal(err)
+	}
+	if got := f.forgotten(); !same(got, false, phone.SessionHash) {
+		t.Fatalf("sign-out: %+v", got)
+	}
+	if _, err := ask[Done](f, RevokeSession{P: laptop, SessionID: tablet.SessionID}); err != nil {
+		t.Fatal(err)
+	}
+	if got := f.forgotten(); !same(got, false, tablet.SessionHash) {
+		t.Fatalf("revocation: %+v", got)
+	}
+	if _, err := ask[*models.User](f, SetDeactivated{P: ap, UserID: bob.ID.String(), Deactivated: true}); err != nil {
+		t.Fatal(err)
+	}
+	if got := f.forgotten(); !same(got, true, laptop.SessionHash) {
+		t.Fatalf("deactivation: %+v", got)
 	}
 }
 
