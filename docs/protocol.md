@@ -104,7 +104,8 @@ their turn. Calls spend the session's request budget, as the HTTP API's do.
 
 People may make the unary calls the apps make over `/api/v1` (see
 [`internal/web/api.go`](../internal/web/api.go)), plus `UpdatesService` and
-the people's calls of `BotService`. Files and photos still move over HTTP:
+the people's calls of `BotService`; apps tie their device's push token to
+the session with `PushService.RegisterDevice`. Files and photos still move over HTTP:
 `POST /api/v2/files?channel_id=&name=` and `GET /api/v2/files/<id>` take the
 same bearer token as `/api/v1/files`. The calls open to bots are
 [listed below](#what-bots-may-call).

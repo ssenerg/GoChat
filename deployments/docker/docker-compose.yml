@@ -166,6 +166,13 @@ services:
       SERVER_DRPC_VOICE_SERVER_KEY: ${VOICE_SERVER_KEY:-}
       SERVICES_ACCOUNTS_SECRET_KEY: ${SERVICES_ACCOUNTS_SECRET_KEY}
       SERVICES_ACCOUNTS_SETUP_TOKEN: ${SERVICES_ACCOUNTS_SETUP_TOKEN:-}
+      # Push notifications to the apps, off while empty. The server then
+      # needs a network with outbound access too, such as frontend.
+      SERVICES_PUSH_FCM_CREDENTIALS: ${SERVICES_PUSH_FCM_CREDENTIALS:-}
+      SERVICES_PUSH_APNS_KEY: ${SERVICES_PUSH_APNS_KEY:-}
+      SERVICES_PUSH_APNS_KEY_ID: ${SERVICES_PUSH_APNS_KEY_ID:-}
+      SERVICES_PUSH_APNS_TEAM_ID: ${SERVICES_PUSH_APNS_TEAM_ID:-}
+      SERVICES_PUSH_APNS_TOPIC: ${SERVICES_PUSH_APNS_TOPIC:-}
     read_only: true
     cap_drop: [ALL]
     security_opt: ["no-new-privileges:true"]

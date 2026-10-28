@@ -64,9 +64,26 @@ class GoChatApp(
     private val rtc: RtcEngine? = null,
     /** This app's version and device, for the server to know it by. */
     private val app: AppInfo? = null,
+    /** The platform's push service, which reaches the app while it is closed. */
+    private val push: PushService? = null,
 ) {
     private val _state = MutableStateFlow<AppState>(AppState.Starting)
     val state: StateFlow<AppState> = _state.asStateFlow()
+
+    private val _opening = MutableStateFlow<PushTarget?>(null)
+
+    /** The push the person tapped, for the screens to open once signed in. */
+    val opening: StateFlow<PushTarget?> = _opening.asStateFlow()
+
+    /** Opens what a tapped push shows, now or once signed in. */
+    fun openPush(target: PushTarget) {
+        _opening.value = target
+    }
+
+    /** The screens opened [target]. */
+    fun pushOpened(target: PushTarget) {
+        _opening.compareAndSet(target, null)
+    }
 
     private var session: ChatSession? = null
 
@@ -203,6 +220,9 @@ class GoChatApp(
         val s = session ?: return
         // Signing out ends the socket too: that is no surprise.
         s.signingOut = true
+        // Signing out forgets the device too; this says so first, should
+        // signing out fail.
+        if (push != null) runCatching { s.api.unregisterDevice() }
         runCatching { s.api.logout() }
         close(null)
     }
@@ -244,6 +264,7 @@ class GoChatApp(
         session = s
         _state.value = AppState.SignedIn(s)
         s.start(store.get(KEY_PTS)?.toLongOrNull() ?: 0)
+        push?.let { s.registerPush(it) }
     }
 
     /** Ends the session; [keepToken] when an updated app may resume it. */
@@ -255,6 +276,8 @@ class GoChatApp(
             store.put(KEY_TOKEN, null)
             store.put(KEY_ME, null)
             store.put(KEY_PTS, null)
+            push?.disable()
+            _opening.value = null
         }
         _state.value = AppState.SignedOut(s.api.client.baseUrl, notice)
         s.api.client.close()

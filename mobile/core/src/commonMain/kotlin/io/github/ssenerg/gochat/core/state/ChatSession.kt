@@ -30,6 +30,7 @@ import io.github.ssenerg.gochat.core.socket.Socket
 import io.github.ssenerg.gochat.core.socket.SocketEvent
 import io.github.ssenerg.gochat.core.voice.RtcEngine
 import io.github.ssenerg.gochat.core.voice.VoiceCall
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.Job
@@ -43,7 +44,9 @@ import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
@@ -289,6 +292,40 @@ class ChatSession internal constructor(
             if (teamId != null) loadSidebar() else _state.update { it.copy(loading = false) }
         } catch (e: Exception) {
             fail(e)
+        }
+    }
+
+    /** Opens the team of what a tapped push shows; teams still loading open it once they load. */
+    fun showTeam(teamId: String) {
+        val st = _state.value
+        if (teamId.isEmpty() || teamId == st.teamId) return
+        if (st.teams.isEmpty()) store.put(KEY_TEAM, teamId) else if (st.teams.any { it.id == teamId }) selectTeam(teamId)
+    }
+
+    /**
+     * Keeps the device's push token tied to the session for as long as it
+     * lasts: each new token, tried again while the server cannot be reached.
+     */
+    internal fun registerPush(push: PushService) {
+        push.enable()
+        scope.launch {
+            push.token.filterNotNull().collectLatest { t ->
+                var wait = REGISTER_RETRY
+                while (true) {
+                    try {
+                        api.registerDevice(t.platform, t.token, t.sandbox)
+                        return@collectLatest
+                    } catch (e: CancellationException) {
+                        throw e
+                    } catch (_: ApiException) {
+                        // The server answered: an older one has no pushes.
+                        return@collectLatest
+                    } catch (_: Exception) {
+                        delay(wait)
+                        wait = minOf(wait * 2, REGISTER_RETRY_MAX)
+                    }
+                }
+            }
         }
     }
 
@@ -815,6 +852,8 @@ class ChatSession internal constructor(
         private const val TYPING_EVERY_MS = 3_000L
         private const val SAVE_PTS_MS = 2_000L
         private const val MAX_NOTIFIED = 200
+        private val REGISTER_RETRY = 15.seconds
+        private val REGISTER_RETRY_MAX = 5.minutes
 
         // A press waits so long for its bot's answer; an answer that came
         // first waits so long for its press, among so many.

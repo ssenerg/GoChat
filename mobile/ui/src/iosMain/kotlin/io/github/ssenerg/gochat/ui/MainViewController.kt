@@ -20,7 +20,8 @@ private var root: Pair<GoChatApp, IosPlatform>? = null
 fun MainViewController(rtc: IosRtcEngine?): UIViewController {
     val (app, platform) = root ?: run {
         val platform = IosPlatform(scope, rtc?.let(::SwiftRtc))
-        val app = GoChatApp(platform.store, scope, rtc = platform.rtc, app = platform.app).also { it.start() }
+        val app = GoChatApp(platform.store, scope, rtc = platform.rtc, app = platform.app, push = IosPush).also { it.start() }
+        IosPush.app = app
         // A broadcast the person started, from the app or the Control
         // Center, shares the screen in the call.
         rtc?.setScreenEvents(
