@@ -1,6 +1,8 @@
 package voiceserver
 
 import (
+	"context"
+	"slices"
 	"strconv"
 
 	"github.com/anthdm/hollywood/actor"
@@ -28,13 +30,19 @@ type roomEntry struct {
 // rooms runs one room actor per voice channel with talk on this server,
 // and stops it when its last peer leaves. Every peer joins through here,
 // so a room is never stopped with a peer on its way in.
+//
+// A room is no child of it: as a parent stops, hollywood poisons each child
+// again, even one already stopping, and loses that second pill, so the stop
+// would wait on the room forever. Each room gets one pill, from here.
 type rooms struct {
 	logger *zap.Logger
 	cfg    *Config
 	media  *Media
 	link   *actor.PID
 	byID   map[string]*roomEntry
-	seq    uint64
+	// stopping are the rooms told to stop, each done once it has.
+	stopping []context.Context
+	seq      uint64
 }
 
 func newRooms(logger *zap.Logger, cfg *Config, media *Media, link *actor.PID) actor.Producer {
@@ -45,11 +53,18 @@ func newRooms(logger *zap.Logger, cfg *Config, media *Media, link *actor.PID) ac
 
 func (r *rooms) Receive(c *actor.Context) {
 	switch msg := c.Message().(type) {
+	case actor.Stopped:
+		for _, e := range r.byID {
+			r.stop(c, e.pid)
+		}
+		for _, done := range r.stopping {
+			<-done.Done()
+		}
 	case addPeer:
 		e := r.byID[msg.channelID]
 		if e == nil {
 			r.seq++
-			pid := c.SpawnChild(newRoom(r.logger, r.cfg, r.media, r.link, c.PID(), msg.channelID), "room",
+			pid := c.Engine().Spawn(newRoom(r.logger, r.cfg, r.media, r.link, c.PID(), msg.channelID), "room",
 				actor.WithID(msg.channelID+"-"+strconv.FormatUint(r.seq, 36)), actor.WithMiddleware(actors.Recover(r.logger)))
 			e = &roomEntry{pid: pid}
 			r.byID[msg.channelID] = e
@@ -64,7 +79,7 @@ func (r *rooms) Receive(c *actor.Context) {
 		}
 		if e.peers--; e.peers <= 0 {
 			delete(r.byID, msg.channelID)
-			c.Engine().Poison(e.pid)
+			r.stop(c, e.pid)
 		}
 	case toRoom:
 		if e := r.byID[msg.channelID]; e != nil {
@@ -79,6 +94,11 @@ func (r *rooms) Receive(c *actor.Context) {
 			c.Send(e.pid, dropPeers(msg))
 		}
 	}
+}
+
+func (r *rooms) stop(c *actor.Context, pid *actor.PID) {
+	r.stopping = slices.DeleteFunc(r.stopping, func(done context.Context) bool { return done.Err() != nil })
+	r.stopping = append(r.stopping, c.Engine().Poison(pid))
 }
 
 // dropPeers ends every connection of a room.
