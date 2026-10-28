@@ -21,7 +21,7 @@ import (
 const (
 	fcmEndpoint = "https://fcm.googleapis.com"
 	fcmScope    = "https://www.googleapis.com/auth/firebase.messaging"
-	googleToken = "https://oauth2.googleapis.com/token"
+	googleToken = "https://oauth2.googleapis.com/token" //nolint:gosec // an address, not a credential
 	// fcmChannel is the Android notification channel the app makes for
 	// messages.
 	fcmChannel = "messages"
