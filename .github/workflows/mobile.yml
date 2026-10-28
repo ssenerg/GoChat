@@ -36,19 +36,25 @@ jobs:
         with:
           persist-credentials: false
           fetch-depth: 2
+      # A diff that fails fails the step, rather than skip the apps; one
+      # without renames names the paths a file left as well.
       - id: diff
         working-directory: .
         run: |
-          if [ "$GITHUB_EVENT_NAME" != pull_request ] ||
-            git diff --name-only HEAD^ HEAD | grep -qE '^(mobile/|api/protobuf/proto/|\.github/workflows/mobile\.yml$)'; then
-            echo "mobile=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "mobile=false" >> "$GITHUB_OUTPUT"
+          mobile=true
+          if [ "$GITHUB_EVENT_NAME" = pull_request ]; then
+            changed=$(git diff --no-renames --name-only HEAD^ HEAD)
+            if ! grep -qE '^(mobile/|api/protobuf/proto/|\.github/workflows/mobile\.yml$)' <<<"$changed"; then
+              mobile=false
+            fi
           fi
+          echo "mobile=$mobile" >> "$GITHUB_OUTPUT"
 
+  # They skip only when changes said the apps are untouched: should it
+  # fail, they run, since a skipped job counts as passing.
   android:
     needs: changes
-    if: needs.changes.outputs.mobile == 'true'
+    if: ${{ !cancelled() && needs.changes.outputs.mobile != 'false' }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -73,7 +79,7 @@ jobs:
 
   ios:
     needs: changes
-    if: needs.changes.outputs.mobile == 'true'
+    if: ${{ !cancelled() && needs.changes.outputs.mobile != 'false' }}
     runs-on: macos-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
