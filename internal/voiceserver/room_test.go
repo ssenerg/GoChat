@@ -7,6 +7,7 @@ import (
 	"net"
 	"strings"
 	"sync"
+	"syscall"
 	"testing"
 	"time"
 
@@ -62,13 +63,33 @@ func (l *fakeLink) has(session string) bool {
 	return false
 }
 
+// freeUDPPort picks a port free on every address, as the media binds it on
+// each one.
 func freeUDPPort(t *testing.T) int {
-	c, err := net.ListenPacket("udp", "127.0.0.1:0")
+	c, err := net.ListenPacket("udp", ":0")
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer func() { _ = c.Close() }()
 	return c.LocalAddr().(*net.UDPAddr).Port
+}
+
+// newMedia listens on a free port. A test client may still take the port
+// before the media binds it, so a taken port is traded for another.
+func newMedia(t *testing.T) *Media {
+	var err error
+	for range 5 {
+		var m *Media
+		if m, err = NewMedia(&ICEConfig{UDPPort: freeUDPPort(t), TURN: &TURNConfig{}}); err == nil {
+			t.Cleanup(m.Close)
+			return m
+		}
+		if !errors.Is(err, syscall.EADDRINUSE) {
+			break
+		}
+	}
+	t.Fatal(err)
+	return nil
 }
 
 type sfu struct {
@@ -79,11 +100,7 @@ type sfu struct {
 }
 
 func newSFU(t *testing.T, maxPeers int) *sfu {
-	m, err := NewMedia(&ICEConfig{UDPPort: freeUDPPort(t), TURN: &TURNConfig{}})
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(m.Close)
+	m := newMedia(t)
 	engine, err := actor.NewEngine(actor.NewEngineConfig())
 	if err != nil {
 		t.Fatal(err)
