@@ -158,8 +158,15 @@ func (w *worker) register(ctx context.Context, msg Register) (Registered, error)
 		return false, err
 	}
 	if hash != nil && (userID != msg.P.UserID || string(hash) != string(msg.P.SessionHash)) {
-		if err := w.drop(ctx, userID, hash); err != nil {
+		held, err := w.Repo.GetPushDevice(ctx, userID, hash)
+		switch {
+		case ierrors.Is(err, ierrors.CodeNotFound):
+		case err != nil:
 			return false, err
+		case held.Platform == platform && held.Token == msg.Token:
+			if err := w.Repo.DeletePushDevice(ctx, held); err != nil {
+				return false, err
+			}
 		}
 	}
 	old, err := w.Repo.GetPushDevice(ctx, msg.P.UserID, msg.P.SessionHash)

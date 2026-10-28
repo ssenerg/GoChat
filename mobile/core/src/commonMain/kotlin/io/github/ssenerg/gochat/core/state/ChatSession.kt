@@ -313,7 +313,7 @@ class ChatSession internal constructor(
                 var wait = REGISTER_RETRY
                 while (true) {
                     try {
-                        api.registerDevice(t.platform, t.token, t.sandbox)
+                        pushing = api.registerDevice(t.platform, t.token, t.sandbox)
                         return@collectLatest
                     } catch (e: CancellationException) {
                         throw e
@@ -417,10 +417,14 @@ class ChatSession internal constructor(
     private var background: Job? = null
     private var asleep = false
 
+    /** Whether the server pushes to this device: it does once the socket is gone. */
+    private var pushing = false
+
     /**
      * Tells the session whether the app is in the foreground. A minute in
-     * the background closes the event socket, unless a call goes on; back in
-     * the foreground it opens again and loads what may have changed.
+     * the background closes the event socket, or a few seconds while the
+     * server pushes to the device, unless a call goes on; back in the
+     * foreground it opens again and loads what may have changed.
      */
     fun setForeground(foreground: Boolean) {
         background?.cancel()
@@ -438,7 +442,7 @@ class ChatSession internal constructor(
         // The system may end the app in the background.
         savePts()
         background = scope.launch {
-            delay(BACKGROUND_GRACE_MS)
+            delay(if (pushing) PUSH_BACKGROUND_GRACE_MS else BACKGROUND_GRACE_MS)
             if (voice.state.value == null) {
                 asleep = true
                 socket.stop()
@@ -848,6 +852,7 @@ class ChatSession internal constructor(
         internal const val KEY_PTS = "pts"
         private const val PRESENCE_BATCH = 200
         private const val BACKGROUND_GRACE_MS = 60_000L
+        private const val PUSH_BACKGROUND_GRACE_MS = 3_000L
         private const val KEPT_VIEWS = 8
         private const val TYPING_EVERY_MS = 3_000L
         private const val SAVE_PTS_MS = 2_000L
