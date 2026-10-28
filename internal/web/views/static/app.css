@@ -539,7 +539,7 @@ kbd {
 /* Link previews: what a linked page says of itself, under the message. */
 .link-card {
   position: relative; display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: .35rem .75rem; align-items: start;
-  max-width: min(480px, 100%); margin-top: .45rem; padding: .55rem .7rem; padding-right: 2rem;
+  max-width: min(480px, 100%); margin-top: .45rem; padding: .55rem .7rem;
   border: 1px solid var(--border); border-left: 3px solid var(--accent); border-radius: 10px; background: var(--bg-soft);
 }
 .link-card.wide { grid-template-columns: minmax(0, 1fr); }
@@ -553,6 +553,10 @@ kbd {
 }
 .link-image img { display: block; width: 72px; height: 72px; object-fit: cover; border-radius: 8px; border: 1px solid var(--border); }
 .link-card.wide .link-image img { width: 100%; height: auto; max-height: 260px; }
+/* Room for the author's remove button, beside the text of a wide card. */
+.link-card:has(.link-remove) { padding-right: 2rem; }
+.link-card.wide:has(.link-remove) { padding-right: .7rem; }
+.link-card.wide:has(.link-remove) .link-text { padding-right: 1.4rem; }
 .link-remove { position: absolute; top: .3rem; right: .3rem; opacity: 0; }
 .msg:hover .link-remove, .link-remove:focus-visible { opacity: 1; }
 @media (hover: none) { .link-remove { opacity: 1; } }
