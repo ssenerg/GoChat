@@ -160,7 +160,7 @@ func (s *authService) Me(ctx context.Context, _ *pb.MeRequest) (*pb.MeResponse, 
 	if err != nil {
 		return nil, err
 	}
-	return &pb.MeResponse{User: me.User, Email: me.Email, SessionId: p.SessionID}, nil
+	return &pb.MeResponse{User: me.User, Email: me.Email, SessionId: p.SessionID, HasPassword: me.HasPassword}, nil
 }
 
 func (s *authService) ChangePassword(ctx context.Context, req *pb.ChangePasswordRequest) (*pb.ChangePasswordResponse, error) {

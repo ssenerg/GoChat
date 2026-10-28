@@ -41,6 +41,7 @@ type DRPCAdminServiceClient interface {
 	FindUser(ctx context.Context, in *FindUserRequest) (*FindUserResponse, error)
 	SetUserDeactivated(ctx context.Context, in *SetUserDeactivatedRequest) (*SetUserDeactivatedResponse, error)
 	SetStorageQuota(ctx context.Context, in *SetStorageQuotaRequest) (*SetStorageQuotaResponse, error)
+	ListSSOAccounts(ctx context.Context, in *ListSSOAccountsRequest) (*ListSSOAccountsResponse, error)
 }
 
 type drpcAdminServiceClient struct {
@@ -80,10 +81,20 @@ func (c *drpcAdminServiceClient) SetStorageQuota(ctx context.Context, in *SetSto
 	return out, nil
 }
 
+func (c *drpcAdminServiceClient) ListSSOAccounts(ctx context.Context, in *ListSSOAccountsRequest) (*ListSSOAccountsResponse, error) {
+	out := new(ListSSOAccountsResponse)
+	err := c.cc.Invoke(ctx, "/gochat.v1.AdminService/ListSSOAccounts", drpcEncoding_File_gochat_v1_admin_proto{}, in, out)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 type DRPCAdminServiceServer interface {
 	FindUser(context.Context, *FindUserRequest) (*FindUserResponse, error)
 	SetUserDeactivated(context.Context, *SetUserDeactivatedRequest) (*SetUserDeactivatedResponse, error)
 	SetStorageQuota(context.Context, *SetStorageQuotaRequest) (*SetStorageQuotaResponse, error)
+	ListSSOAccounts(context.Context, *ListSSOAccountsRequest) (*ListSSOAccountsResponse, error)
 }
 
 type DRPCAdminServiceUnimplementedServer struct{}
@@ -100,9 +111,13 @@ func (s *DRPCAdminServiceUnimplementedServer) SetStorageQuota(context.Context, *
 	return nil, drpcerr.WithCode(errors.New("Unimplemented"), drpcerr.Unimplemented)
 }
 
+func (s *DRPCAdminServiceUnimplementedServer) ListSSOAccounts(context.Context, *ListSSOAccountsRequest) (*ListSSOAccountsResponse, error) {
+	return nil, drpcerr.WithCode(errors.New("Unimplemented"), drpcerr.Unimplemented)
+}
+
 type DRPCAdminServiceDescription struct{}
 
-func (DRPCAdminServiceDescription) NumMethods() int { return 3 }
+func (DRPCAdminServiceDescription) NumMethods() int { return 4 }
 
 func (DRPCAdminServiceDescription) Method(n int) (string, drpc.Encoding, drpc.Receiver, interface{}, bool) {
 	switch n {
@@ -133,6 +148,15 @@ func (DRPCAdminServiceDescription) Method(n int) (string, drpc.Encoding, drpc.Re
 						in1.(*SetStorageQuotaRequest),
 					)
 			}, DRPCAdminServiceServer.SetStorageQuota, true
+	case 3:
+		return "/gochat.v1.AdminService/ListSSOAccounts", drpcEncoding_File_gochat_v1_admin_proto{},
+			func(srv interface{}, ctx context.Context, in1, in2 interface{}) (drpc.Message, error) {
+				return srv.(DRPCAdminServiceServer).
+					ListSSOAccounts(
+						ctx,
+						in1.(*ListSSOAccountsRequest),
+					)
+			}, DRPCAdminServiceServer.ListSSOAccounts, true
 	default:
 		return "", nil, nil, nil, false
 	}
@@ -196,6 +220,26 @@ func (x *drpcAdminService_SetStorageQuotaStream) GetStream() drpc.Stream {
 }
 
 func (x *drpcAdminService_SetStorageQuotaStream) SendAndClose(m *SetStorageQuotaResponse) error {
+	if err := x.MsgSend(m, drpcEncoding_File_gochat_v1_admin_proto{}); err != nil {
+		return err
+	}
+	return x.CloseSend()
+}
+
+type DRPCAdminService_ListSSOAccountsStream interface {
+	drpc.Stream
+	SendAndClose(*ListSSOAccountsResponse) error
+}
+
+type drpcAdminService_ListSSOAccountsStream struct {
+	drpc.Stream
+}
+
+func (x *drpcAdminService_ListSSOAccountsStream) GetStream() drpc.Stream {
+	return x.Stream
+}
+
+func (x *drpcAdminService_ListSSOAccountsStream) SendAndClose(m *ListSSOAccountsResponse) error {
 	if err := x.MsgSend(m, drpcEncoding_File_gochat_v1_admin_proto{}); err != nil {
 		return err
 	}

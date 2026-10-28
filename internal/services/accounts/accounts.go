@@ -72,6 +72,17 @@ type Repo interface {
 	GetBot(ctx context.Context, id gocql.UUID) (*models.Bot, error)
 	ConsumeInvite(ctx context.Context, inv *models.Invite, userID gocql.UUID, now time.Time) (bool, error)
 	ReleaseInvite(ctx context.Context, inv *models.Invite, userID gocql.UUID, now time.Time) error
+
+	CreateSSOFlow(ctx context.Context, f *models.SSOFlow, now time.Time) error
+	ConsumeSSOFlow(ctx context.Context, hash []byte) (*models.SSOFlow, error)
+	CreateSSOTicket(ctx context.Context, t *models.SSOTicket, now time.Time) error
+	GetSSOTicket(ctx context.Context, hash []byte) (*models.SSOTicket, error)
+	ConsumeSSOTicket(ctx context.Context, hash []byte) (bool, error)
+	GetSSOIdentity(ctx context.Context, issuer, subject string) (gocql.UUID, error)
+	LinkSSOIdentity(ctx context.Context, id *models.SSOIdentity) (bool, error)
+	UnlinkSSOIdentity(ctx context.Context, id *models.SSOIdentity) error
+	ListUserSSOIdentities(ctx context.Context, userID gocql.UUID) ([]*models.SSOIdentity, error)
+	ListIssuerSSOIdentities(ctx context.Context, issuer string, after gocql.UUID, limit int) ([]*models.SSOIdentity, error)
 }
 
 const recoveryCodeCount = 10
@@ -107,6 +118,7 @@ type Deps struct {
 	// totp serializes each user's two-factor changes, so the recovery codes
 	// a confirmation shows are the ones it stored.
 	totp *keylock.Locks
+	sso  *ssoProviders
 }
 
 func NewDeps(logger *zap.Logger, cfg *Config, repo Repo, userCache *users.Cache, az *authz.Authorizer, engine *actor.Engine, hubPID *actor.PID) (*Deps, error) {
@@ -115,6 +127,10 @@ func NewDeps(logger *zap.Logger, cfg *Config, repo Repo, userCache *users.Cache,
 		return nil, err
 	}
 	sealer, err := secure.NewSealer(key)
+	if err != nil {
+		return nil, err
+	}
+	sso, err := newSSOProviders(&cfg.SSO)
 	if err != nil {
 		return nil, err
 	}
@@ -133,6 +149,7 @@ func NewDeps(logger *zap.Logger, cfg *Config, repo Repo, userCache *users.Cache,
 		failures:        window.New(cfg.LoginFailures, cfg.LoginWindow),
 		accountFailures: window.New(cfg.LoginFailures*accountFailureFactor, cfg.LoginWindow),
 		totp:            keylock.New(),
+		sso:             sso,
 	}, nil
 }
 
@@ -194,6 +211,24 @@ func (w *worker) Receive(c *actor.Context) {
 		out, err = w.findUser(ctx, msg)
 	case SetDeactivated:
 		out, err = w.setDeactivated(ctx, msg)
+	case SSOProviders:
+		out = w.sso.list()
+	case BeginSSO:
+		out, err = w.beginSSO(ctx, msg)
+	case FinishSSO:
+		out, err = w.finishSSO(ctx, msg)
+	case RedeemSSO:
+		out, err = w.redeemSSO(ctx, msg)
+	case GetSSOLink:
+		out, err = w.getSSOLink(ctx, msg)
+	case LinkSSO:
+		out, err = w.linkSSO(ctx, msg)
+	case ListSSOIdentities:
+		out, err = w.listSSOIdentities(ctx, msg)
+	case UnlinkSSO:
+		out, err = w.unlinkSSO(ctx, msg)
+	case ListSSOAccounts:
+		out, err = w.listSSOAccounts(ctx, msg)
 	default:
 		return
 	}
@@ -432,6 +467,12 @@ func (w *worker) login(ctx context.Context, msg Login) (*LoginResult, error) {
 	if err != nil {
 		return nil, err
 	}
+	// Accounts of single sign-on and bots have no password.
+	if user.PasswordHash == "" {
+		password.Dummy(msg.Password, w.Cfg.Password)
+		w.failures.Add(key)
+		return nil, errBadCredentials
+	}
 	ok, rehash, err := password.Verify(msg.Password, user.PasswordHash, w.Cfg.Password)
 	if err != nil {
 		return nil, ierrors.Internal(err)
@@ -450,6 +491,12 @@ func (w *worker) login(ctx context.Context, msg Login) (*LoginResult, error) {
 			w.Logger.Warn("failed to rehash password", zap.Error(err))
 		}
 	}
+	return w.signIn(ctx, user, msg.IP, msg.UserAgent)
+}
+
+// signIn opens a session for someone who proved who they are, or first a
+// challenge for their second factor.
+func (w *worker) signIn(ctx context.Context, user *models.User, ip, ua string) (*LoginResult, error) {
 	if user.TOTPEnabled {
 		token := secure.Token()
 		now := time.Now().UTC()
@@ -457,15 +504,15 @@ func (w *worker) login(ctx context.Context, msg Login) (*LoginResult, error) {
 			TokenHash: secure.Hash(token),
 			UserID:    user.ID,
 			ExpiresAt: now.Add(w.Cfg.MFATTL),
-			IP:        truncate(msg.IP, 64),
-			UserAgent: truncate(msg.UserAgent, 256),
+			IP:        truncate(ip, 64),
+			UserAgent: truncate(ua, 256),
 		}
 		if err := w.Repo.CreateMFAChallenge(ctx, ch, now); err != nil {
 			return nil, err
 		}
 		return &LoginResult{MFAToken: token}, nil
 	}
-	sess, err := w.newSession(ctx, user, msg.IP, msg.UserAgent)
+	sess, err := w.newSession(ctx, user, ip, ua)
 	if err != nil {
 		return nil, err
 	}
@@ -715,6 +762,9 @@ func (w *worker) verifyPassword(ctx context.Context, p *models.Principal, pass s
 	user, err := w.Repo.GetUser(ctx, p.UserID)
 	if err != nil {
 		return nil, err
+	}
+	if user.PasswordHash == "" {
+		return nil, ierrors.FailedPrecondition("this account has no password: it signs in with single sign-on")
 	}
 	if len(pass) > 256 {
 		return nil, ierrors.New(ierrors.CodePermissionDenied, "password is incorrect")

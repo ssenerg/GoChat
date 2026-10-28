@@ -189,8 +189,9 @@ type Photo struct {
 type Me struct{ P *models.Principal }
 
 type MeResult struct {
-	User  *pb.User
-	Email string
+	User        *pb.User
+	Email       string
+	HasPassword bool
 }
 
 // Presence replies with the statuses of the users among UserIDs who are not

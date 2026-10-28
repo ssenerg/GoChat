@@ -115,3 +115,84 @@ type SetDeactivated struct {
 	UserID      string
 	Deactivated bool
 }
+
+// SSOProviders replies with the []SSOProviderInfo people may sign in with.
+type SSOProviders struct{}
+
+type SSOProviderInfo struct{ ID, Name string }
+
+// BeginSSO starts a sign-in at a provider, which comes back to RedirectURI.
+// P, when set, links the identity to P's account instead; AppChallenge
+// hands the sign-in to the app holding its PKCE verifier.
+type BeginSSO struct {
+	Provider, RedirectURI, AppChallenge string
+	P                                   *models.Principal
+}
+
+type SSOStart struct{ URL, State string }
+
+// FinishSSO finishes a sign-in with the code the provider gave. P is
+// whoever is signed in where it finishes, and InviteToken the invite they
+// came with.
+type FinishSSO struct {
+	State, Code, InviteToken string
+	P                        *models.Principal
+	IP, UserAgent            string
+}
+
+// SSOResult is one of: a sign-in, an app's code, a link to confirm, or a
+// link done.
+type SSOResult struct {
+	Login   *LoginResult
+	AppCode string
+	// LinkToken is set when the identity is new and its email has an
+	// account: its owner signs in with their password, then links it.
+	LinkToken string
+	Linked    bool
+	// Provider is the provider's name.
+	Provider string
+	// User, InviteTeamID and InviteHash are of a new account and its invite.
+	User         *models.User
+	InviteTeamID gocql.UUID
+	InviteHash   []byte
+}
+
+// RedeemSSO turns an app's code into a sign-in, given the verifier of the
+// challenge it began with.
+type RedeemSSO struct {
+	Code, Verifier, IP, UserAgent string
+}
+
+// GetSSOLink replies with the *SSOLinkInfo of a link to confirm.
+type GetSSOLink struct{ Token string }
+
+type SSOLinkInfo struct{ Provider, Email string }
+
+// LinkSSO links the identity of a link token to the caller's account and
+// replies with the *SSOLinkInfo.
+type LinkSSO struct {
+	P     *models.Principal
+	Token string
+}
+
+// ListSSOIdentities replies with the []*pb.SSOIdentity of the caller, or
+// of UserID for someone who may find users.
+type ListSSOIdentities struct {
+	P      *models.Principal
+	UserID string
+}
+
+// UnlinkSSO unlinks an identity from the caller, or from UserID for someone
+// who may deactivate users.
+type UnlinkSSO struct {
+	P                       *models.Principal
+	UserID, Issuer, Subject string
+}
+
+// ListSSOAccounts replies with the *pb.ListSSOAccountsResponse of a
+// provider, a page of the accounts linked through it after the user After.
+type ListSSOAccounts struct {
+	P               *models.Principal
+	Provider, After string
+	Limit           int
+}
