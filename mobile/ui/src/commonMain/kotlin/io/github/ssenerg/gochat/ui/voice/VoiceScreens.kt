@@ -49,6 +49,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -128,9 +129,15 @@ fun VoiceRoomScreen(session: ChatSession, channelId: String) {
     val videos = if (here != null) allVideos else emptyList()
     val cameras = videos.filter { it.source == VideoSource.Camera }.associateBy { it.userId }
     val screens = videos.filter { it.source == VideoSource.Screen }.sortedBy { !it.local }
-    // Whose screen shows full screen, while it is shared.
+    // Which camera or screen shows full screen, by stream id, while it comes; it alone comes sharp.
     var expanded by remember { mutableStateOf<String?>(null) }
-    screens.firstOrNull { it.userId == expanded }?.let { FullScreen(it) { expanded = null } }
+    val big = videos.firstOrNull { it.streamId == expanded }
+    big?.let { FullScreen(it) { expanded = null } }
+    val focus = big?.takeUnless { it.local }?.streamId
+    DisposableEffect(focus) {
+        session.voice.setFocus(focus)
+        onDispose { session.voice.setFocus(null) }
+    }
     Scaffold(
         topBar = {
             TopAppBar(
@@ -171,14 +178,16 @@ fun VoiceRoomScreen(session: ChatSession, channelId: String) {
                 // Screens go first, the grid's full width, as the web shows them.
                 items(screens, key = { "screen:" + it.userId }, span = { GridItemSpan(maxLineSpan) }) { video ->
                     val owner = members.firstOrNull { it.user?.id == video.userId }?.user
-                    ScreenTile(video, if (video.local) "Your screen" else "${owner.displayName()}'s screen") { expanded = video.userId }
+                    ScreenTile(video, if (video.local) "Your screen" else "${owner.displayName()}'s screen") { expanded = video.streamId }
                 }
                 items(members.filter { it.user != null }.distinctBy { it.user?.id }, key = { it.user?.id.orEmpty() }) { vs ->
                     val id = vs.user?.id.orEmpty()
+                    val camera = cameras[id]
                     VoiceTile(
                         vs,
-                        camera = cameras[id],
+                        camera = camera,
                         speaking = here != null && id in here.speaking,
+                        onExpand = camera?.let { { expanded = it.streamId } },
                         onDisconnect = if (moderator && id != st.me.id) {
                             {
                                 session.launch({ session.disconnectVoice(channelId, id) }) { err -> err?.let(toasts::show) }
@@ -194,7 +203,7 @@ fun VoiceRoomScreen(session: ChatSession, channelId: String) {
 }
 
 @Composable
-private fun VoiceTile(vs: VoiceState, camera: CallVideo?, speaking: Boolean, onDisconnect: (() -> Unit)?) {
+private fun VoiceTile(vs: VoiceState, camera: CallVideo?, speaking: Boolean, onExpand: (() -> Unit)?, onDisconnect: (() -> Unit)?) {
     val colors = LocalChatColors.current
     var menu by remember { mutableStateOf(false) }
     Box {
@@ -238,6 +247,14 @@ private fun VoiceTile(vs: VoiceState, camera: CallVideo?, speaking: Boolean, onD
                 }
             }
         }
+        if (camera != null && onExpand != null) {
+            IconButton(
+                onClick = onExpand,
+                modifier = Modifier.align(Alignment.TopEnd).padding(6.dp).size(36.dp).background(Color.Black.copy(alpha = 0.45f), CircleShape),
+            ) {
+                Icon(Icons.Filled.Fullscreen, contentDescription = "Full screen", tint = Color.White)
+            }
+        }
         if (onDisconnect != null) {
             DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
                 DropdownMenuItem(text = { Text("Disconnect from voice") }, onClick = {
@@ -273,7 +290,7 @@ private fun ScreenTile(video: CallVideo, name: String, onExpand: () -> Unit) {
     }
 }
 
-/** A screen over everything else, until the person goes back. */
+/** A camera or screen over everything else, until the person goes back. */
 @Composable
 private fun FullScreen(video: CallVideo, onClose: () -> Unit) {
     Dialog(onDismissRequest = onClose, properties = DialogProperties(usePlatformDefaultWidth = false)) {
