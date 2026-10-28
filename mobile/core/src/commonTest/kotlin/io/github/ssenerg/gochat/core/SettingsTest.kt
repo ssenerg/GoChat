@@ -2,6 +2,7 @@ package io.github.ssenerg.gochat.core
 
 import com.squareup.wire.Message
 import com.squareup.wire.ProtoAdapter
+import com.squareup.wire.ofEpochSecond
 import gochat.v1.ApiError
 import gochat.v1.BeginTOTPSetupRequest
 import gochat.v1.BeginTOTPSetupResponse
@@ -22,6 +23,7 @@ import gochat.v1.RemoveTeamPhotoRequest
 import gochat.v1.RemoveTeamPhotoResponse
 import gochat.v1.RevokeInviteRequest
 import gochat.v1.RevokeInviteResponse
+import gochat.v1.Status
 import gochat.v1.SystemRole
 import gochat.v1.Team
 import gochat.v1.TeamJoined
@@ -236,5 +238,17 @@ class SettingsTest {
         assertTrue(session.state.value.me.totp_enabled)
         session.disableTotp("hunter2", "123456")
         assertFalse(session.state.value.me.totp_enabled)
+    }
+
+    @Test
+    fun aProfileEventAboutMeKeepsWhatOnlyISee() = runTest {
+        val me = User(
+            id = "u-ann", username = "ann", display_name = "Ann", totp_enabled = true,
+            created_at = ofEpochSecond(1_700_000_000, 0), status = Status.STATUS_DND, dnd_until = ofEpochSecond(2_000_000_000, 0),
+        )
+        val session = ChatSession(api(Recorder()), me, MemoryStore(), backgroundScope, null) {}
+        // Renaming herself while on Do not disturb: the event is what others see of Ann.
+        session.event(Event(profile_changed = ProfileChanged(user = User(id = "u-ann", username = "ann", display_name = "Ann B", photo = "v2"))))
+        assertEquals(me.copy(display_name = "Ann B", photo = "v2"), session.state.value.me)
     }
 }
