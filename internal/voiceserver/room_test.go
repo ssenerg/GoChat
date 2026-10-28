@@ -110,6 +110,10 @@ type client struct {
 	got     map[string]int // packets received by the stream id that sent them
 	reports map[string]int // sender reports, by stream id
 	remotes map[string]*webrtc.TrackRemote
+	tracks  map[string]int     // tracks received, by stream id
+	frames  map[string][]frame // video packets received, by stream id
+	// layered counts the offers that asked for the camera's layers.
+	layered int
 	speak   []outbound
 	refused []string // the sources the server would not forward
 	offers  int
@@ -131,6 +135,19 @@ type client struct {
 	swaps   []string
 }
 
+// frame is a video packet as a client got it: one frame of the test
+// cameras, which name their layer after the VP8 header.
+type frame struct {
+	seq   uint16
+	ts    uint32
+	pic   uint16
+	layer int
+	key   bool
+}
+
+// hello is what a client says of itself as it identifies.
+type hello struct{ video, simulcast, layers bool }
+
 func (s *sfu) join(session, userID string, send bool) (*client, error) {
 	return s.joinWith(session, userID, send, false, nil)
 }
@@ -138,6 +155,10 @@ func (s *sfu) join(session, userID string, send bool) (*client, error) {
 // joinWith joins a client that says it sends and shows video when video is
 // set.
 func (s *sfu) joinWith(session, userID string, send, video bool, beforeAnswer func(*client, *slots)) (*client, error) {
+	return s.joinAs(session, userID, send, hello{video: video}, beforeAnswer)
+}
+
+func (s *sfu) joinAs(session, userID string, send bool, h hello, beforeAnswer func(*client, *slots)) (*client, error) {
 	se := webrtc.SettingEngine{}
 	se.SetICEMulticastDNSMode(ice.MulticastDNSModeDisabled)
 	api := webrtc.NewAPI(webrtc.WithSettingEngine(se))
@@ -149,7 +170,7 @@ func (s *sfu) joinWith(session, userID string, send, video bool, beforeAnswer fu
 	c := &client{
 		t: s.t, s: s, session: session, userID: userID, api: api, pc: pc, out: newSender(256),
 		got: map[string]int{}, reports: map[string]int{}, remotes: map[string]*webrtc.TrackRemote{}, beforeAnswer: beforeAnswer,
-		sending: map[string]string{},
+		sending: map[string]string{}, tracks: map[string]int{}, frames: map[string][]frame{},
 	}
 	if send {
 		track, err := webrtc.NewTrackLocalStaticSample(webrtc.RTPCodecCapability{MimeType: webrtc.MimeTypeOpus, ClockRate: 48000, Channels: 2}, "mic", "local")
@@ -174,6 +195,7 @@ func (s *sfu) joinWith(session, userID string, send, video bool, beforeAnswer fu
 	pc.OnTrack(func(remote *webrtc.TrackRemote, recv *webrtc.RTPReceiver) {
 		c.mu.Lock()
 		c.remotes[remote.StreamID()] = remote
+		c.tracks[remote.StreamID()]++
 		c.mu.Unlock()
 		go func() {
 			for {
@@ -191,11 +213,18 @@ func (s *sfu) joinWith(session, userID string, send, video bool, beforeAnswer fu
 			}
 		}()
 		for {
-			if _, _, err := remote.ReadRTP(); err != nil {
+			pkt, _, err := remote.ReadRTP()
+			if err != nil {
 				return
 			}
 			c.mu.Lock()
 			c.got[remote.StreamID()]++
+			if b := pkt.Payload; remote.Kind() == webrtc.RTPCodecTypeVideo && len(b) > 5 {
+				d := parseVP8(b)
+				c.frames[remote.StreamID()] = append(c.frames[remote.StreamID()], frame{
+					seq: pkt.SequenceNumber, ts: pkt.Timestamp, pic: d.picture(b), layer: int(b[5]), key: d.keyframe,
+				})
+			}
 			c.mu.Unlock()
 		}
 	})
@@ -208,7 +237,7 @@ func (s *sfu) joinWith(session, userID string, send, video bool, beforeAnswer fu
 	go c.pump()
 	ctx, cancel := context.WithTimeout(context.Background(), patience)
 	defer cancel()
-	_, err = actors.Ask[joined](ctx, s.engine, s.rooms, addPeer{session: session, userID: userID, channelID: "room", video: video, out: c.out})
+	_, err = actors.Ask[joined](ctx, s.engine, s.rooms, addPeer{session: session, userID: userID, channelID: "room", video: h.video, simulcast: h.simulcast, layers: h.layers, out: c.out})
 	return c, err
 }
 
@@ -223,10 +252,16 @@ func (c *client) pump() {
 			}
 			switch m.Op {
 			case opOffer:
-				if err := c.pc.SetRemoteDescription(webrtc.SessionDescription{Type: webrtc.SDPTypeOffer, SDP: m.SDP}); err != nil {
+				// Pion would answer a request for layers as one to send
+				// them back: it gets none, as a browser that sends one
+				// layer, or that sends its own, does.
+				if err := c.pc.SetRemoteDescription(webrtc.SessionDescription{Type: webrtc.SDPTypeOffer, SDP: withoutLayers(m.SDP)}); err != nil {
 					continue
 				}
 				c.mu.Lock()
+				if m.Slots != nil && asksLayers(m.SDP, m.Slots.Camera) {
+					c.layered++
+				}
 				c.slots = append(c.slots, m.Slots)
 				c.track(m.SDP)
 				if m.Slots != nil {
@@ -286,6 +321,39 @@ func eventually(t *testing.T, what string, ok func() bool) {
 		time.Sleep(20 * time.Millisecond)
 	}
 	t.Fatalf("timed out waiting: %s", what)
+}
+
+// withoutLayers takes the requests for layers out of an offer.
+func withoutLayers(offer string) string {
+	lines := strings.SplitAfter(offer, "\r\n")
+	kept := lines[:0]
+	for _, l := range lines {
+		if !strings.HasPrefix(l, "a=rid:") && !strings.HasPrefix(l, "a=simulcast:") {
+			kept = append(kept, l)
+		}
+	}
+	return strings.Join(kept, "")
+}
+
+// asksLayers reports whether an offer asks for layers on a mid, and on no
+// other.
+func asksLayers(offer, mid string) bool {
+	var d sdp.SessionDescription
+	if d.UnmarshalString(offer) != nil {
+		return false
+	}
+	asks := false
+	for _, m := range d.MediaDescriptions {
+		v, _ := m.Attribute("simulcast")
+		if at, _ := m.Attribute("mid"); at != mid {
+			if v != "" {
+				return false
+			}
+			continue
+		}
+		asks = v == "recv q;h;f"
+	}
+	return asks
 }
 
 // track follows what each mid of an offer sends.

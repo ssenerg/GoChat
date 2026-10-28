@@ -377,9 +377,9 @@ func (d vp8Desc) setPicture(b []byte, id uint16) {
 	switch {
 	case d.pic < 0:
 	case d.wide:
-		b[d.pic], b[d.pic+1] = 0x80|byte(id>>8)&0x7f, byte(id)
+		b[d.pic], b[d.pic+1] = 0x80|byte(id>>8&0x7f), byte(id&0xff)
 	default:
-		b[d.pic] = byte(id) & 0x7f
+		b[d.pic] = byte(id & 0x7f)
 	}
 }
 
