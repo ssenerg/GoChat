@@ -15,7 +15,7 @@ import (
 // rids are the layers a camera comes in, as simulcast sends them, from the
 // smallest picture to the full one. A screen, or a camera from an app that
 // sends one layer, comes in one, with no rid.
-var rids = []string{"q", "h", "f"}
+var rids = [...]string{"q", "h", "f"}
 
 // layerOf ranks a rid among the layers; -1 for one the server never asked
 // for.
@@ -23,7 +23,7 @@ func layerOf(rid string) int {
 	if rid == "" {
 		return 0
 	}
-	return slices.Index(rids, rid)
+	return slices.Index(rids[:], rid)
 }
 
 // stale is how long a layer may bring no frame before viewers leave it: a
@@ -48,7 +48,7 @@ func askLayers(offer, mid string) string {
 		for _, rid := range rids {
 			m.WithValueAttribute("rid", rid+" recv")
 		}
-		m.WithValueAttribute("simulcast", "recv "+strings.Join(rids, ";"))
+		m.WithValueAttribute("simulcast", "recv "+strings.Join(rids[:], ";"))
 		b, err := d.Marshal()
 		if err != nil {
 			return offer
@@ -65,7 +65,7 @@ type feed struct {
 	// ask asks the sender for a keyframe of a layer.
 	ask func(layer int)
 	// seen is when each layer last brought a frame, in unix nanoseconds.
-	seen  [3]atomic.Int64
+	seen  [len(rids)]atomic.Int64
 	mu    sync.RWMutex
 	views map[*view]struct{}
 }
@@ -159,9 +159,11 @@ type view struct {
 	hasPic, hasTL0 bool
 	lastAt         time.Time
 	asked          time.Time
-	first          uint16
-	fresh          bool
-	payload        []byte
+	// first is the layer's keyframe; fresh says packets from before it may
+	// still come, late.
+	first   uint16
+	fresh   bool
+	payload []byte
 }
 
 // write forwards a packet of a layer, if it is the viewer's.
