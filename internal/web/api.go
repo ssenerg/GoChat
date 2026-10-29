@@ -344,10 +344,37 @@ func (h *Handler) apiLinkImage(w http.ResponseWriter, r *http.Request) {
 	h.sendLinkImage(w, r, h.apiCall(r), func(err error) { h.apiFail(w, r, enc, err) })
 }
 
+// apiMayUpload says, before a picture is read and decoded, whether the
+// caller is signed in, and for a team's photo whether they may change it,
+// as a team admin or a system admin.
+func (h *Handler) apiMayUpload(r *http.Request, teamID string) error {
+	ctx, cancel := h.client.Context(r.Context(), h.apiCall(r))
+	defer cancel()
+	me, err := h.client.Auth.Me(ctx, &pb.MeRequest{})
+	if err != nil {
+		return err
+	}
+	if teamID == "" || me.GetUser().GetRole() == pb.SystemRole_SYSTEM_ROLE_ADMIN {
+		return nil
+	}
+	res, err := h.client.Teams.GetTeam(ctx, &pb.GetTeamRequest{Key: &pb.GetTeamRequest_Id{Id: teamID}})
+	if err != nil {
+		return err
+	}
+	if res.GetTeam().GetRole() != pb.TeamRole_TEAM_ROLE_ADMIN {
+		return ierrors.PermissionDenied()
+	}
+	return nil
+}
+
 // apiSetPhoto makes the body, any picture, the caller's profile photo.
 func (h *Handler) apiSetPhoto(w http.ResponseWriter, r *http.Request) {
 	enc := answerEncoding(r)
 	if !h.apiSignedIn(w, r, enc) {
+		return
+	}
+	if err := h.apiMayUpload(r, ""); err != nil {
+		h.apiFail(w, r, enc, err)
 		return
 	}
 	data, err := h.readRawPhoto(w, r)
@@ -374,6 +401,10 @@ func (h *Handler) apiSetTeamPhoto(w http.ResponseWriter, r *http.Request) {
 	}
 	if !uuidRe.MatchString(r.PathValue("team")) {
 		h.apiFail(w, r, enc, ierrors.NotFound("no such team"))
+		return
+	}
+	if err := h.apiMayUpload(r, r.PathValue("team")); err != nil {
+		h.apiFail(w, r, enc, err)
 		return
 	}
 	data, err := h.readRawPhoto(w, r)
