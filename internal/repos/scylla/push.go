@@ -64,6 +64,17 @@ func (r *Repository) DeletePushDevice(ctx context.Context, d *models.PushDevice)
 	return r.execBatch(b)
 }
 
+// ForgetPushToken forgets the token d holds, as its provider no longer
+// takes it: the session's device, unless it holds another token by now,
+// and who holds the token.
+func (r *Repository) ForgetPushToken(ctx context.Context, d *models.PushDevice) error {
+	q := r.query(ctx, "DELETE FROM push_devices WHERE user_id = ? AND session_hash = ? IF device_token = ?", d.UserID, d.SessionHash, d.Token)
+	if _, err := q.ExecCASRelease(); err != nil {
+		return wrap(err)
+	}
+	return r.DeletePushToken(ctx, d.Platform, d.Token)
+}
+
 // DeletePushToken forgets who holds a device token, for a session whose
 // token changed.
 func (r *Repository) DeletePushToken(ctx context.Context, platform, token string) error {

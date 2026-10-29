@@ -6,6 +6,7 @@ package push
 import (
 	"context"
 	"regexp"
+	"slices"
 	"time"
 
 	"github.com/anthdm/hollywood/actor"
@@ -25,6 +26,7 @@ type Repo interface {
 	ListPushDevices(ctx context.Context, userID gocql.UUID) ([]*models.PushDevice, error)
 	PushTokenHolder(ctx context.Context, platform, token string) (gocql.UUID, []byte, error)
 	DeletePushDevice(ctx context.Context, d *models.PushDevice) error
+	ForgetPushToken(ctx context.Context, d *models.PushDevice) error
 	DeletePushToken(ctx context.Context, platform, token string) error
 
 	GetSession(ctx context.Context, hash []byte) (*models.Session, error)
@@ -167,10 +169,13 @@ func (w *worker) register(ctx context.Context, msg Register) (Registered, error)
 		case err != nil:
 			return false, err
 		case held.Platform == platform && held.Token == msg.Token:
-			if err := w.Repo.DeletePushDevice(ctx, held); err != nil {
+			if err := w.Repo.ForgetPushToken(ctx, held); err != nil {
 				return false, err
 			}
 		}
+	}
+	if err := w.makeRoom(ctx, msg.P); err != nil {
+		return false, err
 	}
 	old, err := w.Repo.GetPushDevice(ctx, msg.P.UserID, msg.P.SessionHash)
 	switch {
@@ -190,6 +195,30 @@ func (w *worker) register(ctx context.Context, msg Register) (Registered, error)
 		return false, err
 	}
 	return true, nil
+}
+
+// maxDevices bounds a person's devices: each push goes to every one.
+const maxDevices = 10
+
+// makeRoom forgets the person's oldest devices but the session's own, so
+// that with its own they have maxDevices at most.
+func (w *worker) makeRoom(ctx context.Context, p *models.Principal) error {
+	list, err := w.Repo.ListPushDevices(ctx, p.UserID)
+	if err != nil {
+		return err
+	}
+	others := slices.DeleteFunc(list, func(d *models.PushDevice) bool { return string(d.SessionHash) == string(p.SessionHash) })
+	extra := len(others) - (maxDevices - 1)
+	if extra <= 0 {
+		return nil
+	}
+	slices.SortFunc(others, func(a, b *models.PushDevice) int { return a.CreatedAt.Compare(b.CreatedAt) })
+	for _, d := range others[:extra] {
+		if err := w.Repo.DeletePushDevice(ctx, d); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func (w *worker) unregister(ctx context.Context, p *models.Principal) (Done, error) {

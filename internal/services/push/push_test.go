@@ -100,6 +100,17 @@ func (f *fakeRepo) DeletePushDevice(_ context.Context, d *models.PushDevice) err
 	return nil
 }
 
+func (f *fakeRepo) ForgetPushToken(_ context.Context, d *models.PushDevice) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	k := deviceKey(d.UserID, d.SessionHash)
+	if held := f.devices[k]; held != nil && held.Token == d.Token {
+		delete(f.devices, k)
+	}
+	delete(f.holders, tokenKey(d.Platform, d.Token))
+	return nil
+}
+
 func (f *fakeRepo) DeletePushToken(_ context.Context, platform, token string) error {
 	f.mu.Lock()
 	defer f.mu.Unlock()
@@ -167,6 +178,8 @@ type fakeProvider struct {
 	dead map[string]bool
 	// slow tokens are not reached before the push gives up.
 	slow map[string]bool
+	// sending, when set, runs as a push goes out.
+	sending func(token string)
 }
 
 type delivery struct {
@@ -176,8 +189,11 @@ type delivery struct {
 
 func (p *fakeProvider) Send(ctx context.Context, d *models.PushDevice, n *Notice) error {
 	p.mu.Lock()
-	slow := p.slow[d.Token]
+	slow, sending := p.slow[d.Token], p.sending
 	p.mu.Unlock()
+	if sending != nil {
+		sending(d.Token)
+	}
 	if slow {
 		<-ctx.Done()
 	}
@@ -638,5 +654,47 @@ func TestASlowDeviceCostsTheOthersNothing(t *testing.T) {
 	f.post(Posted{Message: message(f.user(ann), ids.New(), "hi"), Conversation: true, Members: members(ann, bob)})
 	if got := tokens(f.fcm.take()); !slices.Equal(got, phones) {
 		t.Fatalf("pushed to %v", got)
+	}
+}
+
+func TestAPersonKeepsTheirNewestDevices(t *testing.T) {
+	f := newFixture(t)
+	ann := f.person("ann")
+	var phones []string
+	for i := range maxDevices + 2 {
+		phones = append(phones, fcmToken(fmt.Sprintf("phone%02d", i)))
+		f.register(f.session(ann.UserID), pb.PushPlatform_PUSH_PLATFORM_FCM, phones[i])
+	}
+	list, _ := f.repo.ListPushDevices(context.Background(), ann.UserID)
+	var kept []string
+	for _, d := range list {
+		kept = append(kept, d.Token)
+	}
+	if !slices.Equal(kept, phones[2:]) {
+		t.Fatalf("kept %v", kept)
+	}
+	// A session that registers again keeps its place.
+	f.register(f.session(ann.UserID), pb.PushPlatform_PUSH_PLATFORM_APNS, apnsToken(1))
+	if list, _ := f.repo.ListPushDevices(context.Background(), ann.UserID); len(list) != maxDevices {
+		t.Fatalf("%d devices", len(list))
+	}
+}
+
+func TestADeadTokenTakesNoNewOneWithIt(t *testing.T) {
+	f := newFixture(t)
+	ann, bob := f.person("ann"), f.person("bob")
+	f.register(bob, pb.PushPlatform_PUSH_PLATFORM_FCM, fcmToken("old"))
+	// FCM turns the old token away just as the phone registers its new
+	// one.
+	f.fcm.dead[fcmToken("old")] = true
+	f.fcm.sending = func(token string) {
+		if token == fcmToken("old") {
+			f.register(bob, pb.PushPlatform_PUSH_PLATFORM_FCM, fcmToken("new"))
+		}
+	}
+	f.post(Posted{Message: message(f.user(ann), ids.New(), "hi"), Conversation: true, Members: members(ann, bob)})
+	d, err := f.repo.GetPushDevice(context.Background(), bob.UserID, bob.SessionHash)
+	if err != nil || d.Token != fcmToken("new") {
+		t.Fatalf("bob's phone: %+v, %v", d, err)
 	}
 }

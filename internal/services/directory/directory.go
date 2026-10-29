@@ -543,7 +543,16 @@ func (w *worker) updateTeamMemberRole(ctx context.Context, msg UpdateTeamMemberR
 	if err := w.mayChangeAdmin(ctx, msg.P, teamID, current); err != nil {
 		return Done{}, err
 	}
-	return Done{}, w.Repo.UpdateTeamMemberRole(ctx, teamID, target, msg.Role)
+	if err := w.Repo.UpdateTeamMemberRole(ctx, teamID, target, msg.Role); err != nil {
+		return Done{}, err
+	}
+	// The person's apps and tabs show what the new role lets them do.
+	if team, err := w.Repo.GetTeam(ctx, teamID); err == nil {
+		w.deliver(&pb.Event{Payload: &pb.Event_TeamJoined{TeamJoined: &pb.TeamJoined{Team: convert.Team(team, msg.Role)}}}, target)
+	} else {
+		w.Logger.Warn("failed to tell a person their new team role", zap.Error(err))
+	}
+	return Done{}, nil
 }
 
 // mayChangeAdmin checks, under the team's lock, that p may demote or remove

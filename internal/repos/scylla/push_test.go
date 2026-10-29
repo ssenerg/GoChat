@@ -56,4 +56,27 @@ func TestPushDevicesLive(t *testing.T) {
 	if list, _ := r.ListPushDevices(ctx, user); len(list) != 1 || !list[0].Sandbox {
 		t.Fatalf("devices left %+v", list)
 	}
+
+	// A dead token takes its session's device only while the device holds
+	// it.
+	newer := *other
+	newer.Token = "cd" + ids.New().String()
+	if err := r.PutPushDevice(ctx, &newer, now.Add(time.Hour)); err != nil {
+		t.Fatal(err)
+	}
+	if err := r.ForgetPushToken(ctx, other); err != nil {
+		t.Fatal(err)
+	}
+	if got, err := r.GetPushDevice(ctx, user, other.SessionHash); err != nil || got.Token != newer.Token {
+		t.Fatalf("after its old token died: %+v, %v", got, err)
+	}
+	if err := r.ForgetPushToken(ctx, &newer); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := r.GetPushDevice(ctx, user, other.SessionHash); !ierrors.Is(err, ierrors.CodeNotFound) {
+		t.Fatalf("after its token died: %v", err)
+	}
+	if id, _, _ := r.PushTokenHolder(ctx, newer.Platform, newer.Token); !ids.IsZero(id) {
+		t.Fatal("a dead token is still held")
+	}
 }
