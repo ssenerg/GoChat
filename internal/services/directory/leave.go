@@ -46,16 +46,16 @@ func (w *worker) leaveTeam(ctx context.Context, msg LeaveTeam) (Done, error) {
 	// Out of the team, they can no longer finish this themselves.
 	if _, err := w.afterLeaving(ctx, msg.P, teamID, msg.P.UserID); err != nil {
 		w.Logger.Warn("failed to take a leaver out of the team's channels", zap.String("team", teamID.String()), zap.Error(err))
-		go w.finishLeaving(msg.P, teamID)
+		go w.finishLeaving(context.WithoutCancel(ctx), msg.P, teamID)
 	}
 	return Done{}, nil
 }
 
 // finishLeaving retries afterLeaving for a leave that stopped short.
-func (w *worker) finishLeaving(p *models.Principal, teamID gocql.UUID) {
+func (w *worker) finishLeaving(base context.Context, p *models.Principal, teamID gocql.UUID) {
 	for _, wait := range leaveRetries {
 		time.Sleep(wait)
-		ctx, cancel := context.WithTimeout(context.Background(), w.Cfg.OpTimeout)
+		ctx, cancel := context.WithTimeout(base, w.Cfg.OpTimeout)
 		_, err := w.afterLeaving(ctx, p, teamID, p.UserID)
 		cancel()
 		if err == nil {
