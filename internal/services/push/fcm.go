@@ -138,6 +138,7 @@ func (f *FCM) Send(ctx context.Context, d *models.PushDevice, n *Notice) error {
 		"data":         n.Data,
 		"android": map[string]any{
 			"priority":     "HIGH",
+			"ttl":          fmt.Sprintf("%ds", int(expiry.Seconds())),
 			"notification": map[string]string{"channel_id": fcmChannel},
 		},
 	}

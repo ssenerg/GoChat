@@ -44,6 +44,8 @@ type Deps struct {
 	// IdleTimeout is the sessions': a device whose session went unused
 	// that long gets no more pushes.
 	IdleTimeout time.Duration
+
+	fan *fanOut
 }
 
 // Register replaces the device of P's session; it replies with Registered.
@@ -71,6 +73,7 @@ type Forget struct {
 type Done struct{}
 
 func Pool(d *Deps) actor.Producer {
+	d.fan = newFanOut()
 	return actors.NewPool(d.Cfg.Workers, func() actor.Receiver { return &worker{Deps: d} },
 		actor.WithMiddleware(actors.Recover(d.Logger)))
 }

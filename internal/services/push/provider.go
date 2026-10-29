@@ -34,6 +34,9 @@ var ErrDeadToken = errors.New("push: the device's token is no longer valid")
 // maxResponse bounds what is read of a provider's answer.
 const maxResponse = 64 << 10
 
+// expiry is how long FCM and APNs keep a push for a device out of reach.
+const expiry = 24 * time.Hour
+
 // Client is the HTTP client of the providers. APNs needs HTTP/2, which
 // Go's transport speaks over TLS.
 func Client() *http.Client {

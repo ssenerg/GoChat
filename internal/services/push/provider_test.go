@@ -103,6 +103,7 @@ func TestFCM(t *testing.T) {
 				Data         map[string]string `json:"data"`
 				Android      struct {
 					Priority     string            `json:"priority"`
+					TTL          string            `json:"ttl"`
 					Notification map[string]string `json:"notification"`
 				} `json:"android"`
 			} `json:"message"`
@@ -110,7 +111,7 @@ func TestFCM(t *testing.T) {
 		_ = json.NewDecoder(r.Body).Decode(&body)
 		m := body.Message
 		if !strings.HasPrefix(r.Header.Get("Authorization"), "Bearer at-") || m.Notification["title"] != "Ann" ||
-			m.Data["channel_id"] != "ch" || m.Android.Priority != "HIGH" || m.Android.Notification["channel_id"] != fcmChannel {
+			m.Data["channel_id"] != "ch" || m.Android.Priority != "HIGH" || m.Android.TTL != "86400s" || m.Android.Notification["channel_id"] != fcmChannel {
 			t.Errorf("sent %s %+v", r.Header.Get("Authorization"), m)
 		}
 		if m.Token == "gone" {
@@ -242,6 +243,12 @@ func TestAPNs(t *testing.T) {
 	expire.Store(true)
 	if err := send("ok", false); err != nil || len(jwts) != 2 {
 		t.Fatalf("after the token expired: %v, %d tokens", err, len(jwts))
+	}
+	// A push that never got there says why without the device's token,
+	// which is in the URL.
+	prod.Close()
+	if err := send("0123abcd", false); err == nil || strings.Contains(err.Error(), "0123abcd") {
+		t.Fatalf("an unreachable APNs: %v", err)
 	}
 
 	rsaKey, _ := rsa.GenerateKey(rand.Reader, 2048)
