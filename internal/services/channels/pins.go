@@ -47,6 +47,12 @@ func (a *channel) pin(msg Pin) (*pb.Message, error) {
 	if !a.poster(msg.P.UserID).Allow() {
 		return nil, ierrors.ResourceExhausted("you are pinning too fast")
 	}
+	// Unpinning stays allowed.
+	if msg.Pinned {
+		if err := a.refuseBlocked(msg.P.UserID); err != nil {
+			return nil, err
+		}
+	}
 	ctx, cancel := a.ctx()
 	defer cancel()
 	m, err := a.messageOf(ctx, msg.MessageID, msg.RootID)

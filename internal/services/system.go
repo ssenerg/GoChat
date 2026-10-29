@@ -58,6 +58,7 @@ type System struct {
 	filing   *actor.PID
 	backfill *actor.PID
 	adopter  *actor.PID
+	copier   *actor.PID
 	events   *actor.PID
 	// callbacks holds the presses bots have yet to answer, webhooks
 	// delivers the updates of bots that have one.
@@ -152,10 +153,12 @@ func Start(logger *zap.Logger, cfg *Config, repo *scylla.Repository, storage *mi
 	}), "webhooks", actor.WithID("main"), recovered)
 	botDeps.Webhooks = s.webhooks
 	s.Bots = engine.Spawn(bots.Pool(botDeps), "bots", actor.WithID("main"))
-	s.Safety = engine.Spawn(safety.Pool(&safety.Deps{
+	safetyDeps := &safety.Deps{
 		Logger: logger.Named("safety"), Cfg: cfg.Safety, Repo: repo, Authz: az, Users: userCache, Blocks: blocked,
 		Engine: engine, Hub: s.Hub, Updates: s.Updates, Channels: s.Channels, Directory: s.Directory, Accounts: s.Accounts,
-	}), "safety", actor.WithID("main"))
+	}
+	s.Safety = engine.Spawn(safety.Pool(safetyDeps), "safety", actor.WithID("main"))
+	s.copier = engine.Spawn(safety.CopyBlocks(safetyDeps), "safety", actor.WithID("copy"), recovered)
 	logger.Info("actors started")
 	return s, nil
 }
@@ -171,7 +174,7 @@ func (s *System) Stop(timeout time.Duration) {
 	if s.Previews != nil {
 		previewer = s.Previews.PID
 	}
-	for _, pid := range []*actor.PID{s.Safety, s.Bots, s.webhooks, s.Accounts, s.Auth, s.Directory, s.Files, s.Search, s.backfill, s.adopter, s.janitor, previewer, s.Channels, s.Push, s.Voice, s.callbacks, s.Updates, s.filing, s.Hub, s.events} {
+	for _, pid := range []*actor.PID{s.Safety, s.Bots, s.webhooks, s.Accounts, s.Auth, s.Directory, s.Files, s.Search, s.backfill, s.adopter, s.copier, s.janitor, previewer, s.Channels, s.Push, s.Voice, s.callbacks, s.Updates, s.filing, s.Hub, s.events} {
 		if pid == nil {
 			continue
 		}

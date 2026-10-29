@@ -312,8 +312,9 @@ type Block struct {
 
 // Report is a message or a person reported to a team's admins: UserID is
 // the person reported, or the message's author. Action stays empty while
-// the report is open. A report of a conversation of no team has a zero
-// TeamID, for system admins alone.
+// the report is open, and is ReportPending while an admin acts on it,
+// ResolvedBy and ResolvedAt naming who claimed it and when. A report of a
+// conversation of no team has a zero TeamID, for system admins alone.
 type Report struct {
 	ID         gocql.UUID `db:"id"`
 	TeamID     gocql.UUID `db:"team_id"`
@@ -344,4 +345,8 @@ const (
 	ReportDeleteMessage = "message_deleted"
 	ReportRemoveMember  = "member_removed"
 	ReportDeactivate    = "deactivated"
+	ReportPending       = "pending"
 )
+
+// Open reports whether no admin has finished acting on the report.
+func (r *Report) Open() bool { return r.Action == "" || r.Action == ReportPending }

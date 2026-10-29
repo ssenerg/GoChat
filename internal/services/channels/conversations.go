@@ -43,8 +43,8 @@ func (a *channel) push(m *pb.Message, participants []string) {
 // cannot write.
 var ErrNotTaking = ierrors.New(ierrors.CodePermissionDenied, "you cannot send messages in this conversation")
 
-// refuseBlocked refuses userID's post in a direct conversation whose two
-// people one blocked the other.
+// refuseBlocked refuses userID's post, edit, reaction or pin in a direct
+// conversation whose two people one blocked the other.
 func (a *channel) refuseBlocked(userID gocql.UUID) error {
 	if a.ch.Kind != models.ChannelDirect || a.Blocks == nil {
 		return nil
@@ -70,19 +70,18 @@ func (a *channel) refuseBlocked(userID gocql.UUID) error {
 	return nil
 }
 
-// unblocked keeps of userIDs those who did not block author, or whose
-// blocks could not be read.
+// unblocked keeps of userIDs those who did not block author, with one
+// read of who did. It keeps none when that read fails.
 func (a *channel) unblocked(ctx context.Context, author gocql.UUID, userIDs []gocql.UUID) []gocql.UUID {
 	if a.Blocks == nil {
 		return userIDs
 	}
-	return slices.DeleteFunc(userIDs, func(id gocql.UUID) bool {
-		blocked, err := a.Blocks.Blocked(ctx, id, author)
-		if err != nil {
-			a.Logger.Warn("failed to read a person's blocks", zap.Error(err))
-		}
-		return blocked || err != nil
-	})
+	blocked, err := a.Blocks.Among(ctx, author, userIDs)
+	if err != nil {
+		a.Logger.Warn("failed to read who blocked a message's author", zap.Error(err))
+		return nil
+	}
+	return slices.DeleteFunc(userIDs, func(id gocql.UUID) bool { return blocked[id] })
 }
 
 // inTeam reports whether userID belongs to teamID.

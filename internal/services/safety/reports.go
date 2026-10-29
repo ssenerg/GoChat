@@ -191,7 +191,7 @@ func (w *worker) listReports(ctx context.Context, msg ListReports) (*pb.ListRepo
 	}
 	var after gocql.UUID
 	if msg.After != "" {
-		if after, err = parseID(msg.After, "report"); err != nil {
+		if after, err = parseTimeID(msg.After, "report"); err != nil {
 			return nil, err
 		}
 	}
@@ -203,15 +203,29 @@ func (w *worker) listReports(ctx context.Context, msg ListReports) (*pb.ListRepo
 	if len(list) == reportPage {
 		out.Next = list[len(list)-1].ID.String()
 	}
-	// A resolution cut short leaves its report listed as open.
 	shown := list[:0]
 	for _, rep := range list {
-		if (rep.Action == "") != msg.Resolved {
+		if rep.Open() == msg.Resolved {
+			// Resolved but still listed open: its move was cut short.
+			if !msg.Resolved {
+				w.reindex(ctx, rep)
+			}
+			continue
+		}
+		// No one sees the reports about themselves.
+		if rep.UserID != msg.P.UserID {
 			shown = append(shown, rep)
 		}
 	}
 	out.Reports, err = w.render(ctx, shown)
 	return out, err
+}
+
+// reindex redoes a resolved report's move out of the open listings.
+func (w *worker) reindex(ctx context.Context, rep *models.Report) {
+	if err := w.Repo.IndexResolved(ctx, rep); err != nil {
+		w.Logger.Warn("failed to list a resolved report as resolved", zap.String("report", rep.ID.String()), zap.Error(err))
+	}
 }
 
 func (w *worker) countReports(ctx context.Context, p *models.Principal) (*pb.CountReportsResponse, error) {
@@ -224,24 +238,24 @@ func (w *worker) countReports(ctx context.Context, p *models.Principal) (*pb.Cou
 		if !w.Authz.Can(authz.ObjReport, authz.ActRead, string(m.Role)) {
 			continue
 		}
-		n, err := w.Repo.CountOpenReports(ctx, m.TeamID, maxCounted)
+		n, about, err := w.Repo.CountOpenReports(ctx, m.TeamID, maxCounted)
 		if err != nil {
 			return nil, err
 		}
-		out.Teams[m.TeamID.String()] = int32(n) //nolint:gosec // at most maxCounted
+		out.Teams[m.TeamID.String()] = int32(n - about[p.UserID]) //nolint:gosec // at most maxCounted
 	}
 	if p.Role == models.SystemRoleAdmin {
-		n, err := w.Repo.CountOpenReports(ctx, gocql.UUID{}, maxCounted)
+		n, about, err := w.Repo.CountOpenReports(ctx, gocql.UUID{}, maxCounted)
 		if err != nil {
 			return nil, err
 		}
-		out.All = int32(n) //nolint:gosec // at most maxCounted
+		out.All = int32(n - about[p.UserID]) //nolint:gosec // at most maxCounted
 	}
 	return out, nil
 }
 
 func (w *worker) resolve(ctx context.Context, msg Resolve) (*pb.Report, error) {
-	id, err := parseID(msg.ReportID, "report")
+	id, err := parseTimeID(msg.ReportID, "report")
 	if err != nil {
 		return nil, err
 	}
@@ -256,35 +270,70 @@ func (w *worker) resolve(ctx context.Context, msg Resolve) (*pb.Report, error) {
 	if err != nil {
 		return nil, err
 	}
-	if ok, err := w.moderates(ctx, msg.P, rep.TeamID); err != nil || !ok {
+	if ok, err := w.moderates(ctx, msg.P, rep.TeamID); err != nil || !ok || rep.UserID == msg.P.UserID {
 		if err == nil {
 			err = errNoReport
 		}
 		return nil, err
 	}
-	if rep.Action != "" {
-		return nil, ierrors.FailedPrecondition("an admin already acted on this report")
+	if rep.ReporterID == msg.P.UserID {
+		return nil, ierrors.New(ierrors.CodePermissionDenied, "another admin acts on a report you sent")
 	}
+	if !rep.Open() {
+		w.reindex(ctx, rep)
+		return nil, errResolved
+	}
+	if rep.Action == models.ReportPending && time.Since(rep.ResolvedAt) < w.claimFor() {
+		return nil, errClaimed
+	}
+	// Claimed first, so two admins never both act; a claim its admin
+	// never settled goes stale after claimFor.
+	claim := time.Now().UTC().Truncate(time.Millisecond)
+	if ok, err := w.Repo.ClaimReport(ctx, rep, msg.P.UserID, claim); err != nil || !ok {
+		if err == nil {
+			err = errClaimed
+		}
+		return nil, err
+	}
+	rep.Action, rep.ResolvedBy, rep.ResolvedAt = models.ReportPending, msg.P.UserID, claim
+	// The claim is settled even when the act ran out the request's time.
+	sctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), w.Cfg.OpTimeout)
+	defer cancel()
 	if err := w.act(ctx, msg.P, rep, msg.Action); err != nil {
+		if rerr := w.Repo.ReleaseReport(sctx, rep); rerr != nil {
+			w.Logger.Warn("failed to release a report's claim", zap.String("report", rep.ID.String()), zap.Error(rerr))
+		}
 		return nil, err
 	}
-	now := time.Now().UTC()
-	applied, err := w.Repo.ResolveReport(ctx, rep, action, msg.P.UserID, now)
-	if err != nil {
+	held, err := w.Repo.FinishReport(sctx, rep, action)
+	switch {
+	case err != nil && held:
+		// Resolved, but still listed open until a listing repairs it.
+		w.Logger.Warn("failed to list a resolved report as resolved", zap.String("report", rep.ID.String()), zap.Error(err))
+	case err != nil:
 		return nil, err
+	case !held:
+		return nil, errClaimed
 	}
-	if applied {
-		rep.Action, rep.ResolvedBy, rep.ResolvedAt = action, msg.P.UserID, now
-		w.Logger.Info("report resolved", zap.String("report", rep.ID.String()), zap.String("action", action), zap.String("by", msg.P.UserID.String()))
-	} else if rep, err = w.Repo.GetReport(ctx, id); err != nil {
-		return nil, err
-	}
-	w.announce(ctx, rep.TeamID)
-	out, err := w.render(ctx, []*models.Report{rep})
+	rep.Action = action
+	w.Logger.Info("report resolved", zap.String("report", rep.ID.String()), zap.String("action", action), zap.String("by", msg.P.UserID.String()))
+	w.announce(sctx, rep.TeamID)
+	out, err := w.render(sctx, []*models.Report{rep})
 	if err != nil {
 		return nil, err
 	}
 	return out[0], nil
+}
+
+var (
+	errResolved = ierrors.FailedPrecondition("an admin already acted on this report")
+	errClaimed  = ierrors.FailedPrecondition("another admin is acting on this report")
+)
+
+// claimFor is how long an admin's claim on a report holds: past the time
+// their act may take.
+func (w *worker) claimFor() time.Duration {
+	return max(time.Minute, 3*w.Cfg.OpTimeout)
 }
 
 // act does what the admin chose. Its object being gone already counts as
@@ -330,7 +379,7 @@ func (w *worker) render(ctx context.Context, list []*models.Report) ([]*pb.Repor
 	var userIDs, teamIDs, channelIDs []gocql.UUID
 	for _, rep := range list {
 		userIDs = append(userIDs, rep.ReporterID, rep.UserID)
-		if !ids.IsZero(rep.ResolvedBy) {
+		if !rep.Open() {
 			userIDs = append(userIDs, rep.ResolvedBy)
 		}
 		if !ids.IsZero(rep.TeamID) {
@@ -375,7 +424,7 @@ func (w *worker) render(ctx context.Context, list []*models.Report) ([]*pb.Repor
 			Excerpt: rep.Excerpt, Reason: reasonOf(rep.Reason), Details: rep.Details, CreatedAt: convert.Time(rep.ID.Time()),
 			ChannelName: channelNames[rep.ChannelID],
 		}
-		if rep.Action != "" {
+		if !rep.Open() {
 			r.Action = actionOf(rep.Action)
 			r.ResolvedBy = convert.PublicUser(people[rep.ResolvedBy])
 			r.ResolvedAt = convert.Time(rep.ResolvedAt)

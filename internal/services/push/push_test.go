@@ -711,12 +711,31 @@ func (b blockList) ListBlocks(_ context.Context, userID gocql.UUID, _ int) ([]*m
 	return out, nil
 }
 
+func (b blockList) ListBlockers(_ context.Context, userID gocql.UUID, _ int) ([]gocql.UUID, error) {
+	var out []gocql.UUID
+	for by, list := range b {
+		if slices.Contains(list, userID) {
+			out = append(out, by)
+		}
+	}
+	return out, nil
+}
+
 func TestBlockedPeoplePushNothing(t *testing.T) {
+	for _, copied := range []bool{false, true} {
+		testBlockedPeoplePushNothing(t, copied)
+	}
+}
+
+func testBlockedPeoplePushNothing(t *testing.T, copied bool) {
 	f := newFixture(t)
 	ann, bob, cat := f.person("ann"), f.person("bob"), f.person("cat")
 	f.register(bob, pb.PushPlatform_PUSH_PLATFORM_FCM, fcmToken("bob"))
 	f.register(cat, pb.PushPlatform_PUSH_PLATFORM_FCM, fcmToken("cat"))
 	f.deps.Blocks = blocks.NewCache(blockList{bob.UserID: {ann.UserID}}, 10, 10, time.Minute)
+	if copied {
+		f.deps.Blocks.Copied()
+	}
 	team, channel := ids.New(), ids.New()
 	all := members(ann, bob, cat)
 

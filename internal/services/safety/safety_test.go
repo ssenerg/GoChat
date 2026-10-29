@@ -2,6 +2,7 @@ package safety
 
 import (
 	"context"
+	"errors"
 	"slices"
 	"sync"
 	"testing"
@@ -35,12 +36,17 @@ type fakeRepo struct {
 	teams   map[gocql.UUID]map[gocql.UUID]models.TeamRole
 	blocks  map[gocql.UUID][]*models.Block
 	reports map[gocql.UUID]*models.Report
+	// listed holds the reports listed open; failIndex fails moving them.
+	listed    map[gocql.UUID]bool
+	failIndex bool
+	state     map[string]string
 }
 
 func newFakeRepo() *fakeRepo {
 	return &fakeRepo{
 		users: map[gocql.UUID]*models.User{}, teams: map[gocql.UUID]map[gocql.UUID]models.TeamRole{},
 		blocks: map[gocql.UUID][]*models.Block{}, reports: map[gocql.UUID]*models.Report{},
+		listed: map[gocql.UUID]bool{}, state: map[string]string{},
 	}
 }
 
@@ -84,7 +90,8 @@ func (f *fakeRepo) GetUsers(ctx context.Context, list []gocql.UUID) ([]*models.U
 func (f *fakeRepo) Block(_ context.Context, b *models.Block) error {
 	f.mu.Lock()
 	defer f.mu.Unlock()
-	f.blocks[b.UserID] = append(f.blocks[b.UserID], b)
+	list := slices.DeleteFunc(f.blocks[b.UserID], func(old *models.Block) bool { return old.BlockedID == b.BlockedID })
+	f.blocks[b.UserID] = append(list, b)
 	return nil
 }
 
@@ -102,11 +109,39 @@ func (f *fakeRepo) ListBlocks(_ context.Context, userID gocql.UUID, limit int) (
 	return slices.Clone(list[:min(limit, len(list))]), nil
 }
 
+func (f *fakeRepo) ListBlockers(_ context.Context, userID gocql.UUID, limit int) ([]gocql.UUID, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	var out []gocql.UUID
+	for by, list := range f.blocks {
+		if slices.ContainsFunc(list, func(b *models.Block) bool { return b.BlockedID == userID }) && len(out) < limit {
+			out = append(out, by)
+		}
+	}
+	return out, nil
+}
+
+func (f *fakeRepo) CopyBlocks(context.Context) (int, error) { return 0, nil }
+
+func (f *fakeRepo) GetState(_ context.Context, key string) (string, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return f.state[key], nil
+}
+
+func (f *fakeRepo) SetState(_ context.Context, key, value string) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.state[key] = value
+	return nil
+}
+
 func (f *fakeRepo) CreateReport(_ context.Context, rep *models.Report) error {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	c := *rep
 	f.reports[rep.ID] = &c
+	f.listed[rep.ID] = true
 	return nil
 }
 
@@ -123,7 +158,7 @@ func (f *fakeRepo) GetReport(_ context.Context, id gocql.UUID) (*models.Report, 
 func (f *fakeRepo) scoped(scope gocql.UUID, open bool) []*models.Report {
 	var out []*models.Report
 	for _, rep := range f.reports {
-		if (ids.IsZero(scope) || rep.TeamID == scope) && (rep.Action == "") == open {
+		if (ids.IsZero(scope) || rep.TeamID == scope) && f.listed[rep.ID] == open {
 			c := *rep
 			out = append(out, &c)
 		}
@@ -143,21 +178,63 @@ func (f *fakeRepo) ListReports(_ context.Context, scope gocql.UUID, open bool, a
 	return list[:min(limit, len(list))], nil
 }
 
-func (f *fakeRepo) CountOpenReports(_ context.Context, scope gocql.UUID, limit int) (int, error) {
+func (f *fakeRepo) CountOpenReports(_ context.Context, scope gocql.UUID, limit int) (int, map[gocql.UUID]int, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
-	return min(limit, len(f.scoped(scope, true))), nil
+	list := f.scoped(scope, true)
+	list = list[:min(limit, len(list))]
+	about := map[gocql.UUID]int{}
+	for _, rep := range list {
+		about[rep.UserID]++
+	}
+	return len(list), about, nil
 }
 
-func (f *fakeRepo) ResolveReport(_ context.Context, rep *models.Report, action string, by gocql.UUID, at time.Time) (bool, error) {
+// holds reports whether held is as rep was read.
+func holds(held, rep *models.Report) bool {
+	return held.Action == rep.Action && held.ResolvedBy == rep.ResolvedBy && held.ResolvedAt.Equal(rep.ResolvedAt)
+}
+
+func (f *fakeRepo) ClaimReport(_ context.Context, rep *models.Report, by gocql.UUID, at time.Time) (bool, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	held := f.reports[rep.ID]
-	if held.Action != "" {
+	if !holds(held, rep) || !held.Open() {
 		return false, nil
 	}
-	held.Action, held.ResolvedBy, held.ResolvedAt = action, by, at
+	held.Action, held.ResolvedBy, held.ResolvedAt = models.ReportPending, by, at
 	return true, nil
+}
+
+func (f *fakeRepo) FinishReport(ctx context.Context, rep *models.Report, action string) (bool, error) {
+	f.mu.Lock()
+	held := f.reports[rep.ID]
+	if !holds(held, rep) || held.Action != models.ReportPending {
+		f.mu.Unlock()
+		return false, nil
+	}
+	held.Action = action
+	f.mu.Unlock()
+	return true, f.IndexResolved(ctx, rep)
+}
+
+func (f *fakeRepo) ReleaseReport(_ context.Context, rep *models.Report) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if held := f.reports[rep.ID]; holds(held, rep) && held.Action == models.ReportPending {
+		held.Action, held.ResolvedBy, held.ResolvedAt = "", gocql.UUID{}, time.Time{}
+	}
+	return nil
+}
+
+func (f *fakeRepo) IndexResolved(_ context.Context, rep *models.Report) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if f.failIndex {
+		return ierrors.Internal(errors.New("index unavailable"))
+	}
+	f.listed[rep.ID] = false
+	return nil
 }
 
 func (f *fakeRepo) GetTeamMember(_ context.Context, teamID, userID gocql.UUID) (*models.TeamMember, error) {
@@ -220,6 +297,8 @@ type world struct {
 	pushed   []updates.Push
 	toTeam   []hub.Deliver
 	toAdmins []hub.ToAdmins
+	// failRemove fails removing people from teams.
+	failRemove bool
 }
 
 func (wd *world) take() (team []hub.Deliver, admins []hub.ToAdmins) {
@@ -291,8 +370,12 @@ func newFixture(t *testing.T) *fixture {
 	dir := engine.SpawnFunc(func(c *actor.Context) {
 		if msg, ok := c.Message().(directory.RemoveTeamMember); ok {
 			wd.mu.Lock()
+			defer wd.mu.Unlock()
+			if wd.failRemove {
+				actors.Reply(c, ierrors.Unavailable("the team is busy, try again"))
+				return
+			}
 			wd.removed = append(wd.removed, msg)
-			wd.mu.Unlock()
 			actors.Reply(c, directory.Done{})
 		}
 	}, "directory")
@@ -367,16 +450,50 @@ func TestBlocking(t *testing.T) {
 	settle()
 	f.world.mu.Lock()
 	defer f.world.mu.Unlock()
-	if len(f.world.pushed) != 4 {
-		t.Fatalf("%d updates, want 4: three blocks and an unblock", len(f.world.pushed))
+	if len(f.world.pushed) != 5 {
+		t.Fatalf("%d updates, want 5: three blocks, one again and an unblock", len(f.world.pushed))
 	}
 	for _, p := range f.world.pushed {
 		if len(p.UserIDs) != 1 || p.UserIDs[0] != me || p.Event.GetBlocksChanged() == nil {
 			t.Fatalf("an update went to %v: %v", p.UserIDs, p.Event)
 		}
 	}
-	if last := f.world.pushed[3].Event.GetBlocksChanged(); last.Blocked || last.GetUser().GetId() != bob.String() {
+	if last := f.world.pushed[4].Event.GetBlocksChanged(); last.Blocked || last.GetUser().GetId() != bob.String() {
 		t.Fatalf("the unblock said %v", last)
+	}
+}
+
+func TestBlockingPastAStaleCache(t *testing.T) {
+	f := newFixture(t)
+	ctx := context.Background()
+	me, bob, cat, dan := f.repo.person("me", models.SystemRoleUser), f.repo.person("bob", models.SystemRoleUser),
+		f.repo.person("cat", models.SystemRoleUser), f.repo.person("dan", models.SystemRoleUser)
+	block := func(id gocql.UUID, blocked bool) error {
+		_, err := f.w.block(ctx, Block{P: f.principal(me), UserID: id.String(), Blocked: blocked})
+		return err
+	}
+	if err := block(bob, true); err != nil {
+		t.Fatal(err)
+	}
+	// The cache holds one block while three were made, two of them
+	// elsewhere.
+	if _, err := f.w.Blocks.Of(ctx, me); err != nil {
+		t.Fatal(err)
+	}
+	for _, id := range []gocql.UUID{cat, dan} {
+		if err := f.repo.Block(ctx, &models.Block{UserID: me, BlockedID: id}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := block(f.repo.person("eve", models.SystemRoleUser), true); !ierrors.Is(err, ierrors.CodeResourceExhausted) {
+		t.Fatalf("blocked past the cap: %v", err)
+	}
+	// Unblocking someone the cache never saw blocked still unblocks them.
+	if err := block(cat, false); err != nil {
+		t.Fatal(err)
+	}
+	if list, _ := f.repo.ListBlocks(ctx, me, 10); len(list) != 2 || slices.ContainsFunc(list, func(b *models.Block) bool { return b.BlockedID == cat }) {
+		t.Fatalf("after unblocking cat: %v", list)
 	}
 }
 
@@ -550,5 +667,199 @@ func TestResolvingReports(t *testing.T) {
 		if rep := f.repo.reports[id]; rep.Action != want {
 			t.Fatalf("report %s: %q, want %q", id, rep.Action, want)
 		}
+	}
+}
+
+func TestReportsAboutAnAdmin(t *testing.T) {
+	f := newFixture(t)
+	ctx := context.Background()
+	team, channel := ids.New(), ids.New()
+	ann, boss, deputy := f.repo.person("ann", models.SystemRoleUser), f.repo.person("boss", models.SystemRoleUser), f.repo.person("deputy", models.SystemRoleUser)
+	root, chief := f.repo.person("root", models.SystemRoleAdmin), f.repo.person("chief", models.SystemRoleAdmin)
+	f.repo.join(team, ann, models.TeamRoleMember)
+	f.repo.join(team, boss, models.TeamRoleAdmin)
+	f.repo.join(team, deputy, models.TeamRoleAdmin)
+	f.repo.join(team, root, models.TeamRoleMember)
+	f.world.teamOf[channel] = team
+	file := func(reporter, about gocql.UUID) gocql.UUID {
+		rep := &models.Report{ID: ids.NewTime(), TeamID: team, ReporterID: reporter, UserID: about, ChannelID: channel, MessageID: ids.NewTime(), Reason: models.ReportSpam}
+		if err := f.repo.CreateReport(ctx, rep); err != nil {
+			t.Fatal(err)
+		}
+		return rep.ID
+	}
+	ofBoss, ofRoot, byBoss := file(ann, boss), file(ann, root), file(boss, ann)
+	listed := func(p gocql.UUID, teamID string) []string {
+		t.Helper()
+		res, err := f.w.listReports(ctx, ListReports{P: f.principal(p), TeamID: teamID})
+		if err != nil {
+			t.Fatal(err)
+		}
+		var out []string
+		for _, r := range res.Reports {
+			out = append(out, r.Id)
+		}
+		slices.Sort(out)
+		return out
+	}
+	sorted := func(list ...gocql.UUID) []string {
+		out := make([]string, len(list))
+		for i, id := range list {
+			out[i] = id.String()
+		}
+		slices.Sort(out)
+		return out
+	}
+
+	// No one reads or counts the reports about themselves; the others do.
+	if got := listed(boss, team.String()); !slices.Equal(got, sorted(ofRoot, byBoss)) {
+		t.Fatalf("boss read %v", got)
+	}
+	if got := listed(deputy, team.String()); !slices.Equal(got, sorted(ofBoss, ofRoot, byBoss)) {
+		t.Fatalf("deputy read %v", got)
+	}
+	if got := listed(root, ""); !slices.Equal(got, sorted(ofBoss, byBoss)) {
+		t.Fatalf("root read %v", got)
+	}
+	if got := listed(chief, ""); len(got) != 3 {
+		t.Fatalf("chief read %v", got)
+	}
+	if c, _ := f.w.countReports(ctx, f.principal(boss)); c.Teams[team.String()] != 2 {
+		t.Fatalf("boss counts %v", c)
+	}
+	if c, _ := f.w.countReports(ctx, f.principal(root)); c.All != 2 {
+		t.Fatalf("root counts %v", c)
+	}
+
+	// Nor act on them, or on those they sent.
+	resolve := func(p, id gocql.UUID) error {
+		_, err := f.w.resolve(ctx, Resolve{P: f.principal(p), ReportID: id.String(), Action: pb.ReportAction_REPORT_ACTION_DISMISS})
+		return err
+	}
+	if err := resolve(boss, ofBoss); !ierrors.Is(err, ierrors.CodeNotFound) {
+		t.Fatalf("boss acted on a report about themselves: %v", err)
+	}
+	if err := resolve(root, ofRoot); !ierrors.Is(err, ierrors.CodeNotFound) {
+		t.Fatalf("root acted on a report about themselves: %v", err)
+	}
+	if err := resolve(boss, byBoss); !ierrors.Is(err, ierrors.CodePermissionDenied) {
+		t.Fatalf("boss acted on their own report: %v", err)
+	}
+
+	// What each admin hears leaves out the reports about them.
+	settle()
+	f.world.take()
+	if err := resolve(deputy, byBoss); err != nil {
+		t.Fatal(err)
+	}
+	settle()
+	toTeam, toAdmins := f.world.take()
+	heard := map[string]int32{}
+	for _, d := range toTeam {
+		for _, id := range d.UserIDs {
+			heard[id] = d.Event.GetReportsChanged().GetCount()
+		}
+	}
+	if heard[boss.String()] != 1 || heard[deputy.String()] != 2 || len(heard) != 2 {
+		t.Fatalf("the team's admins heard %v", heard)
+	}
+	if len(toAdmins) != 1 || toAdmins[0].Event.GetReportsChanged().GetCount() != 2 ||
+		toAdmins[0].Instead[root.String()].GetReportsChanged().GetCount() != 1 {
+		t.Fatalf("system admins heard %+v", toAdmins)
+	}
+}
+
+func TestClaimingReports(t *testing.T) {
+	f := newFixture(t)
+	ctx := context.Background()
+	team, channel := ids.New(), ids.New()
+	ann, bob, boss, deputy := f.repo.person("ann", models.SystemRoleUser), f.repo.person("bob", models.SystemRoleUser),
+		f.repo.person("boss", models.SystemRoleUser), f.repo.person("deputy", models.SystemRoleUser)
+	f.repo.join(team, ann, models.TeamRoleMember)
+	f.repo.join(team, bob, models.TeamRoleMember)
+	f.repo.join(team, boss, models.TeamRoleAdmin)
+	f.repo.join(team, deputy, models.TeamRoleAdmin)
+	f.world.teamOf[channel] = team
+	file := func() gocql.UUID {
+		rep := &models.Report{ID: ids.NewTime(), TeamID: team, ReporterID: ann, UserID: bob, ChannelID: channel, MessageID: ids.NewTime(), Reason: models.ReportSpam}
+		if err := f.repo.CreateReport(ctx, rep); err != nil {
+			t.Fatal(err)
+		}
+		return rep.ID
+	}
+	resolve := func(p, id gocql.UUID, action pb.ReportAction) error {
+		_, err := f.w.resolve(ctx, Resolve{P: f.principal(p), ReportID: id.String(), Action: action})
+		return err
+	}
+	report := func(id gocql.UUID) models.Report {
+		f.repo.mu.Lock()
+		defer f.repo.mu.Unlock()
+		return *f.repo.reports[id]
+	}
+
+	// An act that fails leaves the report open, for anyone to act on.
+	r1 := file()
+	f.world.mu.Lock()
+	f.world.failRemove = true
+	f.world.mu.Unlock()
+	if err := resolve(boss, r1, pb.ReportAction_REPORT_ACTION_REMOVE_MEMBER); !ierrors.Is(err, ierrors.CodeUnavailable) {
+		t.Fatalf("a failed removal: %v", err)
+	}
+	if rep := report(r1); rep.Action != "" || !ids.IsZero(rep.ResolvedBy) {
+		t.Fatalf("after a failed act the report reads %+v", rep)
+	}
+	f.world.mu.Lock()
+	f.world.failRemove = false
+	f.world.mu.Unlock()
+
+	// While one admin acts, the others wait; a claim gone stale is taken
+	// over.
+	f.repo.mu.Lock()
+	held := f.repo.reports[r1]
+	held.Action, held.ResolvedBy, held.ResolvedAt = models.ReportPending, deputy, time.Now().UTC().Truncate(time.Millisecond)
+	f.repo.mu.Unlock()
+	if err := resolve(boss, r1, pb.ReportAction_REPORT_ACTION_DISMISS); !ierrors.Is(err, ierrors.CodeFailedPrecondition) {
+		t.Fatalf("acted on a report claimed: %v", err)
+	}
+	res, err := f.w.listReports(ctx, ListReports{P: f.principal(boss), TeamID: team.String()})
+	if err != nil || len(res.Reports) != 1 || res.Reports[0].Action != pb.ReportAction_REPORT_ACTION_UNSPECIFIED {
+		t.Fatalf("a claimed report lists as %v, %v", res, err)
+	}
+	f.repo.mu.Lock()
+	held.ResolvedAt = held.ResolvedAt.Add(-time.Hour)
+	f.repo.mu.Unlock()
+	if err := resolve(boss, r1, pb.ReportAction_REPORT_ACTION_DISMISS); err != nil {
+		t.Fatalf("taking over a stale claim: %v", err)
+	}
+	if rep := report(r1); rep.Action != models.ReportDismissed || rep.ResolvedBy != boss {
+		t.Fatalf("after taking over: %+v", rep)
+	}
+
+	// A resolution whose listing failed to move shows in neither list
+	// until the open one repairs it.
+	r2 := file()
+	f.repo.mu.Lock()
+	f.repo.failIndex = true
+	f.repo.mu.Unlock()
+	if err := resolve(boss, r2, pb.ReportAction_REPORT_ACTION_DISMISS); err != nil {
+		t.Fatalf("resolving while the index fails: %v", err)
+	}
+	f.repo.mu.Lock()
+	f.repo.failIndex = false
+	f.repo.mu.Unlock()
+	if res, _ := f.w.listReports(ctx, ListReports{P: f.principal(boss), TeamID: team.String()}); len(res.Reports) != 0 {
+		t.Fatalf("open: %v", res.Reports)
+	}
+	res, err = f.w.listReports(ctx, ListReports{P: f.principal(boss), TeamID: team.String(), Resolved: true})
+	if err != nil || len(res.Reports) != 2 {
+		t.Fatalf("resolved after the repair: %v, %v", res, err)
+	}
+
+	// Report ids are timeuuids.
+	if err := resolve(boss, ids.New(), pb.ReportAction_REPORT_ACTION_DISMISS); !ierrors.Is(err, ierrors.CodeInvalidArgument) {
+		t.Fatalf("a random id: %v", err)
+	}
+	if _, err := f.w.listReports(ctx, ListReports{P: f.principal(boss), TeamID: team.String(), After: ids.New().String()}); !ierrors.Is(err, ierrors.CodeInvalidArgument) {
+		t.Fatalf("a random cursor: %v", err)
 	}
 }

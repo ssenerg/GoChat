@@ -58,17 +58,19 @@ func newFanOut() *fanOut { return &fanOut{slots: make(chan struct{}, sends)} }
 // it mentions. Only people with no connection open get it; @here calls for
 // those online, so it pushes to no one.
 func (w *worker) posted(msg Posted) {
-	ctx, cancel := context.WithTimeout(context.Background(), w.Cfg.OpTimeout)
-	defer cancel()
-	targets := w.targets(ctx, msg)
+	// Each step has its own deadline, so a slow one costs the next none.
+	targets := w.targets(msg)
 	if len(targets) == 0 {
 		return
 	}
+	ctx, cancel := context.WithTimeout(context.Background(), w.Cfg.OpTimeout)
 	away, err := actors.Ask[[]string](ctx, w.Engine, w.Hub, hub.Disconnected{UserIDs: targets})
+	cancel()
 	if err != nil {
 		w.Logger.Warn("failed to find who to push to", zap.Error(err))
 		return
 	}
+	away = w.unblocked(msg.Message.GetAuthor().GetId(), away)
 	if len(away) == 0 {
 		return
 	}
@@ -100,14 +102,13 @@ func (w *worker) posted(msg Posted) {
 	}()
 }
 
-// targets are the people msg calls for, the author left out, and those
-// who blocked the author.
-func (w *worker) targets(ctx context.Context, msg Posted) []string {
+// targets are the people msg calls for, the author left out.
+func (w *worker) targets(msg Posted) []string {
 	m := msg.Message
 	author := m.GetAuthor().GetId()
 	set := map[string]bool{}
 	add := func(id string) {
-		if _, ok := msg.Members[id]; ok && id != author && !w.blocked(ctx, id, author) {
+		if _, ok := msg.Members[id]; ok && id != author {
 			set[id] = true
 		}
 	}
@@ -122,12 +123,16 @@ func (w *worker) targets(ctx context.Context, msg Posted) []string {
 			add(id)
 		}
 	}
-	for _, name := range found.Usernames {
-		id, err := w.Repo.GetUserIDByUsername(ctx, name)
-		if err == nil {
-			add(id.String())
-		} else if !ierrors.Is(err, ierrors.CodeNotFound) {
-			w.Logger.Warn("failed to find a mentioned person", zap.Error(err))
+	if len(found.Usernames) > 0 {
+		ctx, cancel := context.WithTimeout(context.Background(), w.Cfg.OpTimeout)
+		defer cancel()
+		for _, name := range found.Usernames {
+			id, err := w.Repo.GetUserIDByUsername(ctx, name)
+			if err == nil {
+				add(id.String())
+			} else if !ierrors.Is(err, ierrors.CodeNotFound) {
+				w.Logger.Warn("failed to find a mentioned person", zap.Error(err))
+			}
 		}
 	}
 	out := make([]string, 0, len(set))
@@ -138,22 +143,33 @@ func (w *worker) targets(ctx context.Context, msg Posted) []string {
 	return out
 }
 
-// blocked reports whether userID blocked author.
-func (w *worker) blocked(ctx context.Context, userID, author string) bool {
-	if w.Blocks == nil {
-		return false
+// unblocked leaves out those of userIDs who blocked author. Unread blocks
+// push nothing.
+func (w *worker) unblocked(author string, userIDs []string) []string {
+	aid, ok := ids.Parse(author)
+	if w.Blocks == nil || !ok {
+		return userIDs
 	}
-	uid, ok1 := ids.Parse(userID)
-	aid, ok2 := ids.Parse(author)
-	if !ok1 || !ok2 {
-		return false
+	uids := make([]gocql.UUID, 0, len(userIDs))
+	for _, id := range userIDs {
+		if uid, ok := ids.Parse(id); ok {
+			uids = append(uids, uid)
+		}
 	}
-	// Unread blocks push nothing.
-	blocked, err := w.Blocks.Blocked(ctx, uid, aid)
+	ctx, cancel := context.WithTimeout(context.Background(), w.Cfg.OpTimeout)
+	defer cancel()
+	blocked, err := w.Blocks.Among(ctx, aid, uids)
 	if err != nil {
-		w.Logger.Warn("failed to read a person's blocks", zap.Error(err))
+		w.Logger.Warn("failed to read who blocked a message's author", zap.Error(err))
+		return nil
 	}
-	return blocked || err != nil
+	out := make([]string, 0, len(uids))
+	for _, uid := range uids {
+		if !blocked[uid] {
+			out = append(out, uid.String())
+		}
+	}
+	return out
 }
 
 // reach pushes n to userID's devices, unless the channel is muted or they

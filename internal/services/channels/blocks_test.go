@@ -6,12 +6,14 @@ import (
 	"testing"
 	"time"
 
+	"github.com/anthdm/hollywood/actor"
 	"github.com/gocql/gocql"
 
 	"github.com/ssenerg/gochat/internal/core/ids"
 	"github.com/ssenerg/gochat/internal/core/models"
 	ierrors "github.com/ssenerg/gochat/internal/errors"
 	"github.com/ssenerg/gochat/internal/services/blocks"
+	"github.com/ssenerg/gochat/internal/services/hub"
 )
 
 type blockList map[gocql.UUID][]gocql.UUID
@@ -20,6 +22,16 @@ func (b blockList) ListBlocks(_ context.Context, userID gocql.UUID, _ int) ([]*m
 	var out []*models.Block
 	for _, id := range b[userID] {
 		out = append(out, &models.Block{UserID: userID, BlockedID: id})
+	}
+	return out, nil
+}
+
+func (b blockList) ListBlockers(_ context.Context, userID gocql.UUID, _ int) ([]gocql.UUID, error) {
+	var out []gocql.UUID
+	for by, list := range b {
+		if slices.Contains(list, userID) {
+			out = append(out, by)
+		}
 	}
 	return out, nil
 }
@@ -90,9 +102,77 @@ func TestBlockedPeopleCannotWriteInADirectConversation(t *testing.T) {
 	}
 }
 
+func TestBlockedPeopleCannotTouchADirectConversation(t *testing.T) {
+	me, peer := ids.New(), ids.New()
+	a, _ := blockChannel(t, models.ChannelDirect, blockList{peer: {me}}, me, peer)
+	typed := make(chan hub.Deliver, 4)
+	a.Hub = a.Engine.SpawnFunc(func(c *actor.Context) {
+		if d, ok := c.Message().(hub.Deliver); ok && d.Event.GetTyping() != nil {
+			typed <- d
+		}
+	}, "typing")
+	target := func(from gocql.UUID) Target {
+		return Target{P: &models.Principal{UserID: from, Role: models.SystemRoleUser}, ChannelID: a.id}
+	}
+	id := ids.NewTime().String()
+	for name, try := range map[string]func(from gocql.UUID) error{
+		"edit": func(from gocql.UUID) error {
+			_, err := a.edit(Edit{Target: target(from), MessageID: id, Content: "changed"})
+			return err
+		},
+		"react": func(from gocql.UUID) error {
+			_, err := a.react(React{Target: target(from), MessageID: id, Emoji: "smile"})
+			return err
+		},
+		"pin": func(from gocql.UUID) error {
+			_, err := a.pin(Pin{Target: target(from), MessageID: id, Pinned: true})
+			return err
+		},
+	} {
+		if err := try(me); !ierrors.Is(err, ierrors.CodePermissionDenied) || ierrors.As(err).Message != ErrNotTaking.Message {
+			t.Fatalf("%s by someone blocked: %v", name, err)
+		}
+		if err := try(peer); !ierrors.Is(err, ierrors.CodeFailedPrecondition) {
+			t.Fatalf("%s by the blocker: %v", name, err)
+		}
+	}
+	// Their typing goes nowhere, and says nothing of why.
+	if _, err := a.typingEvent(Typing{Target: target(me)}); err != nil {
+		t.Fatal(err)
+	}
+	select {
+	case d := <-typed:
+		t.Fatalf("typing reached %v", d)
+	case <-time.After(100 * time.Millisecond):
+	}
+	a, _ = blockChannel(t, models.ChannelDirect, nil, me, peer)
+	a.Hub = a.Engine.SpawnFunc(func(c *actor.Context) {
+		if d, ok := c.Message().(hub.Deliver); ok && d.Event.GetTyping() != nil {
+			typed <- d
+		}
+	}, "typing")
+	if _, err := a.typingEvent(Typing{Target: target(me)}); err != nil {
+		t.Fatal(err)
+	}
+	select {
+	case <-typed:
+	case <-time.After(5 * time.Second):
+		t.Fatal("typing with no block went nowhere")
+	}
+}
+
 func TestBlockedPeopleCallOutNoOne(t *testing.T) {
+	for _, copied := range []bool{false, true} {
+		testBlockedPeopleCallOutNoOne(t, copied)
+	}
+}
+
+func testBlockedPeopleCallOutNoOne(t *testing.T, copied bool) {
 	ann, bob, cat := ids.New(), ids.New(), ids.New()
 	a, w := blockChannel(t, models.ChannelPublic, blockList{bob: {ann}}, ann, bob, cat)
+	if copied {
+		a.Blocks.Copied()
+	}
 	mentioned := func(from gocql.UUID, text string) []gocql.UUID {
 		t.Helper()
 		if _, err := a.post(Post{Target: Target{P: &models.Principal{UserID: from, Role: models.SystemRoleUser}, ChannelID: a.id}, Content: text}); err != nil {
