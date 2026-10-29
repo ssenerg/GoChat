@@ -9,6 +9,7 @@ import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Build
+import android.util.Base64
 import com.google.firebase.FirebaseApp
 import com.google.firebase.messaging.FirebaseMessaging
 import com.google.firebase.messaging.FirebaseMessagingService
@@ -23,6 +24,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.runBlocking
+import java.security.SecureRandom
 
 /**
  * Firebase Cloud Messaging. Firebase starts from the app's resources
@@ -81,6 +83,7 @@ class AndroidPush(private val context: Context) : PushService {
         if (Build.VERSION.SDK_INT >= 33 && context.checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) return
         val open = context.packageManager.getLaunchIntentForPackage(context.packageName) ?: return
         data.forEach { (k, v) -> open.putExtra(k, v) }
+        open.putExtra(PushTarget.TAP, tapSecret(context))
         val id = (data["message_id"] ?: (title + body)).hashCode()
         val tap = PendingIntent.getActivity(context, id, open, PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
         val notice = Notification.Builder(context, CHANNEL)
@@ -100,10 +103,23 @@ class AndroidPush(private val context: Context) : PushService {
 
         internal var current: AndroidPush? = null
 
-        /** What the push an activity was opened from shows, if it was. */
-        fun target(intent: Intent?): PushTarget? {
+        private const val PREFS = "gochat_push"
+        private const val TAP_SECRET = "tap_secret"
+
+        /** What the push an activity was opened from shows, if the app made its notice. */
+        fun target(context: Context, intent: Intent?): PushTarget? {
             val extras = intent?.extras ?: return null
-            return PushTarget.from { extras.getString(it) }
+            return PushTarget.tapped(tapSecret(context)) { extras.getString(it) }
+        }
+
+        // The install's secret, which its notices carry: MainActivity is
+        // exported, so any app may start it with a channel's keys.
+        private fun tapSecret(context: Context): String {
+            val prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+            prefs.getString(TAP_SECRET, null)?.let { return it }
+            val secret = Base64.encodeToString(ByteArray(16).also { SecureRandom().nextBytes(it) }, Base64.NO_WRAP)
+            prefs.edit().putString(TAP_SECRET, secret).apply()
+            return secret
         }
     }
 }

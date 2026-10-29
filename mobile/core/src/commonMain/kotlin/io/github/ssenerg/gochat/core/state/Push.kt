@@ -29,5 +29,16 @@ data class PushTarget(val channelId: String, val rootId: String = "", val teamId
             val channel = get("channel_id")?.takeIf { it.isNotBlank() } ?: return null
             return PushTarget(channel, get("root_id").orEmpty(), get("team_id").orEmpty())
         }
+
+        /**
+         * Reads a tapped notice the app made itself: its [TAP] extra holds
+         * [secret]. Other apps may start the app with a channel's keys, but
+         * not with the secret.
+         */
+        fun tapped(secret: String, get: (String) -> String?): PushTarget? =
+            if (secret.isNotEmpty() && get(TAP) == secret) from(get) else null
+
+        /** The extra of a notice that holds the app's secret. */
+        const val TAP = "gochat_tap"
     }
 }

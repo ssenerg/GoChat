@@ -112,6 +112,16 @@ class PushTest {
     }
 
     @Test
+    fun onlyANoticeTheAppMadeOpensWhatItNames() {
+        val keys = mapOf("channel_id" to "c1", "team_id" to "t1")
+        assertEquals(PushTarget("c1", teamId = "t1"), PushTarget.tapped("s3cret") { (keys + (PushTarget.TAP to "s3cret"))[it] })
+        // Another app's intent, or the launcher's.
+        assertNull(PushTarget.tapped("s3cret") { keys[it] })
+        assertNull(PushTarget.tapped("s3cret") { (keys + (PushTarget.TAP to "guess"))[it] })
+        assertNull(PushTarget.tapped("") { (keys + (PushTarget.TAP to ""))[it] })
+    }
+
+    @Test
     fun aTappedPushWaitsForTheScreens() = runTest {
         val app = GoChatApp(MemoryStore(), backgroundScope)
         val target = PushTarget("c1", teamId = "t1")

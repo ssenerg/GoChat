@@ -31,6 +31,6 @@ class MainActivity : ComponentActivity() {
             app.ssoReturned(data.toString())
             return
         }
-        AndroidPush.target(intent)?.let { app.openPush(it) }
+        AndroidPush.target(this, intent)?.let { app.openPush(it) }
     }
 }

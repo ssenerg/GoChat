@@ -193,7 +193,9 @@ They are the values `google-services.json` holds, which the app does not
 need. Without them the app builds and runs as before, without pushes. The
 server sends data alone, as high-priority messages: FCM hands each to the
 app, running or not, which shows it in the Messages channel of its
-notification settings.
+notification settings. A tap opens the channel only from a notice the app
+made: each carries a random secret of the install, kept in its private
+preferences. Any app may start GoChat's activity, but not with it.
 
 **iOS.** The app has the Push Notifications capability: under your team,
 Xcode adds it to the App ID with the bundle id. The server's APNs `topic`
