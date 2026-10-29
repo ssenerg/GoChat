@@ -20,8 +20,10 @@ import (
 	"github.com/ssenerg/gochat/internal/core/models"
 	ierrors "github.com/ssenerg/gochat/internal/errors"
 	"github.com/ssenerg/gochat/internal/services/callbacks"
+	"github.com/ssenerg/gochat/internal/services/directory"
 	"github.com/ssenerg/gochat/internal/services/hub"
 	"github.com/ssenerg/gochat/internal/services/updates"
+	"github.com/ssenerg/gochat/internal/services/users"
 )
 
 func TestWebhookURLs(t *testing.T) {
@@ -303,6 +305,85 @@ func TestWebhooksStopAsAHookEnds(t *testing.T) {
 		case <-engine.Poison(hooks).Done():
 		case <-time.After(5 * time.Second):
 			t.Fatal("the webhooks never stopped")
+		}
+	}
+}
+
+// ownedRepo keeps people's bots.
+type ownedRepo struct {
+	Repo
+	mu   sync.Mutex
+	bots map[gocql.UUID]*models.Bot
+}
+
+func (r *ownedRepo) ListBotIDs(_ context.Context, owner gocql.UUID) ([]gocql.UUID, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	var out []gocql.UUID
+	for id, b := range r.bots {
+		if b.OwnerID == owner {
+			out = append(out, id)
+		}
+	}
+	return out, nil
+}
+
+func (r *ownedRepo) GetBots(_ context.Context, list []gocql.UUID) ([]*models.Bot, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	var out []*models.Bot
+	for _, id := range list {
+		if b := r.bots[id]; b != nil {
+			out = append(out, b)
+		}
+	}
+	return out, nil
+}
+
+func (r *ownedRepo) DeleteBot(_ context.Context, b *models.Bot) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	delete(r.bots, b.ID)
+	return nil
+}
+
+func TestADeletedAccountsBotsGoWithIt(t *testing.T) {
+	engine, err := actor.NewEngine(actor.NewEngineConfig())
+	if err != nil {
+		t.Fatal(err)
+	}
+	dir := engine.SpawnFunc(func(c *actor.Context) {
+		if _, ok := c.Message().(directory.RemoveBot); ok {
+			actors.Reply(c, directory.Done{})
+		}
+	}, "directory")
+	owner, other := ids.New(), ids.New()
+	repo := &ownedRepo{bots: map[gocql.UUID]*models.Bot{}}
+	// Not read for being deactivated, as listing them for their owner is.
+	for _, who := range []gocql.UUID{owner, owner, other} {
+		id := ids.New()
+		repo.bots[id] = &models.Bot{ID: id, OwnerID: who, TokenHash: id[:]}
+	}
+	var revoked sync.Map
+	w := &worker{Deps: &Deps{
+		Logger: zap.NewNop(), Repo: repo, Users: users.NewCache(nil, 10, time.Minute), Engine: engine, Directory: dir,
+		Revoke: func(id gocql.UUID, _ [][]byte, _ bool) { revoked.Store(id, true) },
+	}}
+	if _, err := w.deleteOwned(context.Background(), &models.Principal{UserID: owner, Bot: true}); !ierrors.Is(err, ierrors.CodePermissionDenied) {
+		t.Fatalf("a bot deleted its owner's bots: %v", err)
+	}
+	if _, err := w.deleteOwned(context.Background(), &models.Principal{UserID: owner}); err != nil {
+		t.Fatal(err)
+	}
+	if len(repo.bots) != 1 {
+		t.Fatalf("%d bots stayed", len(repo.bots))
+	}
+	for id, b := range repo.bots {
+		if b.OwnerID != other {
+			t.Fatal("one of the owner's bots stayed")
+		}
+		if _, ok := revoked.Load(id); ok {
+			t.Fatal("another's bot was stopped")
 		}
 	}
 }

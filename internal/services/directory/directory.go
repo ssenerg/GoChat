@@ -482,7 +482,8 @@ func (w *worker) removeTeamMember(ctx context.Context, msg RemoveTeamMember) (Do
 	if err := w.dropTeamMember(ctx, msg.P, teamID, target); err != nil {
 		return Done{}, err
 	}
-	return Done{}, w.afterLeaving(ctx, msg.P, teamID, target)
+	_, err = w.afterLeaving(ctx, msg.P, teamID, target)
+	return Done{}, err
 }
 
 // dropTeamMember removes target from the team, keeping it an admin. A
