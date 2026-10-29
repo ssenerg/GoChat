@@ -35,6 +35,8 @@ import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Tag
+import androidx.compose.material3.Badge
+import androidx.compose.material3.BadgedBox
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
@@ -185,12 +187,16 @@ private fun TeamHeader(st: ChatState, session: ChatSession) {
             Icon(Icons.Filled.Search, contentDescription = "Search")
         }
         Box {
+            // Reports waiting for the team's admins show on the menu.
+            val reports = st.team?.takeIf { it.isAdmin }?.let { st.reports[it.id] } ?: 0
             IconButton(onClick = { menu = true }, enabled = st.team != null) {
-                Icon(Icons.Filled.MoreVert, contentDescription = "Team menu")
+                BadgedBox(badge = { if (reports > 0) Badge { Text(reports.toString()) } }) {
+                    Icon(Icons.Filled.MoreVert, contentDescription = "Team menu")
+                }
             }
             DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
                 val team = st.team
-                // As on the web: inviting is its admins'.
+                // As on the web: inviting and the team's reports are its admins'.
                 if (team?.isAdmin == true) {
                     DropdownMenuItem(text = { Text("Invite people") }, onClick = {
                         menu = false
@@ -203,6 +209,11 @@ private fun TeamHeader(st: ChatState, session: ChatSession) {
                             }
                         }
                     })
+                    val open = st.reports[team.id] ?: 0
+                    DropdownMenuItem(
+                        text = { Text(if (open > 0) "Reports ($open)" else "Reports") },
+                        onClick = { menu = false; nav.open(Route.Reports(team.id)) },
+                    )
                 }
                 if (team != null) {
                     DropdownMenuItem(text = { Text("Team settings") }, onClick = { menu = false; nav.open(Route.TeamSettings(team.id)) })

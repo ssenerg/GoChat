@@ -97,6 +97,9 @@ type Delete struct {
 	Target
 	MessageID string
 	RootID    string
+	// Moderated deletes for an admin acting on a report, whom the safety
+	// service checked: P need not be a member.
+	Moderated bool
 }
 
 // History replies with *HistoryResult: the messages before BeforeID, or

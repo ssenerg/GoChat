@@ -19,7 +19,9 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Logout
+import androidx.compose.material.icons.filled.Block
 import androidx.compose.material.icons.filled.DeleteForever
+import androidx.compose.material.icons.filled.Flag
 import androidx.compose.material.icons.filled.Key
 import androidx.compose.material.icons.filled.Security
 import androidx.compose.material3.AlertDialog
@@ -53,6 +55,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import gochat.v1.SSOIdentity
 import gochat.v1.Status
+import gochat.v1.SystemRole
 import io.github.ssenerg.gochat.core.api.userMessage
 import io.github.ssenerg.gochat.core.model.Emojis
 import io.github.ssenerg.gochat.core.model.displayName
@@ -153,6 +156,20 @@ fun SettingsScreen(session: ChatSession, app: GoChatApp) {
                 leadingContent = { Icon(Icons.Filled.Security, contentDescription = null) },
                 modifier = Modifier.clickable { nav.open(Route.TwoFactor) },
             )
+            ListItem(
+                headlineContent = { Text("Blocked people") },
+                supportingContent = { Text(if (st.blocked.isEmpty()) "No one" else "${st.blocked.size} blocked") },
+                leadingContent = { Icon(Icons.Filled.Block, contentDescription = null) },
+                modifier = Modifier.clickable { nav.open(Route.Blocked) },
+            )
+            if (me.role == SystemRole.SYSTEM_ROLE_ADMIN) {
+                ListItem(
+                    headlineContent = { Text("All reports") },
+                    supportingContent = { Text(if (st.allReports == 0) "None open" else "${st.allReports} open") },
+                    leadingContent = { Icon(Icons.Filled.Flag, contentDescription = null) },
+                    modifier = Modifier.clickable { nav.open(Route.Reports("")) },
+                )
+            }
             ListItem(
                 headlineContent = { Text("Sign out", color = MaterialTheme.colorScheme.error) },
                 leadingContent = { Icon(Icons.AutoMirrored.Filled.Logout, contentDescription = null, tint = MaterialTheme.colorScheme.error) },

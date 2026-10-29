@@ -54,6 +54,7 @@ func Mux(sys *services.System, storage *minio.Storage, cfg *services.Config) (*d
 		func() error { return pb.DRPCRegisterVoiceService(mux, &voiceService{b}) },
 		func() error { return pb.DRPCRegisterVoiceServerService(mux, &voiceServerService{b}) },
 		func() error { return pb.DRPCRegisterPushService(mux, &pushService{b}) },
+		func() error { return pb.DRPCRegisterSafetyService(mux, &safetyService{b}) },
 	} {
 		if err := reg(); err != nil {
 			return nil, err

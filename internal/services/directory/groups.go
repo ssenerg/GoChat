@@ -75,10 +75,13 @@ func (w *worker) openGroup(ctx context.Context, msg OpenGroup) (*pb.Channel, err
 			return nil, err
 		}
 		bots[id] = bot
+		if err := w.mayReach(ctx, msg.P.UserID, id, kindOf(len(members))); err != nil {
+			return nil, err
+		}
 	}
-	kind, display := models.ChannelGroup, "Group"
-	if len(members) == 2 {
-		kind, display = models.ChannelDirect, "Direct"
+	kind, display := kindOf(len(members)), "Group"
+	if kind == models.ChannelDirect {
+		display = "Direct"
 	}
 	// A bot talks with one person at a time.
 	if kind == models.ChannelGroup && slices.Contains(slices.Collect(maps.Values(bots)), true) {
@@ -119,6 +122,39 @@ func (w *worker) openGroup(ctx context.Context, msg OpenGroup) (*pb.Channel, err
 		}
 	}
 	return view, nil
+}
+
+// kindOf is the kind of a conversation of n people.
+func kindOf(n int) models.ChannelKind {
+	if n == 2 {
+		return models.ChannelDirect
+	}
+	return models.ChannelGroup
+}
+
+// mayReach refuses a conversation with target to someone target blocked,
+// in the words a post to them is refused. Who blocked target may open
+// their direct conversation, to read it, but not start a group with them.
+func (w *worker) mayReach(ctx context.Context, userID, target gocql.UUID, k models.ChannelKind) error {
+	if w.Blocks == nil {
+		return nil
+	}
+	if theirs, err := w.Blocks.Blocked(ctx, target, userID); err != nil || theirs {
+		if err == nil {
+			err = channels.ErrNotTaking
+		}
+		return err
+	}
+	if k == models.ChannelDirect {
+		return nil
+	}
+	if mine, err := w.Blocks.Blocked(ctx, userID, target); err != nil || mine {
+		if err == nil {
+			err = ierrors.FailedPrecondition("you blocked someone you picked: unblock them first")
+		}
+		return err
+	}
+	return nil
 }
 
 // reachable checks target is an active member of the team.

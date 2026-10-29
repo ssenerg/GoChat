@@ -1,12 +1,15 @@
 package io.github.ssenerg.gochat.core.state
 
 import gochat.v1.Attachment
+import gochat.v1.BlockedUser
 import gochat.v1.CallbackAnswer
 import gochat.v1.Channel
 import gochat.v1.ChannelCommand
 import gochat.v1.Event
 import gochat.v1.Message
 import gochat.v1.Reaction
+import gochat.v1.ReportAction
+import gochat.v1.ReportReason
 import gochat.v1.Status
 import gochat.v1.Team
 import gochat.v1.User
@@ -64,6 +67,11 @@ data class ChatState(
     val channels: List<Channel> = emptyList(),
     val muted: Set<String> = emptySet(),
     val saved: Set<String> = emptySet(),
+    /** The people the person blocked: their messages show folded and call for nothing. */
+    val blocked: Set<String> = emptySet(),
+    /** Open reports by team, of the teams the person is an admin of, and every team's for a system admin. */
+    val reports: Map<String, Int> = emptyMap(),
+    val allReports: Int = 0,
     /** The people not offline, and how available they are. */
     val presence: Map<String, Status> = emptyMap(),
     /** Who talks in each voice channel, by channel id. */
@@ -88,6 +96,9 @@ data class ChatState(
     fun channel(id: String): Channel? = channels.firstOrNull { it.id == id }
 
     fun statusOf(userId: String): Status = presence[userId] ?: Status.STATUS_OFFLINE
+
+    /** Whether [m] is by someone the person blocked, and shows folded. */
+    fun fromBlocked(m: Message): Boolean = m.author?.id.let { it != null && it != me.id && it in blocked }
 }
 
 /** A message elsewhere that calls for the person: a mention, a direct message, a reply. */
@@ -237,6 +248,7 @@ class ChatSession internal constructor(
                     loadTeams()
                     reloadViews()
                     runCatching { api.savedIds() }.onSuccess { ids -> _state.update { it.copy(saved = ids.toSet()) } }
+                    loadSafety()
                     synced = _state.value.error == null
                 } else {
                     catchUp()
@@ -245,6 +257,14 @@ class ChatSession internal constructor(
                 updates.release()
             }
         }
+    }
+
+    /** Loads whom the person blocked and the reports waiting for them; a server without them answers neither. */
+    private suspend fun loadSafety() {
+        runCatching { api.blocked() }.onSuccess { list ->
+            _state.update { s -> s.copy(blocked = list.mapNotNull { it.user?.id }.toSet()) }
+        }
+        runCatching { api.reportCounts() }.onSuccess { c -> _state.update { it.copy(reports = c.teams, allReports = c.all) } }
     }
 
     private fun reloadViews() {
@@ -656,6 +676,29 @@ class ChatSession internal constructor(
         api.removeTeamPhoto(teamId)?.let { putTeam(it) }
     }
 
+    // Blocking and reports.
+
+    /** Blocks someone, or with [blocked] false unblocks them. Returns why not, or null. */
+    suspend fun block(userId: String, blocked: Boolean): String? = act {
+        api.block(userId, blocked)
+        _state.update { s -> s.copy(blocked = if (blocked) s.blocked + userId else s.blocked - userId) }
+    }
+
+    /** The people the person blocked, for Settings. */
+    suspend fun blockedPeople(): List<BlockedUser> = api.blocked().also { list ->
+        _state.update { s -> s.copy(blocked = list.mapNotNull { it.user?.id }.toSet()) }
+    }
+
+    /** Reports a message to its team's admins. Returns why not, or null. */
+    suspend fun report(m: Message, reason: ReportReason, details: String): String? = act { api.reportMessage(m, reason, details) }
+
+    /** Reports a person of the team to its admins. Returns why not, or null. */
+    suspend fun reportPerson(teamId: String, userId: String, reason: ReportReason, details: String): String? =
+        act { api.reportUser(teamId, userId, reason, details) }
+
+    /** Acts on a report for its admins. Returns why not, or null. */
+    suspend fun resolveReport(id: String, action: ReportAction): String? = act { api.resolveReport(id, action) }
+
     private fun putTeam(t: Team) {
         _state.update { s -> s.copy(teams = s.teams.map { if (it.id == t.id) t else it }) }
     }
@@ -790,6 +833,13 @@ class ChatSession internal constructor(
             threads.values.forEach { t -> t.update(sv.message_id) { it.copy(saved = sv.saved) } }
         }
         ev.pins_changed?.let { p -> updateChannel(p.channel_id) { it.copy(pinned_count = p.count) } }
+        ev.blocks_changed?.let { b ->
+            val id = b.user?.id ?: return@let
+            _state.update { s -> s.copy(blocked = if (b.blocked) s.blocked + id else s.blocked - id) }
+        }
+        ev.reports_changed?.let { r ->
+            _state.update { s -> if (r.team_id.isEmpty()) s.copy(allReports = r.count) else s.copy(reports = s.reports + (r.team_id to r.count)) }
+        }
         ev.presence?.let { p ->
             // A status set elsewhere, which may end at a time the event
             // leaves out: the account says.
@@ -848,6 +898,8 @@ class ChatSession internal constructor(
         val participants = p.participant_ids
         val st = _state.value
         val mine = m.author?.id == st.me.id
+        // A blocked person's messages show folded, and call for nothing.
+        val ignored = st.fromBlocked(m)
         val ch = st.channel(m.channel_id)
         // Another team's conversations and threads show in that team alone,
         // as on the web; its mentions still call for the person.
@@ -863,17 +915,17 @@ class ChatSession internal constructor(
             }
             return
         }
-        if (!mine && (!elsewhere || !p.conversation)) notify(m, ch, p.conversation, participants)
+        if (!mine && !ignored && (!elsewhere || !p.conversation)) notify(m, ch, p.conversation, participants)
         if (m.root_id.isNotEmpty()) {
             threads[m.root_id]?.added(m)
             timelines[m.channel_id]?.replied(m)
             val looking = visibleThread == m.root_id
-            if (!mine && !elsewhere && !looking && st.me.id in participants) {
+            if (!mine && !ignored && !elsewhere && !looking && st.me.id in participants) {
                 _state.update { it.copy(threadsUnread = it.threadsUnread + 1) }
             }
             if (looking && !mine) scope.launch { runCatching { api.markThreadRead(m.channel_id, m.root_id) } }
             // A reply that mentions the person counts on its channel's badge.
-            if (!mine && !elsewhere && !looking && visibleChannel != m.channel_id && m.mentions(st.me)) {
+            if (!mine && !ignored && !elsewhere && !looking && visibleChannel != m.channel_id && m.mentions(st.me)) {
                 updateChannel(m.channel_id) { it.copy(mention_count = it.mention_count + 1) }
             }
             return
@@ -891,7 +943,7 @@ class ChatSession internal constructor(
             var c = if (newer(m.id, old.last_message_id)) old.copy(last_message_id = m.id) else old
             if (mine || looking) {
                 c = c.copy(last_read_id = m.id)
-            } else if (ch.isConversation || m.mentions(st.me)) {
+            } else if (!ignored && (ch.isConversation || m.mentions(st.me))) {
                 c = c.copy(mention_count = c.mention_count + 1)
             }
             c

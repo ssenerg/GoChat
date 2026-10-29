@@ -1,0 +1,17 @@
+{{define "content"}}
+<main class="page">
+  <header class="page-header">
+    <a class="btn" href="/">{{icon "back"}}Back</a>
+    <h1>Reports</h1>
+    <a class="btn" href="/admin/users">Users</a>
+  </header>
+  <nav class="row tabs" aria-label="Reports">
+    <a class="btn{{if not .Resolved}} primary{{end}}" href="/admin/reports"{{if not .Resolved}} aria-current="page"{{end}}>Open</a>
+    <a class="btn{{if .Resolved}} primary{{end}}" href="/admin/reports?resolved=1"{{if .Resolved}} aria-current="page"{{end}}>Resolved</a>
+  </nav>
+  <section class="card">
+    <p class="muted">Reports from every team, and from conversations of no team, which only system admins see.</p>
+    {{template "report-list" .List}}
+  </section>
+</main>
+{{end}}

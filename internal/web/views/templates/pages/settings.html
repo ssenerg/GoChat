@@ -56,6 +56,11 @@
   <section class="card" id="sessions">
     {{template "sessions" .Sessions}}
   </section>
+  <section class="card">
+    <h2>Blocked people</h2>
+    <p class="muted">People you blocked cannot message you or start a conversation with you, and their messages show folded. They are not told.</p>
+    <div id="blocked-list" hx-get="/settings/blocked" hx-trigger="load"><span class="spinner" aria-label="Loading"></span></div>
+  </section>
   <section class="card" id="bots">
     {{template "bots" .Bots}}
   </section>
@@ -67,7 +72,7 @@
   {{if isSystemAdmin .User}}
   <section class="card">
     <h2>Administration</h2>
-    <p><a class="btn" href="/admin/users">Manage users</a></p>
+    <p class="row"><a class="btn" href="/admin/users">Manage users</a><a class="btn" href="/admin/reports">Reports</a></p>
   </section>
   {{end}}
   <section class="card" id="delete-account">

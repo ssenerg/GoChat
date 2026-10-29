@@ -302,3 +302,46 @@ type PushDevice struct {
 	Sandbox   bool      `db:"sandbox"`
 	CreatedAt time.Time `db:"created_at"`
 }
+
+// Block is a person someone blocked.
+type Block struct {
+	UserID    gocql.UUID `db:"user_id"`
+	BlockedID gocql.UUID `db:"blocked_id"`
+	CreatedAt time.Time  `db:"created_at"`
+}
+
+// Report is a message or a person reported to a team's admins: UserID is
+// the person reported, or the message's author. Action stays empty while
+// the report is open. A report of a conversation of no team has a zero
+// TeamID, for system admins alone.
+type Report struct {
+	ID         gocql.UUID `db:"id"`
+	TeamID     gocql.UUID `db:"team_id"`
+	ReporterID gocql.UUID `db:"reporter_id"`
+	UserID     gocql.UUID `db:"user_id"`
+	ChannelID  gocql.UUID `db:"channel_id"`
+	MessageID  gocql.UUID `db:"message_id"`
+	RootID     gocql.UUID `db:"root_id"`
+	// Excerpt is the message as it read when reported.
+	Excerpt    string     `db:"excerpt"`
+	Reason     string     `db:"reason"`
+	Details    string     `db:"details"`
+	Action     string     `db:"action"`
+	ResolvedBy gocql.UUID `db:"resolved_by"`
+	ResolvedAt time.Time  `db:"resolved_at"`
+}
+
+// The reasons a report gives, and what an admin did about one.
+const (
+	ReportSpam       = "spam"
+	ReportHarassment = "harassment"
+	ReportHate       = "hate"
+	ReportSexual     = "sexual"
+	ReportViolence   = "violence"
+	ReportOther      = "other"
+
+	ReportDismissed     = "dismissed"
+	ReportDeleteMessage = "message_deleted"
+	ReportRemoveMember  = "member_removed"
+	ReportDeactivate    = "deactivated"
+)

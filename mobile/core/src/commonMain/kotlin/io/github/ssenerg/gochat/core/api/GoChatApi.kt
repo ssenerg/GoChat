@@ -352,6 +352,39 @@ class GoChatApi(val client: ApiClient) {
         voice("DisconnectVoiceMember", DisconnectVoiceMemberRequest(channel_id = channelId, user_id = userId), DisconnectVoiceMemberResponse.ADAPTER)
     }
 
+    // Blocking people, and reporting messages and people to admins.
+
+    private suspend fun <T : Any> safety(m: String, req: com.squareup.wire.Message<*, *>, res: com.squareup.wire.ProtoAdapter<T>) =
+        client.call("gochat.v1.SafetyService/$m", req, res)
+
+    /** Blocks someone, or with [blocked] false unblocks them. */
+    suspend fun block(userId: String, blocked: Boolean) {
+        if (blocked) safety("BlockUser", BlockUserRequest(user_id = userId), BlockUserResponse.ADAPTER)
+        else safety("UnblockUser", UnblockUserRequest(user_id = userId), UnblockUserResponse.ADAPTER)
+    }
+
+    /** Whom the person blocked, the most recent first. */
+    suspend fun blocked() = safety("ListBlocked", ListBlockedRequest(), ListBlockedResponse.ADAPTER).blocked
+
+    suspend fun reportMessage(m: Message, reason: ReportReason, details: String) {
+        val ref = ReportedMessage(channel_id = m.channel_id, message_id = m.id, root_id = m.root_id)
+        safety("Report", ReportRequest(reason = reason, details = details, message = ref), ReportResponse.ADAPTER)
+    }
+
+    suspend fun reportUser(teamId: String, userId: String, reason: ReportReason, details: String) {
+        val ref = ReportedUser(team_id = teamId, user_id = userId)
+        safety("Report", ReportRequest(reason = reason, details = details, user = ref), ReportResponse.ADAPTER)
+    }
+
+    /** A team's open reports for its admins, or resolved ones; every team's for system admins when [teamId] is empty. */
+    suspend fun reports(teamId: String, resolved: Boolean = false, after: String = "") =
+        safety("ListReports", ListReportsRequest(team_id = teamId, resolved = resolved, after = after), ListReportsResponse.ADAPTER)
+
+    suspend fun reportCounts() = safety("CountReports", CountReportsRequest(), CountReportsResponse.ADAPTER)
+
+    suspend fun resolveReport(id: String, action: ReportAction) =
+        safety("ResolveReport", ResolveReportRequest(report_id = id, action = action), ResolveReportResponse.ADAPTER).report
+
     companion object {
         /** The most updates the server answers at once. */
         const val DIFFERENCE_LIMIT = 100

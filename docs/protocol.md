@@ -155,10 +155,14 @@ A `ChannelJoined` may arrive after the first update of that channel, so on
 asks for the channel's difference from it.
 
 **Ephemeral updates** come in `Down.ephemeral` and carry no number: typing,
-presence, profile changes, voice states, and the answer to a button the
-client pressed. They are never replayed. A client that reconnects asks for
-presence again (`UserService.GetPresence`) and voice states
-(`VoiceService.ListVoiceStates`) for what it shows. Typing goes only to
+presence, profile changes, voice states, the answer to a button the
+client pressed, and the count of reports waiting for an admin
+(`ReportsChanged`). They are never replayed. A client that reconnects asks for
+presence again (`UserService.GetPresence`), voice states
+(`VoiceService.ListVoiceStates`) and report counts
+(`SafetyService.CountReports`) for what it shows. Blocking someone
+(`BlocksChanged`) is an update of the account's sequence, sent to the person
+who blocked alone. Typing goes only to
 sockets that said they show the channel (`Up.view`), presence and profile
 changes only to sockets that said they show the person (`Up.watch`).
 

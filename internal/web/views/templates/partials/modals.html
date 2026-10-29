@@ -277,6 +277,12 @@
 {{template "modal-start" "Team settings"}}
 <p class="muted">{{.Team.DisplayName}} · /t/{{.Team.Name}}</p>
 {{with .Photo}}{{template "photo-field" .}}{{end}}
+{{if isAdmin .Team}}
+<section class="stack" aria-labelledby="team-reports-title">
+  <h3 id="team-reports-title">Open reports</h3>
+  <div id="team-reports" hx-get="/t/{{.Team.Name}}/reports" hx-trigger="load"><span class="spinner" aria-label="Loading reports"></span></div>
+</section>
+{{end}}
 {{template "leave-team" .}}
 {{template "modal-end"}}
 {{end}}

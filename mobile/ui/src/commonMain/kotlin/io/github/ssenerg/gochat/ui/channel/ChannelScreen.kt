@@ -32,6 +32,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -64,11 +65,12 @@ import io.github.ssenerg.gochat.ui.AvatarWithStatus
 import io.github.ssenerg.gochat.ui.BackButton
 import io.github.ssenerg.gochat.ui.BotBadge
 import io.github.ssenerg.gochat.ui.ErrorState
-import io.github.ssenerg.gochat.ui.LocalChatColors
 import io.github.ssenerg.gochat.ui.Loading
+import io.github.ssenerg.gochat.ui.LocalChatColors
 import io.github.ssenerg.gochat.ui.main.LocalNavigator
 import io.github.ssenerg.gochat.ui.main.LocalToasts
 import io.github.ssenerg.gochat.ui.main.Route
+import io.github.ssenerg.gochat.ui.safety.PersonSheet
 import io.github.ssenerg.gochat.ui.statusLabel
 import kotlinx.coroutines.launch
 
@@ -83,6 +85,7 @@ fun ChannelScreen(session: ChatSession, channelId: String) {
     val moderator = channel?.moderatedBy(chat.me, chat.team) == true
     var selected by remember { mutableStateOf<Message?>(null) }
     var editing by remember { mutableStateOf<Message?>(null) }
+    var person by remember { mutableStateOf<User?>(null) }
     val list = rememberLazyListState()
 
     LaunchedEffect(st.gone) {
@@ -147,6 +150,8 @@ fun ChannelScreen(session: ChatSession, channelId: String) {
                                     continues = Format.continues(m, older),
                                     onLongPress = { selected = m },
                                     onOpenThread = { nav.open(Route.Thread(channelId, m.id)) },
+                                    folded = chat.fromBlocked(m),
+                                    onAuthor = { person = m.author },
                                 )
                             }
                         }
@@ -166,6 +171,7 @@ fun ChannelScreen(session: ChatSession, channelId: String) {
             TypingLine(st.typing)
             when {
                 channel != null && channel.isArchived -> Notice("This channel is archived: you can read it, not write in it.")
+                channel?.peer?.id in chat.blocked -> BlockedNotice(session, channel?.peer)
                 else -> Composer(
                     placeholder = channel?.let { if (it.isConversation) "Message ${it.title()}" else "Message #${it.title()}" } ?: "Message",
                     voiceAllowed = channel?.voice_enabled == true || channel?.isConversation == true,
@@ -195,6 +201,27 @@ fun ChannelScreen(session: ChatSession, channelId: String) {
             onEdit = { editing = m },
             onReply = { nav.open(Route.Thread(channelId, m.id)) },
         )
+    }
+    person?.let { PersonSheet(session, it, onDismiss = { person = null }) }
+}
+
+/** Takes the place of the composer in a direct conversation with someone the person blocked. */
+@Composable
+fun BlockedNotice(session: ChatSession, peer: User?) {
+    val toasts = LocalToasts.current
+    Surface(color = MaterialTheme.colorScheme.surfaceVariant, modifier = Modifier.fillMaxWidth()) {
+        Column(Modifier.padding(12.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+            Text(
+                "You blocked ${peer.displayName()}: you can read this conversation, not write in it.",
+                textAlign = TextAlign.Center,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            if (peer != null) {
+                TextButton(onClick = {
+                    session.launch({ session.block(peer.id, false) }) { err -> err?.let { toasts.show(it) } }
+                }) { Text("Unblock") }
+            }
+        }
     }
 }
 

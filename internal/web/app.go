@@ -191,6 +191,7 @@ func (h *Handler) channelView(ctx context.Context, u *pb.User, team *pb.Team, ch
 		ch       *pb.Channel
 		msgs     *pb.ListMessagesResponse
 		anchored bool
+		blocked  map[string]bool
 	)
 	g.Go(func() error {
 		res, err := h.client.Channels.GetChannel(gctx, &pb.GetChannelRequest{ChannelId: chID})
@@ -200,6 +201,7 @@ func (h *Handler) channelView(ctx context.Context, u *pb.User, team *pb.Team, ch
 		ch = res.Channel
 		return nil
 	})
+	g.Go(func() error { blocked = h.blockedOrNone(gctx); return nil })
 	g.Go(func() error {
 		res, more, err := h.history(gctx, chID, focus)
 		if err != nil {
@@ -234,8 +236,10 @@ func (h *Handler) channelView(ctx context.Context, u *pb.User, team *pb.Team, ch
 		}
 		return view, nil
 	}
+	view.PeerBlocked = ch.Peer != nil && blocked[ch.Peer.Id]
 	if msgs != nil {
 		view.Messages = h.render.Messages(msgs.Messages, u, view.Moderator)
+		render.Fold(view.Messages, blocked)
 		view.HasMore, view.Anchored = msgs.HasMore, anchored
 		if n := len(msgs.Messages); n > 0 {
 			view.Newest, view.Oldest = msgs.Messages[0].Id, msgs.Messages[n-1].Id
@@ -413,11 +417,13 @@ func (h *Handler) olderMessages(w http.ResponseWriter, r *http.Request) {
 	defer cancel()
 	g, gctx := errgroup.WithContext(ctx)
 	var (
-		team *pb.Team
-		ch   *pb.Channel
-		msgs *pb.ListMessagesResponse
+		team    *pb.Team
+		ch      *pb.Channel
+		msgs    *pb.ListMessagesResponse
+		blocked map[string]bool
 	)
 	g.Go(func() (err error) { team, err = h.team(gctx, r.PathValue("team")); return })
+	g.Go(func() error { blocked = h.blockedOrNone(gctx); return nil })
 	g.Go(func() error {
 		res, err := h.client.Channels.GetChannel(gctx, &pb.GetChannelRequest{ChannelId: chID})
 		if err == nil {
@@ -436,6 +442,7 @@ func (h *Handler) olderMessages(w http.ResponseWriter, r *http.Request) {
 	mod := moderator(u, team, ch)
 	view := &render.ChannelView{Team: team, Channel: ch, Title: render.Title(ch), Member: true, Moderator: mod, HasMore: msgs.HasMore,
 		Messages: h.render.Messages(msgs.Messages, u, mod)}
+	render.Fold(view.Messages, blocked)
 	if n := len(msgs.Messages); n > 0 {
 		view.Oldest = msgs.Messages[n-1].Id
 	}
@@ -1128,10 +1135,12 @@ func (h *Handler) threadPanel(w http.ResponseWriter, r *http.Request) {
 	defer cancel()
 	g, gctx := errgroup.WithContext(ctx)
 	var (
-		ch     *pb.Channel
-		team   *pb.Team
-		thread *pb.ListThreadResponse
+		ch      *pb.Channel
+		team    *pb.Team
+		thread  *pb.ListThreadResponse
+		blocked map[string]bool
 	)
+	g.Go(func() error { blocked = h.blockedOrNone(gctx); return nil })
 	g.Go(func() error {
 		res, err := h.client.Channels.GetChannel(gctx, &pb.GetChannelRequest{ChannelId: chID})
 		if err != nil {
@@ -1165,6 +1174,7 @@ func (h *Handler) threadPanel(w http.ResponseWriter, r *http.Request) {
 		Following: thread.Following,
 		Voice:     ch.VoiceEnabled,
 	}
+	render.Fold(view.Replies, blocked)
 	if len(thread.Replies) > 0 {
 		view.Oldest = thread.Replies[0].Id
 	}

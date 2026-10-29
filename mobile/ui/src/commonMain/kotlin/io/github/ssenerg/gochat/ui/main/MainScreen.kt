@@ -52,6 +52,8 @@ import io.github.ssenerg.gochat.ui.people.NewConversationScreen
 import io.github.ssenerg.gochat.ui.settings.SettingsScreen
 import io.github.ssenerg.gochat.ui.settings.TeamMembersScreen
 import io.github.ssenerg.gochat.ui.settings.TeamSettingsScreen
+import io.github.ssenerg.gochat.ui.safety.BlockedPeopleScreen
+import io.github.ssenerg.gochat.ui.safety.ReportsScreen
 import io.github.ssenerg.gochat.ui.settings.TwoFactorScreen
 import io.github.ssenerg.gochat.ui.thread.ThreadScreen
 import io.github.ssenerg.gochat.ui.voice.VoiceRoomScreen
@@ -91,6 +93,11 @@ sealed interface Route {
     data class TeamSettings(val teamId: String) : Route
 
     data class TeamMembers(val teamId: String) : Route
+
+    data object Blocked : Route
+
+    /** A team's reports, or every team's for a system admin when [teamId] is empty. */
+    data class Reports(val teamId: String) : Route
 }
 
 /** The screens open, the sidebar at the bottom. */
@@ -255,5 +262,7 @@ private fun Screen(route: Route, session: ChatSession, app: GoChatApp) {
         Route.TwoFactor -> TwoFactorScreen(session)
         is Route.TeamSettings -> TeamSettingsScreen(session, route.teamId)
         is Route.TeamMembers -> TeamMembersScreen(session, route.teamId)
+        Route.Blocked -> BlockedPeopleScreen(session)
+        is Route.Reports -> ReportsScreen(session, route.teamId)
     }
 }

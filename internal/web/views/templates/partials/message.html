@@ -1,5 +1,19 @@
 {{define "message"}}
+{{if .Blocked}}
+<article class="msg folded{{if .Focus}} focus{{end}}" id="msg-{{.Id}}"{{if .Focus}} data-focus="1"{{end}}{{if .OOB}} hx-swap-oob="outerHTML"{{end}}>
+  <details>
+    <summary>{{icon "block"}}<span>Message from someone you blocked</span></summary>
+    <div class="folded-body">{{template "message-body" .}}</div>
+  </details>
+</article>
+{{else}}
 <article class="msg{{if .Mine}} mine{{end}}{{if .Mentioned}} mentioned{{end}}{{if .Focus}} focus{{end}}" id="msg-{{.Id}}"{{if .Focus}} data-focus="1"{{end}}{{if .OOB}} hx-swap-oob="outerHTML"{{end}}>
+  {{template "message-body" .}}
+</article>
+{{end}}
+{{end}}
+
+{{define "message-body"}}
   {{template "avatar" (dict "User" .Author "Size" "")}}
   <div class="msg-main">
     {{template "msg-content" .}}
@@ -17,13 +31,13 @@
     <button class="icon-btn sm{{if .Pinned}} on{{end}}" hx-post="/m/{{.ChannelId}}/{{.Id}}/pin{{with .RootId}}?root={{.}}{{end}}" hx-vals='{"pinned": "{{if .Pinned}}0{{else}}1{{end}}"{{if .CanDelete}}, "mod": "1"{{end}}}' hx-target="#msg-{{.Id}}" hx-swap="outerHTML" aria-pressed="{{if .Pinned}}true{{else}}false{{end}}" aria-label="{{if .Pinned}}Unpin message{{else}}Pin to channel{{end}}" title="{{if .Pinned}}Unpin{{else}}Pin to channel{{end}}">{{icon "pin"}}</button>
     {{if .Mine}}<button class="icon-btn sm" hx-get="/m/{{.ChannelId}}/{{.Id}}/edit{{with .RootId}}?root={{.}}{{end}}" hx-target="#msg-{{.Id}}" hx-swap="outerHTML" aria-label="Edit message" title="Edit">{{icon "edit"}}</button>{{end}}
     {{if .CanDelete}}<button class="icon-btn sm" hx-post="/m/{{.ChannelId}}/{{.Id}}/delete{{with .RootId}}?root={{.}}{{end}}" hx-confirm="{{if .ReplyCount}}Delete this message and its thread?{{else}}Delete this message?{{end}}" hx-target="#msg-{{.Id}}" hx-swap="outerHTML" aria-label="Delete message" title="Delete">{{icon "trash"}}</button>{{end}}
+    {{if not .Mine}}<button class="icon-btn sm" hx-get="/m/{{.ChannelId}}/{{.Id}}/report{{with .RootId}}?root={{.}}{{end}}" hx-target="#modal" aria-label="Report message" title="Report">{{icon "flag"}}</button>{{end}}
   </div>
-</article>
 {{end}}
 
 {{define "msg-content"}}
 <header>
-  <strong class="author">{{name .Author}}</strong>
+  {{with .Author}}{{if .Deleted}}<strong class="author">{{name .}}</strong>{{else}}<button type="button" class="author" hx-get="/u/{{.Id}}?channel={{$.ChannelId}}" hx-target="#modal" title="See {{name .}}">{{name .}}</button>{{end}}{{else}}<strong class="author">{{name .Author}}</strong>{{end}}
   {{with .Author}}{{if .Bot}}<span class="badge bot">Bot</span>{{end}}{{with .Username}}<span class="handle">@{{.}}</span>{{end}}{{end}}
   <time datetime="{{iso .Time}}" title="{{date .Time}}">{{clock .Time}}</time>
   {{if .Edited}}<span class="edited">(edited)</span>{{end}}

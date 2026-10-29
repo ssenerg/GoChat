@@ -49,6 +49,11 @@
     <span>This channel is archived: you can read it, but not write in it.</span>
     {{if .Manage}}<button class="btn sm" hx-post="/t/{{.Team.Name}}/ch/{{.Channel.Id}}/archive" hx-vals='{"archived": "0"}'>Restore</button>{{end}}
   </div>
+  {{else if .PeerBlocked}}
+  <div class="archived-note" role="status">
+    <span>You blocked {{.Title}}: you can read this conversation, but not write in it.</span>
+    <button class="btn sm" hx-post="/u/{{.Channel.Peer.Id}}/block" hx-vals='{"blocked": "0"}' hx-swap="none">Unblock</button>
+  </div>
   {{else}}{{template "composer" .}}{{end}}
 </div>
 {{end}}

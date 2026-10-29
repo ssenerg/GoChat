@@ -19,6 +19,7 @@ import (
 	"github.com/ssenerg/gochat/internal/core/models"
 	ierrors "github.com/ssenerg/gochat/internal/errors"
 	"github.com/ssenerg/gochat/internal/repos/scylla"
+	"github.com/ssenerg/gochat/internal/services/blocks"
 	"github.com/ssenerg/gochat/internal/services/channels"
 	"github.com/ssenerg/gochat/internal/services/users"
 )
@@ -479,4 +480,67 @@ func TestClearedConversationsWaitForANewMessage(t *testing.T) {
 
 func (r *teamsRepo) ChannelsPts(context.Context, []gocql.UUID) (map[gocql.UUID]int64, error) {
 	return nil, nil
+}
+
+type blockList map[gocql.UUID][]gocql.UUID
+
+func (b blockList) ListBlocks(_ context.Context, userID gocql.UUID, _ int) ([]*models.Block, error) {
+	var out []*models.Block
+	for _, id := range b[userID] {
+		out = append(out, &models.Block{UserID: userID, BlockedID: id})
+	}
+	return out, nil
+}
+
+func TestBlockedPeopleOpenNoConversation(t *testing.T) {
+	repo := newTeamsRepo()
+	me, bob, carol, dan := repo.person("me"), repo.person("bob"), repo.person("carol"), repo.person("dan")
+	acme := ids.New()
+	repo.join(acme, time.Now(), me, bob, carol, dan)
+	w, _ := newTeamsWorker(t, repo)
+	// Bob blocked me; I blocked Carol.
+	w.Blocks = blocks.NewCache(blockList{bob: {me}, me: {carol}}, 10, 10, time.Minute)
+	ctx := context.Background()
+	open := func(people ...gocql.UUID) error {
+		raw := make([]string, len(people))
+		for i, id := range people {
+			raw[i] = id.String()
+		}
+		_, err := w.openGroup(ctx, OpenGroup{P: principal(me), TeamID: acme.String(), UserIDs: raw})
+		return err
+	}
+	// Someone who blocked me: no direct conversation, no group with them,
+	// in the words a post to them is refused.
+	for _, people := range [][]gocql.UUID{{bob}, {bob, dan}} {
+		if err := open(people...); !ierrors.Is(err, ierrors.CodePermissionDenied) || ierrors.As(err).Message != channels.ErrNotTaking.Message {
+			t.Fatalf("opened a conversation with someone who blocked me: %v", err)
+		}
+	}
+	// Someone I blocked: our direct conversation opens, to read, but no
+	// group starts with them.
+	if err := open(carol); err != nil {
+		t.Fatalf("my direct conversation with someone I blocked: %v", err)
+	}
+	if err := open(carol, dan); !ierrors.Is(err, ierrors.CodeFailedPrecondition) {
+		t.Fatalf("started a group with someone I blocked: %v", err)
+	}
+	if err := open(dan); err != nil {
+		t.Fatalf("a conversation with no one blocked: %v", err)
+	}
+	// Bob cannot put me, whom he blocked, in a group of his, nor Carol, whom
+	// I blocked, put me in hers.
+	other := func(p gocql.UUID, people ...gocql.UUID) error {
+		raw := make([]string, len(people))
+		for i, id := range people {
+			raw[i] = id.String()
+		}
+		_, err := w.openGroup(ctx, OpenGroup{P: principal(p), TeamID: acme.String(), UserIDs: raw})
+		return err
+	}
+	if err := other(bob, me, dan); !ierrors.Is(err, ierrors.CodeFailedPrecondition) {
+		t.Fatalf("bob put someone he blocked in a group: %v", err)
+	}
+	if err := other(carol, me, dan); !ierrors.Is(err, ierrors.CodePermissionDenied) {
+		t.Fatalf("carol put me, who blocked her, in a group: %v", err)
+	}
 }

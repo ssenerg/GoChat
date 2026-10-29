@@ -5,6 +5,7 @@ import (
 	"slices"
 
 	"github.com/gocql/gocql"
+	"go.uber.org/zap"
 
 	pb "github.com/ssenerg/gochat/api/protobuf/gen/gochat/v1"
 	"github.com/ssenerg/gochat/internal/core/ids"
@@ -35,6 +36,52 @@ func (a *channel) push(m *pb.Message, participants []string) {
 	a.Engine.Send(a.Push, push.Posted{
 		Message: m, TeamID: a.ch.TeamID, Conversation: a.ch.Kind.Conversation(),
 		ChannelName: name, Members: a.recipients, Participants: participants,
+	})
+}
+
+// ErrNotTaking refuses a person blocked: it says no more than that they
+// cannot write.
+var ErrNotTaking = ierrors.New(ierrors.CodePermissionDenied, "you cannot send messages in this conversation")
+
+// refuseBlocked refuses userID's post in a direct conversation whose two
+// people one blocked the other.
+func (a *channel) refuseBlocked(userID gocql.UUID) error {
+	if a.ch.Kind != models.ChannelDirect || a.Blocks == nil {
+		return nil
+	}
+	peers := convert.PeerIDs(a.ch, userID)
+	if len(peers) != 1 {
+		return nil
+	}
+	ctx, cancel := a.ctx()
+	defer cancel()
+	if mine, err := a.Blocks.Blocked(ctx, userID, peers[0]); err != nil || mine {
+		if err == nil {
+			err = ierrors.FailedPrecondition("you blocked this person: unblock them to write to them")
+		}
+		return err
+	}
+	if theirs, err := a.Blocks.Blocked(ctx, peers[0], userID); err != nil || theirs {
+		if err == nil {
+			err = ErrNotTaking
+		}
+		return err
+	}
+	return nil
+}
+
+// unblocked keeps of userIDs those who did not block author, or whose
+// blocks could not be read.
+func (a *channel) unblocked(ctx context.Context, author gocql.UUID, userIDs []gocql.UUID) []gocql.UUID {
+	if a.Blocks == nil {
+		return userIDs
+	}
+	return slices.DeleteFunc(userIDs, func(id gocql.UUID) bool {
+		blocked, err := a.Blocks.Blocked(ctx, id, author)
+		if err != nil {
+			a.Logger.Warn("failed to read a person's blocks", zap.Error(err))
+		}
+		return blocked || err != nil
 	})
 }
 

@@ -1,0 +1,162 @@
+syntax = "proto3";
+
+package gochat.v1;
+
+import "gochat/v1/types.proto";
+import "google/protobuf/timestamp.proto";
+
+// SafetyService blocks people and reports messages and people to admins.
+// Bots make none of its calls.
+service SafetyService {
+  // BlockUser blocks a person: they can no longer open a direct
+  // conversation with the caller, put them in a group conversation or
+  // write to them in one they share, and their messages notify the caller
+  // nowhere. They are not told.
+  rpc BlockUser(BlockUserRequest) returns (BlockUserResponse);
+  rpc UnblockUser(UnblockUserRequest) returns (UnblockUserResponse);
+  // ListBlocked lists whom the caller blocked, most recent first.
+  rpc ListBlocked(ListBlockedRequest) returns (ListBlockedResponse);
+  // Report reports a message the caller can read, or a person of a team
+  // they share, to the team's admins; a message of a conversation of no
+  // team goes to system admins.
+  rpc Report(ReportRequest) returns (ReportResponse);
+  // ListReports lists reports for their admins: a team's for its admins,
+  // every team's for system admins when team_id is empty.
+  rpc ListReports(ListReportsRequest) returns (ListReportsResponse);
+  // CountReports counts the open reports the caller can act on.
+  rpc CountReports(CountReportsRequest) returns (CountReportsResponse);
+  // ResolveReport acts on an open report and records who did.
+  rpc ResolveReport(ResolveReportRequest) returns (ResolveReportResponse);
+}
+
+message BlockUserRequest {
+  string user_id = 1;
+}
+
+message BlockUserResponse {}
+
+message UnblockUserRequest {
+  string user_id = 1;
+}
+
+message UnblockUserResponse {}
+
+message ListBlockedRequest {}
+
+message ListBlockedResponse {
+  repeated BlockedUser blocked = 1;
+}
+
+message BlockedUser {
+  User user = 1;
+  google.protobuf.Timestamp blocked_at = 2;
+}
+
+enum ReportReason {
+  REPORT_REASON_UNSPECIFIED = 0;
+  REPORT_REASON_SPAM = 1;
+  // Harassment or bullying.
+  REPORT_REASON_HARASSMENT = 2;
+  REPORT_REASON_HATE = 3;
+  REPORT_REASON_SEXUAL = 4;
+  // Violence or threats.
+  REPORT_REASON_VIOLENCE = 5;
+  // Something else, which details says.
+  REPORT_REASON_OTHER = 6;
+}
+
+// ReportAction is what an admin did about a report.
+enum ReportAction {
+  REPORT_ACTION_UNSPECIFIED = 0;
+  REPORT_ACTION_DISMISS = 1;
+  REPORT_ACTION_DELETE_MESSAGE = 2;
+  // Removes the person from the report's team.
+  REPORT_ACTION_REMOVE_MEMBER = 3;
+  // Deactivates the person's account: system admins only.
+  REPORT_ACTION_DEACTIVATE = 4;
+}
+
+message ReportRequest {
+  ReportReason reason = 1;
+  // Up to 500 characters; required for REPORT_REASON_OTHER.
+  string details = 2;
+  oneof target {
+    ReportedMessage message = 3;
+    ReportedUser user = 4;
+  }
+}
+
+// ReportedMessage names a message; a reply names its thread's root too.
+message ReportedMessage {
+  string channel_id = 1;
+  string message_id = 2;
+  string root_id = 3;
+}
+
+// ReportedUser names a person of a team the caller shares with them.
+message ReportedUser {
+  string team_id = 1;
+  string user_id = 2;
+}
+
+message ReportResponse {}
+
+message ListReportsRequest {
+  // Empty for every team's, for system admins.
+  string team_id = 1;
+  // Resolved ones instead of open ones.
+  bool resolved = 2;
+  // The next of the page before; empty for the first.
+  string after = 3;
+}
+
+message ListReportsResponse {
+  repeated Report reports = 1;
+  // Continues the listing; empty at its end.
+  string next = 2;
+}
+
+message CountReportsRequest {}
+
+message CountReportsResponse {
+  // Open reports by team, of the teams the caller is an admin of.
+  map<string, int32> teams = 1;
+  // Every team's open reports, for system admins.
+  int32 all = 2;
+}
+
+message ResolveReportRequest {
+  string report_id = 1;
+  ReportAction action = 2;
+}
+
+message ResolveReportResponse {
+  Report report = 1;
+}
+
+// Report is a message or a person reported to admins.
+message Report {
+  string id = 1;
+  // Empty for a conversation of no team.
+  string team_id = 2;
+  string team_name = 3;
+  User reporter = 4;
+  // The person reported, or the message's author.
+  User user = 5;
+  // Set for a message.
+  string channel_id = 6;
+  string message_id = 7;
+  string root_id = 8;
+  // The message as it read when reported.
+  string excerpt = 9;
+  ReportReason reason = 10;
+  string details = 11;
+  google.protobuf.Timestamp created_at = 12;
+  // Unspecified while open.
+  ReportAction action = 13;
+  User resolved_by = 14;
+  google.protobuf.Timestamp resolved_at = 15;
+  // Where the message was posted: a channel's name, empty for a
+  // conversation.
+  string channel_name = 16;
+}

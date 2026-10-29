@@ -17,6 +17,7 @@ import (
 	"github.com/ssenerg/gochat/internal/actors"
 	"github.com/ssenerg/gochat/internal/core/models"
 	ierrors "github.com/ssenerg/gochat/internal/errors"
+	"github.com/ssenerg/gochat/internal/services/blocks"
 	"github.com/ssenerg/gochat/internal/services/users"
 )
 
@@ -46,6 +47,9 @@ type Deps struct {
 	// IdleTimeout is the sessions': a device whose session went unused
 	// that long gets no more pushes.
 	IdleTimeout time.Duration
+	// Blocks holds whom people blocked: their messages push nothing to
+	// them. Nil keeps no one apart.
+	Blocks *blocks.Cache
 
 	fan *fanOut
 }

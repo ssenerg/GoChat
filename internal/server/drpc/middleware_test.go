@@ -95,7 +95,8 @@ func TestBotsMakeOnlyTheirCalls(t *testing.T) {
 	for _, rpc := range []string{
 		"/gochat.v1.MessageService/SearchMessages", "/gochat.v1.ChannelService/OpenDirectChannel", "/gochat.v1.TeamService/CreateInvite",
 		"/gochat.v1.AuthService/ChangePassword", "/gochat.v1.UpdatesService/GetChannelDifference", "/gochat.v1.BotService/CreateBot",
-		"/gochat.v1.MessageService/PressButton",
+		"/gochat.v1.MessageService/PressButton", "/gochat.v1.SafetyService/BlockUser", "/gochat.v1.SafetyService/Report",
+		"/gochat.v1.SafetyService/ListReports", "/gochat.v1.SafetyService/CountReports",
 	} {
 		if err := call("bot", rpc); reached || drpcerr.Code(err) != uint64(ierrors.CodeUnimplemented) {
 			t.Errorf("a bot's %s reached it: %v", rpc, err)

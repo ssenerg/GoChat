@@ -1,0 +1,85 @@
+{{define "person-card"}}
+{{template "modal-start" "Profile"}}
+<div class="person-card">
+  {{template "avatar" (dict "User" .User "Size" "lg")}}
+  <div>
+    <strong class="person-name">{{name .User}}</strong>{{if .User.Bot}} <span class="badge bot">Bot</span>{{end}}
+    <div class="muted">@{{.User.Username}}{{if .User.Deactivated}} · deactivated{{end}}</div>
+    {{if .Blocked}}<div class="muted">{{icon "block"}} You blocked them.</div>{{end}}
+  </div>
+</div>
+{{if not .Me}}
+<div class="row">
+  {{if and .Team (not .Blocked) (not .User.Deactivated)}}<button class="btn sm primary" hx-post="/t/{{.Team.Name}}/dm" hx-vals='{"user_id": "{{.User.Id}}"}'>Message</button>{{end}}
+  {{if .Blocked}}<button class="btn sm" hx-post="/u/{{.User.Id}}/block" hx-vals='{"blocked": "0", "channel": "{{.ChannelID}}"}' hx-target="#modal">Unblock</button>
+  {{else}}<button class="btn sm" hx-post="/u/{{.User.Id}}/block" hx-vals='{"blocked": "1", "channel": "{{.ChannelID}}"}' hx-target="#modal" hx-confirm="Block {{name .User}}? They can no longer message you, and their messages show folded. They are not told.">{{icon "block"}}Block</button>{{end}}
+  {{if .Team}}<button class="btn sm danger" hx-get="/u/{{.User.Id}}/report?team={{.Team.Id}}" hx-target="#modal">{{icon "flag"}}Report</button>{{end}}
+</div>
+{{end}}
+{{template "modal-end"}}
+{{end}}
+
+{{define "blocked-list"}}
+{{if .}}
+<ul class="list">
+  {{range .}}
+  <li>
+    <div class="person">{{template "avatar" (dict "User" .User "Size" "sm")}}<span><strong>{{name .User}}</strong> <small class="muted">@{{.User.Username}}</small></span></div>
+    <button class="btn sm" hx-post="/u/{{.User.Id}}/block" hx-vals='{"blocked": "0", "from": "settings"}' hx-target="#blocked-list">Unblock</button>
+  </li>
+  {{end}}
+</ul>
+{{else}}<p class="muted">You have not blocked anyone.</p>{{end}}
+{{end}}
+
+{{define "report-form"}}
+{{template "modal-start" .Heading}}
+<form class="stack" hx-post="{{.URL}}" hx-target="#modal">
+  <p class="muted">Your report goes to the team's admins. The person you report is not told who sent it.</p>
+  <fieldset class="choice">
+    <legend>What is wrong?</legend>
+    {{range .Reasons}}<label class="inline"><input type="radio" name="reason" value="{{.Value}}" required{{if eq .Value $.Reason}} checked{{end}}> {{.Label}}</label>{{end}}
+  </fieldset>
+  <label>Anything to add?<textarea name="details" rows="3" maxlength="500" placeholder="Say what happened (needed for Something else)">{{.Details}}</textarea></label>
+  {{with .Error}}<p class="form-error" role="alert">{{.}}</p>{{end}}
+  <div class="row"><button class="btn primary" type="submit">Send report</button></div>
+</form>
+{{template "modal-end"}}
+{{end}}
+
+{{define "report-list"}}
+{{if .Rows}}<ul class="list reports">{{template "report-rows" .}}</ul>
+{{else}}<p class="muted">{{.Empty}}</p>{{end}}
+{{end}}
+
+{{define "report-rows"}}
+{{range .Rows}}{{template "report-row" .}}{{end}}
+{{with .MoreURL}}<li class="older" hx-get="{{.}}" hx-trigger="intersect once" hx-swap="outerHTML"><span class="spinner" aria-label="Loading more reports"></span></li>{{end}}
+{{end}}
+
+{{define "report-row"}}{{$r := .Report}}
+<li class="report" id="report-{{$r.Id}}">
+  <div class="report-head">
+    <strong>{{.Reason}}</strong>
+    <span class="muted">{{if $r.MessageId}}a message by{{else}}reported{{end}} <strong>{{name $r.User}}</strong>{{with $r.User}} @{{.Username}}{{end}}</span>
+    <time class="muted" datetime="{{iso $r.CreatedAt.AsTime}}">{{date $r.CreatedAt.AsTime}}</time>
+  </div>
+  <div class="muted">From {{name $r.Reporter}}{{with $r.TeamName}} · {{.}}{{end}}{{with $r.ChannelName}} · #{{.}}{{else}}{{if $r.MessageId}} · a conversation{{end}}{{end}}</div>
+  {{with $r.Excerpt}}<blockquote class="report-excerpt">{{.}}</blockquote>{{end}}
+  {{with $r.Details}}<p class="report-details">{{.}}</p>{{end}}
+  {{if $r.Action}}
+  <p class="muted">{{.Done}} by {{name $r.ResolvedBy}}, {{date $r.ResolvedAt.AsTime}}.</p>
+  {{else}}
+  <div class="row">
+    <button class="btn sm" hx-post="/reports/{{$r.Id}}/resolve" hx-vals='{"action": "dismiss"{{if .System}}, "system": "1"{{end}}}' hx-target="#report-{{$r.Id}}" hx-swap="outerHTML">Dismiss</button>
+    {{if $r.MessageId}}<button class="btn sm danger" hx-post="/reports/{{$r.Id}}/resolve" hx-vals='{"action": "delete"{{if .System}}, "system": "1"{{end}}}' hx-target="#report-{{$r.Id}}" hx-swap="outerHTML" hx-confirm="Delete this message for everyone?">Delete message</button>{{end}}
+    {{if $r.TeamId}}<button class="btn sm danger" hx-post="/reports/{{$r.Id}}/resolve" hx-vals='{"action": "remove"{{if .System}}, "system": "1"{{end}}}' hx-target="#report-{{$r.Id}}" hx-swap="outerHTML" hx-confirm="Remove {{name $r.User}} from {{$r.TeamName}}?">Remove from team</button>{{end}}
+    {{if .System}}<button class="btn sm danger" hx-post="/reports/{{$r.Id}}/resolve" hx-vals='{"action": "deactivate", "system": "1"}' hx-target="#report-{{$r.Id}}" hx-swap="outerHTML" hx-confirm="Deactivate {{name $r.User}}? They are signed out everywhere at once and cannot sign in.">Deactivate account</button>{{end}}
+  </div>
+  {{end}}
+</li>
+{{end}}
+
+{{define "reports-badge"}}<span id="reports-{{.ID}}" class="mentions" title="{{.Count}} open {{if eq .Count 1}}report{{else}}reports{{end}}"{{if .OOB}} hx-swap-oob="outerHTML"{{end}}{{if not .Count}} hidden{{end}}>{{if gt .Count 99}}99+{{else}}{{.Count}}{{end}}</span>{{end}}
+
+{{define "reports-badges"}}{{template "reports-badge" (dict "ID" "team" "Count" .Team "OOB" true)}}{{if .System}}{{template "reports-badge" (dict "ID" "admin" "Count" .All "OOB" true)}}{{end}}{{end}}

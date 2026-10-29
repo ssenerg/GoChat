@@ -81,6 +81,7 @@ import io.github.ssenerg.gochat.ui.LocalChatColors
 import io.github.ssenerg.gochat.ui.Loading
 import io.github.ssenerg.gochat.ui.main.LocalNavigator
 import io.github.ssenerg.gochat.ui.main.LocalToasts
+import io.github.ssenerg.gochat.ui.safety.PersonSheet
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
@@ -368,6 +369,7 @@ fun ChannelInfoScreen(session: ChatSession, channelId: String) {
     var confirmArchive by remember { mutableStateOf(false) }
     var confirmDelete by remember { mutableStateOf(false) }
     var edit by remember { mutableStateOf(false) }
+    var person by remember { mutableStateOf<User?>(null) }
     LaunchedEffect(channelId, reload) {
         members = runCatching { session.api.channelMembers(channelId) }.getOrNull()
     }
@@ -462,6 +464,7 @@ fun ChannelInfoScreen(session: ChatSession, channelId: String) {
                         headlineContent = { NameWithBadge(u) },
                         supportingContent = { Text("@" + u.username) },
                         leadingContent = { AvatarWithStatus(u, chat.statusOf(u.id)) },
+                        modifier = Modifier.clickable { person = u },
                         trailingContent = if (moderator && u.id != chat.me.id && !channel.isConversation) {
                             {
                                 TextButton(onClick = {
@@ -544,6 +547,7 @@ fun ChannelInfoScreen(session: ChatSession, channelId: String) {
         )
     }
     if (edit) EditChannelDialog(channel, session) { edit = false }
+    person?.let { PersonSheet(session, it, onDismiss = { person = null }) }
 }
 
 @Composable

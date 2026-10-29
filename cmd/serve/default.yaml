@@ -213,6 +213,15 @@ services:
     allow_hosts: []
     deny_hosts: []
     user_agent: "Mozilla/5.0 (compatible; GoChatBot/1.0; +https://github.com/ssenerg/GoChat)"
+  # Blocking people and reporting messages and people to admins.
+  safety:
+    workers: 4
+    op_timeout: 10s
+    # The most people one person blocks.
+    max_blocks: 1000
+    # The most reports one person sends per report_window.
+    max_reports: 10
+    report_window: 1h
   hub:
     gateway_queue_limit: 65536
     presence_grace: 10s

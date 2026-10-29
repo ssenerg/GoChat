@@ -206,6 +206,15 @@ func (h *Handler) Routes() http.Handler {
 	mux.Handle("POST /m/{channel}/{message}", h.csrf(http.HandlerFunc(h.editMessage)))
 	mux.Handle("POST /m/{channel}/{message}/delete", h.csrf(http.HandlerFunc(h.deleteMessage)))
 	mux.Handle("POST /m/{channel}/{message}/preview/remove", h.csrf(http.HandlerFunc(h.removeLinkPreview)))
+	mux.HandleFunc("GET /m/{channel}/{message}/report", h.reportModal)
+	mux.Handle("POST /m/{channel}/{message}/report", h.csrf(http.HandlerFunc(h.report)))
+	mux.HandleFunc("GET /u/{user}", h.personCardModal)
+	mux.Handle("POST /u/{user}/block", h.csrf(http.HandlerFunc(h.block)))
+	mux.HandleFunc("GET /u/{user}/report", h.reportModal)
+	mux.Handle("POST /u/{user}/report", h.csrf(http.HandlerFunc(h.report)))
+	mux.HandleFunc("GET /t/{team}/reports", h.teamReports)
+	mux.HandleFunc("GET /t/{team}/reports/count", h.reportCounts)
+	mux.Handle("POST /reports/{report}/resolve", h.csrf(http.HandlerFunc(h.resolveReport)))
 
 	mux.Handle("POST /voice/join", h.csrf(http.HandlerFunc(h.joinVoice)))
 	mux.Handle("POST /voice/leave", h.csrf(http.HandlerFunc(h.leaveVoice)))
@@ -219,6 +228,7 @@ func (h *Handler) Routes() http.Handler {
 	mux.HandleFunc("GET /previews/{id}", h.serveLinkImage)
 
 	mux.HandleFunc("GET /settings", h.settingsPage)
+	mux.HandleFunc("GET /settings/blocked", h.blockedList)
 	mux.Handle("POST /settings/profile", h.csrf(http.HandlerFunc(h.updateProfile)))
 	mux.HandleFunc("GET /status", h.statusModal)
 	mux.Handle("POST /status", h.csrf(http.HandlerFunc(h.setStatus)))
@@ -246,6 +256,7 @@ func (h *Handler) Routes() http.Handler {
 	mux.Handle("POST /admin/users/{user}/quota", h.csrf(http.HandlerFunc(h.adminQuota)))
 	mux.Handle("POST /admin/users/{user}/sso/unlink", h.csrf(http.HandlerFunc(h.adminUnlinkSSO)))
 	mux.HandleFunc("GET /admin/sso/{provider}", h.adminSSOAccounts)
+	mux.HandleFunc("GET /admin/reports", h.adminReports)
 
 	mux.HandleFunc("GET /ws", h.websocket)
 

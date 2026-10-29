@@ -24,7 +24,7 @@ func quietSession(t *testing.T) *session {
 		channelID: "here", sidebar: map[string]bool{"here": true, "there": true},
 		mentions: map[string]int{}, unread: map[string]bool{}, muted: map[string]bool{},
 		directs: map[string]bool{}, names: map[string]string{}, peers: map[string]bool{}, peerOf: map[string]string{},
-		saved: map[string]bool{}, reads: map[string]string{}, presses: map[string]*press{},
+		saved: map[string]bool{}, blocked: map[string]bool{}, reads: map[string]string{}, presses: map[string]*press{},
 	}
 }
 
@@ -135,5 +135,51 @@ func TestAnswersShowOnlyInThePressingTab(t *testing.T) {
 	}
 	if !s.quiet() || len(s.presses) > maxPresses {
 		t.Fatalf("another tab's answers shown, or %d held", len(s.presses))
+	}
+}
+
+func TestABlockedPersonsMessagesFoldAndCallOutNoOne(t *testing.T) {
+	s := quietSession(t)
+	s.directs["there"] = true
+	blocks := func(blocked bool) *pb.Event {
+		return &pb.Event{Payload: &pb.Event_BlocksChanged{BlocksChanged: &pb.BlocksChanged{User: &pb.User{Id: "someone"}, Blocked: blocked}}}
+	}
+	s.event(nil, blocks(true))
+	if got := s.frames(); len(got) != 1 || !strings.Contains(got[0], `id="resync"`) {
+		t.Fatalf("blocking someone showed %q", got)
+	}
+	// Here it shows folded; in a direct conversation elsewhere it counts
+	// nothing, and nothing notifies. A read waiting to be marked keeps
+	// the session from timing another.
+	s.flushing = true
+	s.event(nil, posted("1", "here"))
+	if got := s.frames(); len(got) != 1 || !strings.Contains(got[0], "Message from someone you blocked") || !strings.Contains(got[0], "hi") {
+		t.Fatalf("their message showed %q", got)
+	}
+	s.event(nil, posted("2", "there"))
+	if !s.quiet() || s.mentions["there"] != 0 {
+		t.Fatalf("their direct message counted %d: %q", s.mentions["there"], s.frames())
+	}
+	s.event(nil, blocks(false))
+	s.frames()
+	s.event(nil, posted("3", "there"))
+	if s.mentions["there"] != 1 {
+		t.Fatalf("after unblocking, their direct message counted %d", s.mentions["there"])
+	}
+}
+
+func TestReportsChangedUpdatesTheBadges(t *testing.T) {
+	s := quietSession(t)
+	s.teamID = "acme"
+	reports := func(team string, open int32) *pb.Event {
+		return &pb.Event{Payload: &pb.Event_ReportsChanged{ReportsChanged: &pb.ReportsChanged{TeamId: team, Count: open}}}
+	}
+	s.event(nil, reports("acme", 3))
+	s.event(nil, reports("", 5))
+	s.event(nil, reports("beta", 7))
+	got := s.frames()
+	if len(got) != 2 || !strings.Contains(got[0], `id="reports-team"`) || !strings.Contains(got[0], ">3<") ||
+		!strings.Contains(got[1], `id="reports-admin"`) || !strings.Contains(got[1], ">5<") {
+		t.Fatalf("frames %q", got)
 	}
 }

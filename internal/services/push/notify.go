@@ -100,13 +100,14 @@ func (w *worker) posted(msg Posted) {
 	}()
 }
 
-// targets are the people msg calls for, the author left out.
+// targets are the people msg calls for, the author left out, and those
+// who blocked the author.
 func (w *worker) targets(ctx context.Context, msg Posted) []string {
 	m := msg.Message
 	author := m.GetAuthor().GetId()
 	set := map[string]bool{}
 	add := func(id string) {
-		if _, ok := msg.Members[id]; ok && id != author {
+		if _, ok := msg.Members[id]; ok && id != author && !w.blocked(ctx, id, author) {
 			set[id] = true
 		}
 	}
@@ -135,6 +136,24 @@ func (w *worker) targets(ctx context.Context, msg Posted) []string {
 	}
 	slices.Sort(out)
 	return out
+}
+
+// blocked reports whether userID blocked author.
+func (w *worker) blocked(ctx context.Context, userID, author string) bool {
+	if w.Blocks == nil {
+		return false
+	}
+	uid, ok1 := ids.Parse(userID)
+	aid, ok2 := ids.Parse(author)
+	if !ok1 || !ok2 {
+		return false
+	}
+	// Unread blocks push nothing.
+	blocked, err := w.Blocks.Blocked(ctx, uid, aid)
+	if err != nil {
+		w.Logger.Warn("failed to read a person's blocks", zap.Error(err))
+	}
+	return blocked || err != nil
 }
 
 // reach pushes n to userID's devices, unless the channel is muted or they

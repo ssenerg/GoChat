@@ -32,6 +32,8 @@ const (
 	ObjStorage       Object = "storage"
 	// ObjVoice is the talk in voice channels.
 	ObjVoice Object = "voice"
+	// ObjReport is a report of a message or a person to admins.
+	ObjReport Object = "report"
 )
 
 type Action string
@@ -63,6 +65,8 @@ const (
 	// others from it.
 	ActConnect Action = "connect"
 	ActMove    Action = "move"
+	// ActResolve acts on a report.
+	ActResolve Action = "resolve"
 )
 
 type Authorizer struct {
