@@ -316,7 +316,8 @@ class GoChatApp(
     /** Finishes a sign-in the browser came back from at [callback]; signed in, it was a sign-in again. */
     fun ssoReturned(callback: String) {
         val ret = parseSsoReturn(callback, SSO_REDIRECT) ?: return
-        if (_state.value is AppState.SignedIn) {
+        // A sign-in again, though the app may have restarted since it began.
+        if (_state.value is AppState.SignedIn || store.get(KEY_REAUTH) != null) {
             reauthReturned(ret)
             return
         }
