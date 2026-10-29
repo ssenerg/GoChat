@@ -280,15 +280,11 @@ func TestTheMemberListReloadsInPlace(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	var list, stale bytes.Buffer
+	var list bytes.Buffer
 	if err := r.Fragment(&list, "team-members", map[string]any{"Team": &pb.Team{Name: "acme"}}); err != nil {
 		t.Fatal(err)
 	}
-	if err := r.Fragment(&stale, "team-members-stale", "acme"); err != nil {
-		t.Fatal(err)
-	}
-	if !strings.Contains(list.String(), `id="team-members-stale"`) ||
-		!strings.Contains(stale.String(), `id="team-members-stale" hidden hx-swap-oob="outerHTML" hx-get="/t/acme/members"`) {
-		t.Errorf("list %s, reload %s", list.String(), stale.String())
+	if !strings.Contains(list.String(), `id="team-member-list" hx-get="/t/acme/members" hx-trigger="refresh"`) {
+		t.Errorf("the list does not reload: %s", list.String())
 	}
 }

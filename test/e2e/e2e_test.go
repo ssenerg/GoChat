@@ -1845,7 +1845,7 @@ func TestEndToEnd(t *testing.T) {
 		if res, _ := x.hx("/t/"+team+"/leave", url.Values{}); res.Header.Get("HX-Redirect") != "/" {
 			t.Fatalf("leaving: %d", res.StatusCode)
 		}
-		ws.expect(5*time.Second, `id="team-members-stale"`, `hx-get="/t/`+team+`/members"`)
+		ws.expect(5*time.Second, `id="members-changed"`)
 		if res, _ := x.get("/t/" + team); res.StatusCode == http.StatusOK {
 			t.Fatal("still in the team after leaving it")
 		}

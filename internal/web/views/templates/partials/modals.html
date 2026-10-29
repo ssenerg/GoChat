@@ -207,8 +207,7 @@
 
 {{define "team-members"}}
 {{template "modal-start" "Team members"}}
-<div id="team-members-stale" hidden></div>
-<ul class="list">
+<ul class="list" id="team-member-list" hx-get="/t/{{.Team.Name}}/members" hx-trigger="refresh" hx-target="#modal">
   {{template "team-member-rows" .}}
 </ul>
 {{template "modal-end"}}
@@ -320,7 +319,7 @@
 
 {{define "ws-control"}}<div id="ws-control" hidden hx-swap-oob="outerHTML" data-redirect="{{.}}"></div>{{end}}
 
-{{define "team-members-stale"}}<div id="team-members-stale" hidden hx-swap-oob="outerHTML" hx-get="/t/{{.}}/members" hx-trigger="load" hx-target="#modal"></div>{{end}}
+{{define "members-changed"}}<div id="members-changed" hidden hx-swap-oob="outerHTML"></div>{{end}}
 
 {{define "resync"}}<div id="resync" hx-swap-oob="outerHTML" hx-get="{{.}}" hx-trigger="load" hx-target="#main" hidden></div>{{end}}
 

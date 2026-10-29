@@ -991,7 +991,7 @@ func (s *session) event(c *actor.Context, ev *pb.Event) {
 		// list of the members reloads.
 		if p.TeamMembersChanged.TeamId == s.teamID {
 			s.loadSidebar(c, true)
-			s.fragment("team-members-stale", s.teamName)
+			s.fragment("members-changed", nil)
 		}
 	case *pb.Event_Presence:
 		d := render.Presence{ID: p.Presence.UserId, Status: p.Presence.Status}
