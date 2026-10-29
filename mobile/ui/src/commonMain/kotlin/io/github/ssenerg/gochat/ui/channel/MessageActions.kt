@@ -22,6 +22,7 @@ import androidx.compose.material.icons.filled.BookmarkBorder
 import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.Flag
 import androidx.compose.material.icons.filled.LinkOff
 import androidx.compose.material.icons.filled.PushPin
 import androidx.compose.material3.AlertDialog
@@ -52,8 +53,10 @@ import io.github.ssenerg.gochat.core.model.Emojis
 import io.github.ssenerg.gochat.core.state.ChatSession
 import io.github.ssenerg.gochat.ui.LocalPlatform
 import io.github.ssenerg.gochat.ui.main.LocalToasts
+import io.github.ssenerg.gochat.ui.safety.REPORT_SENT
+import io.github.ssenerg.gochat.ui.safety.ReportDialog
 
-/** What can be done with a message: react, reply, copy, edit, remove its preview, delete, pin, save. */
+/** What can be done with a message: react, reply, copy, edit, remove its preview, delete, pin, save, report. */
 @Composable
 fun MessageActions(
     m: Message,
@@ -71,13 +74,14 @@ fun MessageActions(
     val saved = m.saved || m.id in st.saved
     var allEmoji by remember { mutableStateOf(false) }
     var confirmDelete by remember { mutableStateOf(false) }
+    var reporting by remember { mutableStateOf(false) }
 
     fun act(block: suspend () -> String?) {
         onDismiss()
         session.launch(block) { err -> err?.let { toasts.show(it) } }
     }
 
-    ModalBottomSheet(onDismissRequest = onDismiss, sheetState = sheet) {
+    if (!reporting) ModalBottomSheet(onDismissRequest = onDismiss, sheetState = sheet) {
         Column(Modifier.navigationBarsPadding().padding(bottom = 8.dp)) {
             if (allEmoji) {
                 LazyVerticalGrid(
@@ -151,9 +155,18 @@ fun MessageActions(
             if (mine || moderator) {
                 Action(Icons.Filled.Delete, "Delete", danger = true) { confirmDelete = true }
             }
+            if (!mine) {
+                Action(Icons.Filled.Flag, "Report message", danger = true) { reporting = true }
+            }
         }
     }
 
+    if (reporting) {
+        ReportDialog("Report this message", onDismiss = onDismiss) { reason, details ->
+            onDismiss()
+            session.launch({ session.report(m, reason, details) }) { err -> toasts.show(err ?: REPORT_SENT) }
+        }
+    }
     if (confirmDelete) {
         AlertDialog(
             onDismissRequest = { confirmDelete = false },

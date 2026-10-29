@@ -35,6 +35,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import gochat.v1.Message
+import gochat.v1.User
 import io.github.ssenerg.gochat.core.model.Format
 import io.github.ssenerg.gochat.core.model.isArchived
 import io.github.ssenerg.gochat.core.model.isConversation
@@ -43,8 +44,9 @@ import io.github.ssenerg.gochat.core.model.title
 import io.github.ssenerg.gochat.core.state.ChatSession
 import io.github.ssenerg.gochat.ui.BackButton
 import io.github.ssenerg.gochat.ui.ErrorState
-import io.github.ssenerg.gochat.ui.LocalChatColors
 import io.github.ssenerg.gochat.ui.Loading
+import io.github.ssenerg.gochat.ui.LocalChatColors
+import io.github.ssenerg.gochat.ui.channel.BlockedNotice
 import io.github.ssenerg.gochat.ui.channel.Composer
 import io.github.ssenerg.gochat.ui.channel.MessageActions
 import io.github.ssenerg.gochat.ui.channel.MessageRow
@@ -52,6 +54,7 @@ import io.github.ssenerg.gochat.ui.channel.Notice
 import io.github.ssenerg.gochat.ui.channel.PendingRow
 import io.github.ssenerg.gochat.ui.main.LocalNavigator
 import io.github.ssenerg.gochat.ui.main.LocalToasts
+import io.github.ssenerg.gochat.ui.safety.PersonSheet
 import kotlinx.coroutines.launch
 
 /** A thread: its root, its replies and a composer that replies. */
@@ -65,6 +68,7 @@ fun ThreadScreen(session: ChatSession, channelId: String, rootId: String) {
     val toasts = LocalToasts.current
     val moderator = channel?.moderatedBy(chat.me, chat.team) == true
     var selected by remember { mutableStateOf<Message?>(null) }
+    var person by remember { mutableStateOf<User?>(null) }
     var editing by remember { mutableStateOf<Message?>(null) }
     val list = rememberLazyListState()
 
@@ -136,6 +140,8 @@ fun ThreadScreen(session: ChatSession, channelId: String, rootId: String) {
                                 continues = Format.continues(m, replies.getOrNull(i + 1)),
                                 onLongPress = { selected = m },
                                 onOpenThread = null,
+                                folded = chat.fromBlocked(m),
+                                onAuthor = { person = m.author },
                             )
                         }
                         if (st.hasMore) {
@@ -147,7 +153,10 @@ fun ThreadScreen(session: ChatSession, channelId: String, rootId: String) {
                         }
                         item(key = "root") {
                             Column {
-                                MessageRow(root, chat.me, session, continues = false, onLongPress = { selected = root }, onOpenThread = null)
+                                MessageRow(
+                                    root, chat.me, session, continues = false, onLongPress = { selected = root }, onOpenThread = null,
+                                    folded = chat.fromBlocked(root), onAuthor = { person = root.author },
+                                )
                                 Text(
                                     when (st.replies.size) {
                                         0 -> "No replies yet"
@@ -167,6 +176,8 @@ fun ThreadScreen(session: ChatSession, channelId: String, rootId: String) {
             }
             if (channel != null && channel.isArchived) {
                 Notice("This channel is archived: you can read it, not write in it.")
+            } else if (channel?.peer?.id in chat.blocked) {
+                BlockedNotice(session, channel?.peer)
             } else {
                 Composer(
                     placeholder = "Reply…",
@@ -193,4 +204,5 @@ fun ThreadScreen(session: ChatSession, channelId: String, rootId: String) {
     selected?.let { m ->
         MessageActions(m, session, moderator, onDismiss = { selected = null }, onEdit = { editing = m }, onReply = null)
     }
+    person?.let { PersonSheet(session, it, onDismiss = { person = null }) }
 }

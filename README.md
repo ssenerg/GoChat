@@ -38,6 +38,7 @@ API and webhooks.
 | `bots` (pool) | bot accounts and tokens, commands, button answers, webhooks |
 | `voice` | who talks in which voice channel, join tokens, the voice servers |
 | `push` (pool) | the apps' device tokens, and pushes through FCM and APNs to apps that are closed |
+| `safety` (pool) | whom people block, and the reports they make to admins |
 | `previews` (pool) | link previews: fetches the first link of each message, from public addresses only, and keeps its picture |
 
 A channel actor is the single writer for its channel, so ordering and
@@ -257,6 +258,46 @@ Graph or Twitter card tags, or else its `<title>` and meta description.
   changes the first link drops the old preview for the new link's. Bots
   opt out per message with `no_link_preview` on `PostMessage` or
   `EditMessage`, which people may set as well.
+
+### Blocking and reporting
+
+People keep away those who bother them, and tell the admins about what
+breaks the rules, on the web and in the apps, as app stores ask of apps
+that carry what people post.
+
+- Anyone blocks or unblocks another person from their profile (a click on
+  a message's author on the web, a tap in the apps) and lists whom they
+  blocked in **Settings → Blocked people**, with `SafetyService.BlockUser`,
+  `UnblockUser` and `ListBlocked`
+  ([safety.proto](api/protobuf/proto/gochat/v1/safety.proto)). A person
+  blocks up to 1000 people (`services.safety.max_blocks`).
+- Someone blocked cannot open a direct conversation with the person who
+  blocked them, put them in a group conversation, or post in a direct
+  conversation they share; they hear only "you cannot send messages in this
+  conversation", and are told nothing else. The person who blocked them
+  still reads their conversation, which takes no message from either side
+  until they unblock.
+- In channels and group conversations a blocked person's messages stay for
+  everyone else; the person who blocked them sees each folded, "Message from
+  someone you blocked", and opens it with a tap. Those messages call them
+  out nowhere: no push, no mention count, no notice, `@channel` included.
+- Anyone reports a message they can read, or a person of a team they share,
+  with a reason (spam, harassment or bullying, hate speech, sexual content,
+  violence or threats, something else) and a few words, from the message's
+  menu or the person's profile. A report keeps the message as it read, and
+  goes to the team's admins; one of a conversation of no team goes to system
+  admins alone. A person sends up to 10 reports an hour
+  (`services.safety.max_reports` per `report_window`).
+- Team admins see their team's open reports in **Team settings**, system
+  admins every team's, open and resolved, at `/admin/reports`, and in the
+  apps' Settings. An admin dismisses a report, deletes the message, removes
+  the person from the team, or, for system admins, deactivates their account.
+  The report records what was done, by whom and when; two admins acting at
+  once record one.
+- Admins learn of reports as they come: a `ReportsChanged` event carries the
+  open count, a team's to its admins and every team's to system admins,
+  which the web and the apps show as a badge on the team menu.
+- Bots make none of these calls, and get none of these events.
 
 ### Storage
 
@@ -733,7 +774,7 @@ internal/authz     casbin model and enforcer
 internal/core      ids, passwords, TOTP, sealing, validation, models, caches
 internal/repos     Scylla and MinIO repositories
 internal/server    DRPC handlers and the admin listener
-internal/services  hub, accounts, directory, channels, updates, bots, files, voice, push, previews
+internal/services  hub, accounts, directory, channels, updates, bots, files, voice, push, previews, safety
 internal/voiceserver  the voice server: signaling, rooms, media
 internal/web       HTTP handlers, gateway actors, templates and static assets
 migrations/scylla  CQL migrations

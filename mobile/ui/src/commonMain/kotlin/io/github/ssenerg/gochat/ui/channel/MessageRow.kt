@@ -23,13 +23,13 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.OpenInNew
 import androidx.compose.material.icons.filled.AddReaction
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Description
 import androidx.compose.material.icons.filled.Error
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.PushPin
 import androidx.compose.material.icons.filled.Refresh
-import androidx.compose.material.icons.filled.Close
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.HorizontalDivider
@@ -81,6 +81,7 @@ import io.github.ssenerg.gochat.ui.LocalPlatform
 import io.github.ssenerg.gochat.ui.MessageText
 import io.github.ssenerg.gochat.ui.ServerImage
 import io.github.ssenerg.gochat.ui.main.LocalToasts
+import io.github.ssenerg.gochat.ui.safety.FoldedMessage
 import kotlinx.coroutines.launch
 
 /** One message as a channel or a thread shows it. */
@@ -92,16 +93,25 @@ fun MessageRow(
     continues: Boolean,
     onLongPress: () -> Unit,
     onOpenThread: (() -> Unit)?,
+    /** Set for a message by someone the person blocked: it shows folded until tapped. */
+    folded: Boolean = false,
+    onAuthor: (() -> Unit)? = null,
 ) {
     val colors = LocalChatColors.current
+    var unfolded by remember(m.id) { mutableStateOf(false) }
+    if (folded && !unfolded) {
+        FoldedMessage(onShow = { unfolded = true })
+        return
+    }
     val highlight = m.author?.id != me.id && m.mentions(me)
+    val author = if (onAuthor != null) Modifier.clickable(onClick = onAuthor) else Modifier
     Row(
         Modifier.fillMaxWidth()
             .background(if (highlight) colors.mention.copy(alpha = 0.6f) else androidx.compose.ui.graphics.Color.Transparent)
             .combinedClickable(onClick = {}, onLongClick = onLongPress)
             .padding(start = 12.dp, end = 12.dp, top = if (continues) 2.dp else 10.dp, bottom = 2.dp),
     ) {
-        if (continues) Spacer(Modifier.width(40.dp)) else Avatar(m.author, size = 40.dp)
+        if (continues) Spacer(Modifier.width(40.dp)) else Avatar(m.author, size = 40.dp, modifier = author)
         Spacer(Modifier.width(10.dp))
         Column(Modifier.weight(1f)) {
             if (!continues) {
@@ -111,7 +121,7 @@ fun MessageRow(
                         fontWeight = FontWeight.SemiBold,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
-                        modifier = Modifier.weight(1f, fill = false),
+                        modifier = Modifier.weight(1f, fill = false).then(author),
                     )
                     if (m.author?.bot == true) {
                         Spacer(Modifier.width(6.dp))

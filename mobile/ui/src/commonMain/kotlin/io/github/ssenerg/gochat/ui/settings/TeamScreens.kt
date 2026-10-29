@@ -15,6 +15,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Flag
 import androidx.compose.material.icons.filled.Group
 import androidx.compose.material.icons.filled.Link
 import androidx.compose.material.icons.filled.MoreVert
@@ -66,6 +67,7 @@ import io.github.ssenerg.gochat.ui.LocalChatColors
 import io.github.ssenerg.gochat.ui.LocalImages
 import io.github.ssenerg.gochat.ui.LocalPlatform
 import io.github.ssenerg.gochat.ui.Loading
+import io.github.ssenerg.gochat.ui.MentionBadge
 import io.github.ssenerg.gochat.ui.ServerImage
 import io.github.ssenerg.gochat.ui.main.LocalNavigator
 import io.github.ssenerg.gochat.ui.main.LocalToasts
@@ -184,6 +186,14 @@ fun TeamSettingsScreen(session: ChatSession, teamId: String) {
                     supportingContent = { Text("Make admins, or remove people from the team.") },
                     leadingContent = { Icon(Icons.Filled.Group, contentDescription = null) },
                     modifier = Modifier.clickable { nav.open(Route.TeamMembers(teamId)) },
+                )
+                val open = st.reports[teamId] ?: 0
+                ListItem(
+                    headlineContent = { Text("Reports") },
+                    supportingContent = { Text(if (open == 0) "No open reports." else "$open open: messages and people reported to the admins.") },
+                    leadingContent = { Icon(Icons.Filled.Flag, contentDescription = null) },
+                    trailingContent = if (open > 0) ({ MentionBadge(open) }) else null,
+                    modifier = Modifier.clickable { nav.open(Route.Reports(teamId)) },
                 )
                 HorizontalDivider()
                 SectionTitle("Open invites")
