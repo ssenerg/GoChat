@@ -162,9 +162,23 @@ func (r *Repository) EraseUser(ctx context.Context, u *models.User, name string,
 	if err := r.query(ctx, "DELETE FROM recovery_codes WHERE user_id = ?", u.ID).ExecRelease(); err != nil {
 		return wrap(err)
 	}
-	// Whom it blocked; others' blocks of it stay theirs.
-	return wrap(r.query(ctx, "DELETE FROM blocks WHERE user_id = ?", u.ID).ExecRelease())
+	// Whom it blocked, as unblocking does, so each block goes from every
+	// table that keeps it; others' blocks of it stay theirs.
+	blocks, err := r.ListBlocks(ctx, u.ID, erasedBlocks)
+	if err != nil {
+		return err
+	}
+	for _, b := range blocks {
+		if err := r.Unblock(ctx, u.ID, b.BlockedID); err != nil {
+			return err
+		}
+	}
+	return nil
 }
+
+// erasedBlocks bounds the blocks of an erased account read, well over the
+// cap on them.
+const erasedBlocks = 10_000
 
 // ListSystemAdmins lists the active system admins. It reads every user, so
 // it serves only what is rare, such as an admin deleting their account.
