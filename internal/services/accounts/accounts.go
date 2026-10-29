@@ -208,6 +208,8 @@ func (w *worker) Receive(c *actor.Context) {
 		out, err = lockTOTP(ctx, w, msg.P, msg, w.disableTOTP)
 	case DeleteAccount:
 		out, err = lockTOTP(ctx, w, msg.P, msg, w.deleteAccount)
+	case ResumeAccount:
+		out, err = w.resumeAccount(ctx, msg)
 	case EraseAccount:
 		out, err = w.eraseAccount(ctx, msg)
 	case ListSessions:

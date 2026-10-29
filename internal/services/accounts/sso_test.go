@@ -173,6 +173,8 @@ type person struct {
 type grant struct {
 	nonce, challenge, redirect string
 	who                        person
+	// fresh is a sign-in max_age=0 asked for, which says when it was.
+	fresh bool
 }
 
 // fakeIdP is an OpenID provider: discovery and keys from oidctest, and an
@@ -221,7 +223,7 @@ func (idp *fakeIdP) authorize(start string, who person) string {
 	}
 	code := secure.Token()
 	idp.mu.Lock()
-	idp.codes[code] = grant{nonce: q.Get("nonce"), challenge: q.Get("code_challenge"), redirect: q.Get("redirect_uri"), who: who}
+	idp.codes[code] = grant{nonce: q.Get("nonce"), challenge: q.Get("code_challenge"), redirect: q.Get("redirect_uri"), who: who, fresh: q.Get("max_age") == "0"}
 	idp.mu.Unlock()
 	return code
 }
@@ -254,6 +256,9 @@ func (idp *fakeIdP) token(w http.ResponseWriter, r *http.Request) {
 		"iss": idp.URL, "aud": testClientID, "sub": "subject-1", "nonce": g.nonce,
 		"iat": now.Unix(), "exp": now.Add(time.Hour).Unix(),
 		"email": "ann@example.test", "email_verified": true, "name": "Ann Example", "preferred_username": "ann",
+	}
+	if g.fresh {
+		claims["auth_time"] = now.Unix()
 	}
 	for k, v := range g.who.claims {
 		if v == nil {

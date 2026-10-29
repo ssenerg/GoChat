@@ -159,7 +159,11 @@ func (r *Repository) EraseUser(ctx context.Context, u *models.User, name string,
 	if err != nil {
 		return wrap(err)
 	}
-	return wrap(r.query(ctx, "DELETE FROM recovery_codes WHERE user_id = ?", u.ID).ExecRelease())
+	if err := r.query(ctx, "DELETE FROM recovery_codes WHERE user_id = ?", u.ID).ExecRelease(); err != nil {
+		return wrap(err)
+	}
+	// Whom it blocked; others' blocks of it stay theirs.
+	return wrap(r.query(ctx, "DELETE FROM blocks WHERE user_id = ?", u.ID).ExecRelease())
 }
 
 // ListSystemAdmins lists the active system admins. It reads every user, so
