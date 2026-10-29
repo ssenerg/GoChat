@@ -16,6 +16,7 @@ import (
 	"github.com/ssenerg/gochat/internal/authz"
 	"github.com/ssenerg/gochat/internal/core/models"
 	"github.com/ssenerg/gochat/internal/repos/scylla"
+	"github.com/ssenerg/gochat/internal/services/blocks"
 	"github.com/ssenerg/gochat/internal/services/updates"
 	"github.com/ssenerg/gochat/internal/services/users"
 )
@@ -113,6 +114,8 @@ type Deps struct {
 	Push *actor.PID
 	// Previews makes the previews of messages' links; nil makes none.
 	Previews Previewer
+	// Blocks holds whom people blocked; nil keeps no one apart.
+	Blocks *blocks.Cache
 }
 
 // passivate asks to stop an idle channel actor that has handled requests.

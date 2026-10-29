@@ -512,6 +512,9 @@ func (a *channel) post(msg Post) (*pb.Message, error) {
 	if !a.poster(msg.P.UserID).Allow() {
 		return nil, ierrors.ResourceExhausted("you are posting too fast")
 	}
+	if err := a.refuseBlocked(msg.P.UserID); err != nil {
+		return nil, err
+	}
 	content, err := validate.Text("message", msg.Content, a.Cfg.MaxMessageLength)
 	if err != nil {
 		return nil, err
@@ -666,6 +669,8 @@ func (a *channel) recordMentions(m *models.Message) {
 				userIDs = append(userIDs, id)
 			}
 		}
+		// Those who blocked the author are not called out.
+		userIDs = a.unblocked(ctx, m.UserID, userIDs)
 		if err := a.Repo.AddMentions(ctx, a.id, m.ID, userIDs); err != nil {
 			a.Logger.Warn("failed to record mentions", zap.String("channel", a.id.String()), zap.Error(err))
 		}
@@ -891,12 +896,15 @@ func (a *channel) edit(msg Edit) (*pb.Message, error) {
 }
 
 func (a *channel) delete(msg Delete) (Done, error) {
-	role, err := a.member(msg.P)
-	if err != nil {
-		return Done{}, err
-	}
-	if !a.poster(msg.P.UserID).Allow() {
-		return Done{}, ierrors.ResourceExhausted("you are deleting too fast")
+	var role models.ChannelRole
+	if !msg.Moderated {
+		var err error
+		if role, err = a.member(msg.P); err != nil {
+			return Done{}, err
+		}
+		if !a.poster(msg.P.UserID).Allow() {
+			return Done{}, ierrors.ResourceExhausted("you are deleting too fast")
+		}
 	}
 	ctx, cancel := a.ctx()
 	defer cancel()
@@ -904,13 +912,15 @@ func (a *channel) delete(msg Delete) (Done, error) {
 	if err != nil {
 		return Done{}, err
 	}
-	if m.UserID == msg.P.UserID {
+	switch {
+	case msg.Moderated:
+	case m.UserID == msg.P.UserID:
 		if !a.Authz.Can(authz.ObjMessage, authz.ActDeleteOwn, string(role), string(msg.P.Role)) {
 			return Done{}, ierrors.PermissionDenied()
 		}
-	} else if msg.P.Bot {
+	case msg.P.Bot:
 		return Done{}, ierrors.PermissionDenied()
-	} else {
+	default:
 		tr, err := a.teamRole(ctx, msg.P.UserID)
 		if err != nil {
 			return Done{}, err

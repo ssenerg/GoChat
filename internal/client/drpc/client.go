@@ -47,6 +47,7 @@ type Client struct {
 	Bots     pb.DRPCBotServiceClient
 	Admin    pb.DRPCAdminServiceClient
 	Voice    pb.DRPCVoiceServiceClient
+	Safety   pb.DRPCSafetyServiceClient
 }
 
 func New(cfg *Config) (*Client, error) {
@@ -73,6 +74,7 @@ func New(cfg *Config) (*Client, error) {
 	c.Bots = pb.NewDRPCBotServiceClient(conn)
 	c.Admin = pb.NewDRPCAdminServiceClient(conn)
 	c.Voice = pb.NewDRPCVoiceServiceClient(conn)
+	c.Safety = pb.NewDRPCSafetyServiceClient(conn)
 	return c, nil
 }
 

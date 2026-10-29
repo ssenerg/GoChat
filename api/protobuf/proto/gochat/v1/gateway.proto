@@ -108,6 +108,8 @@ message Event {
     VoiceChannelUpdate voice_channel_update = 18;
     CallbackQuery callback_query = 23;
     CallbackAnswer callback_answer = 24;
+    BlocksChanged blocks_changed = 25;
+    ReportsChanged reports_changed = 26;
   }
   // The update's number, set on updates of a sequence: of the channel
   // pts_channel_id names, or of the recipient's account without it.
@@ -141,6 +143,20 @@ message CallbackAnswer {
 message VoiceChannelUpdate {
   string team_id = 1;
   VoiceChannelState channel = 2;
+}
+
+// BlocksChanged tells a person's tabs and apps they blocked someone, or
+// unblocked them. The person blocked hears nothing.
+message BlocksChanged {
+  User user = 1;
+  bool blocked = 2;
+}
+
+// ReportsChanged tells admins how many reports wait for them: a team's
+// admins the team's, system admins every team's, with team_id empty.
+message ReportsChanged {
+  string team_id = 1;
+  int32 open = 2;
 }
 
 // SavedChanged tells a person's tabs they saved a message, or dropped it.

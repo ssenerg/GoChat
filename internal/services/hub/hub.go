@@ -4,6 +4,7 @@ package hub
 
 import (
 	"errors"
+	"maps"
 	"slices"
 	"sync/atomic"
 	"time"
@@ -156,6 +157,9 @@ type (
 // Disconnected replies with those of UserIDs who have no connection open.
 type Disconnected struct{ UserIDs []string }
 
+// ToAdmins sends Event to the connections of system admins.
+type ToAdmins struct{ Event *pb.Event }
+
 // SetStatus records the availability a connected user chose.
 type SetStatus struct {
 	UserID   string
@@ -223,7 +227,9 @@ type hub struct {
 	viewers map[string]map[*gateway]map[uint64]struct{}
 	// watchers holds the connections watching each user.
 	watchers map[string]map[*gateway]map[uint64]struct{}
-	writers  actors.Children
+	// admins holds the system admins with a connection.
+	admins  map[string]struct{}
+	writers actors.Children
 }
 
 func New(logger *zap.Logger, cfg *Config) actor.Producer {
@@ -239,6 +245,7 @@ func New(logger *zap.Logger, cfg *Config) actor.Producer {
 			conns:     make(map[string][]connRef),
 			viewers:   make(map[string]map[*gateway]map[uint64]struct{}),
 			watchers:  make(map[string]map[*gateway]map[uint64]struct{}),
+			admins:    make(map[string]struct{}),
 		}
 	}
 }
@@ -265,6 +272,8 @@ func (h *hub) Receive(c *actor.Context) {
 				h.view(gw, msg.ConnID, cn, msg.ChannelID)
 			}
 		}
+	case ToAdmins:
+		h.deliver(c, Deliver{UserIDs: slices.Collect(maps.Keys(h.admins)), Event: msg.Event})
 	case Broadcast:
 		resp := &pb.ConnectResponse{Frame: &pb.ConnectResponse_Event{Event: msg.Event}}
 		for _, gw := range h.gateways {
@@ -425,6 +434,9 @@ func (h *hub) attach(c *actor.Context, msg Attach) {
 		h.online[userID] = per
 	}
 	per[gw.id]++
+	if msg.User.GetRole() == pb.SystemRole_SYSTEM_ROLE_ADMIN {
+		h.admins[userID] = struct{}{}
+	}
 	h.send(c, gw, &pb.ConnectResponse{Frame: &pb.ConnectResponse_Attached{Attached: &pb.Attached{
 		ConnId: msg.ConnID, User: msg.User, SessionId: msg.SessionID, ExpiresAt: timestamppb.New(msg.ExpiresAt),
 	}}})
@@ -483,6 +495,7 @@ func (h *hub) removeConn(c *actor.Context, gw *gateway, connID uint64) {
 	mine := slices.DeleteFunc(h.conns[cn.userID], func(r connRef) bool { return r.gw == gw && r.id == connID })
 	if len(mine) == 0 {
 		delete(h.conns, cn.userID)
+		delete(h.admins, cn.userID)
 	} else {
 		h.conns[cn.userID] = mine
 	}

@@ -15,6 +15,7 @@ import (
 	"github.com/ssenerg/gochat/internal/services/index"
 	"github.com/ssenerg/gochat/internal/services/previews"
 	"github.com/ssenerg/gochat/internal/services/push"
+	"github.com/ssenerg/gochat/internal/services/safety"
 	"github.com/ssenerg/gochat/internal/services/updates"
 	"github.com/ssenerg/gochat/internal/services/voice"
 )
@@ -31,6 +32,7 @@ type Config struct {
 	Bots      *bots.Config      `mapstructure:"bots"`
 	Push      *push.Config      `mapstructure:"push"`
 	Previews  *previews.Config  `mapstructure:"previews"`
+	Safety    *safety.Config    `mapstructure:"safety"`
 	Users     *UsersConfig      `mapstructure:"users"`
 }
 
@@ -42,8 +44,8 @@ type UsersConfig struct {
 var _ config.Config = (*Config)(nil)
 
 func (c *Config) Validate() error {
-	if c.Accounts == nil || c.Directory == nil || c.Channels == nil || c.Files == nil || c.Hub == nil || c.Search == nil || c.Voice == nil || c.Updates == nil || c.Bots == nil || c.Push == nil || c.Previews == nil || c.Users == nil {
-		return errors.New("accounts, directory, channels, files, hub, search, voice, updates, bots, push, previews and users are required")
+	if c.Accounts == nil || c.Directory == nil || c.Channels == nil || c.Files == nil || c.Hub == nil || c.Search == nil || c.Voice == nil || c.Updates == nil || c.Bots == nil || c.Push == nil || c.Previews == nil || c.Safety == nil || c.Users == nil {
+		return errors.New("accounts, directory, channels, files, hub, search, voice, updates, bots, push, previews, safety and users are required")
 	}
 	if err := c.Accounts.Validate(); err != nil {
 		return fmt.Errorf("accounts.%w", err)
@@ -77,6 +79,9 @@ func (c *Config) Validate() error {
 	}
 	if err := c.Previews.Validate(); err != nil {
 		return fmt.Errorf("previews.%w", err)
+	}
+	if err := c.Safety.Validate(); err != nil {
+		return fmt.Errorf("safety.%w", err)
 	}
 	if c.Users.CacheSize < 1 || c.Users.CacheTTL <= 0 {
 		return errors.New("users.cache_size and users.cache_ttl must be positive")

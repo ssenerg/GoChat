@@ -14,6 +14,7 @@ import (
 	"github.com/ssenerg/gochat/internal/repos/minio"
 	"github.com/ssenerg/gochat/internal/repos/scylla"
 	"github.com/ssenerg/gochat/internal/services/accounts"
+	"github.com/ssenerg/gochat/internal/services/blocks"
 	"github.com/ssenerg/gochat/internal/services/bots"
 	"github.com/ssenerg/gochat/internal/services/callbacks"
 	"github.com/ssenerg/gochat/internal/services/channels"
@@ -23,6 +24,7 @@ import (
 	"github.com/ssenerg/gochat/internal/services/index"
 	"github.com/ssenerg/gochat/internal/services/previews"
 	"github.com/ssenerg/gochat/internal/services/push"
+	"github.com/ssenerg/gochat/internal/services/safety"
 	"github.com/ssenerg/gochat/internal/services/updates"
 	"github.com/ssenerg/gochat/internal/services/users"
 	"github.com/ssenerg/gochat/internal/services/voice"
@@ -46,6 +48,8 @@ type System struct {
 	Bots    *actor.PID
 	// Push reaches closed apps; nil without a provider.
 	Push *actor.PID
+	// Safety blocks people and takes reports.
+	Safety *actor.PID
 	// Previews makes link previews; nil while they are off.
 	Previews *previews.Service
 	Sessions *accounts.Deps
@@ -69,6 +73,7 @@ func Start(logger *zap.Logger, cfg *Config, repo *scylla.Repository, storage *mi
 	s := &System{logger: logger, Engine: engine}
 	s.Users = users.NewCache(repo, cfg.Users.CacheSize, cfg.Users.CacheTTL)
 	userCache := s.Users
+	blocked := blocks.NewCache(repo, cfg.Safety.MaxBlocks, cfg.Users.CacheSize, cfg.Users.CacheTTL)
 	s.events = actors.LogEvents(engine, logger.Named("actors"))
 
 	// Stateful actors survive a panic in one message instead of restarting
@@ -91,14 +96,14 @@ func Start(logger *zap.Logger, cfg *Config, repo *scylla.Repository, storage *mi
 	if len(providers) > 0 {
 		s.Push = engine.Spawn(push.Pool(&push.Deps{
 			Logger: logger.Named("push"), Cfg: cfg.Push, Repo: repo, Users: userCache, Engine: engine, Hub: s.Hub,
-			Providers: providers, IdleTimeout: cfg.Accounts.SessionIdleTimeout,
+			Providers: providers, IdleTimeout: cfg.Accounts.SessionIdleTimeout, Blocks: blocked,
 		}), "push", actor.WithID("main"))
 		logger.Info("push notifications on", zap.Bool("fcm", providers[models.PushFCM] != nil), zap.Bool("apns", providers[models.PushAPNs] != nil))
 	}
 	channelDeps := &channels.Deps{
 		Logger: logger.Named("channels"), Cfg: cfg.Channels, Repo: repo, Storage: storage,
 		Authz: az, Users: userCache, Engine: engine, Hub: s.Hub, Search: s.filing, UpdatesCfg: cfg.Updates,
-		Push: s.Push,
+		Push: s.Push, Blocks: blocked,
 	}
 	s.Updates = engine.Spawn(updates.New(&updates.Deps{
 		Logger: logger.Named("updates"), Cfg: cfg.Updates, Repo: repo, Engine: engine, Hub: s.Hub,
@@ -123,6 +128,7 @@ func Start(logger *zap.Logger, cfg *Config, repo *scylla.Repository, storage *mi
 	directoryDeps := &directory.Deps{
 		Logger: logger.Named("directory"), Cfg: cfg.Directory, Repo: repo, Storage: storage, Authz: az,
 		Users: userCache, Engine: engine, Hub: s.Hub, Channels: s.Channels, Voice: s.Voice, Updates: s.Updates,
+		Blocks: blocked,
 	}
 	s.Directory = engine.Spawn(directory.Pool(directoryDeps), "directory", actor.WithID("main"))
 	s.adopter = engine.Spawn(directory.Adopt(directoryDeps), "directory", actor.WithID("adopt"), recovered)
@@ -146,6 +152,10 @@ func Start(logger *zap.Logger, cfg *Config, repo *scylla.Repository, storage *mi
 	}), "webhooks", actor.WithID("main"), recovered)
 	botDeps.Webhooks = s.webhooks
 	s.Bots = engine.Spawn(bots.Pool(botDeps), "bots", actor.WithID("main"))
+	s.Safety = engine.Spawn(safety.Pool(&safety.Deps{
+		Logger: logger.Named("safety"), Cfg: cfg.Safety, Repo: repo, Authz: az, Users: userCache, Blocks: blocked,
+		Engine: engine, Hub: s.Hub, Updates: s.Updates, Channels: s.Channels, Directory: s.Directory, Accounts: s.Accounts,
+	}), "safety", actor.WithID("main"))
 	logger.Info("actors started")
 	return s, nil
 }
@@ -161,7 +171,7 @@ func (s *System) Stop(timeout time.Duration) {
 	if s.Previews != nil {
 		previewer = s.Previews.PID
 	}
-	for _, pid := range []*actor.PID{s.Bots, s.webhooks, s.Accounts, s.Auth, s.Directory, s.Files, s.Search, s.backfill, s.adopter, s.janitor, previewer, s.Channels, s.Push, s.Voice, s.callbacks, s.Updates, s.filing, s.Hub, s.events} {
+	for _, pid := range []*actor.PID{s.Safety, s.Bots, s.webhooks, s.Accounts, s.Auth, s.Directory, s.Files, s.Search, s.backfill, s.adopter, s.janitor, previewer, s.Channels, s.Push, s.Voice, s.callbacks, s.Updates, s.filing, s.Hub, s.events} {
 		if pid == nil {
 			continue
 		}

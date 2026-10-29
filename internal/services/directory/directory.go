@@ -29,6 +29,7 @@ import (
 	"github.com/ssenerg/gochat/internal/core/window"
 	ierrors "github.com/ssenerg/gochat/internal/errors"
 	"github.com/ssenerg/gochat/internal/repos/scylla"
+	"github.com/ssenerg/gochat/internal/services/blocks"
 	"github.com/ssenerg/gochat/internal/services/channels"
 	"github.com/ssenerg/gochat/internal/services/convert"
 	"github.com/ssenerg/gochat/internal/services/hub"
@@ -103,6 +104,8 @@ type Deps struct {
 	Voice    *actor.PID
 	// Updates numbers what happens to each account.
 	Updates *actor.PID
+	// Blocks holds whom people blocked; nil keeps no one apart.
+	Blocks  *blocks.Cache
 	invited *window.Counter
 	created *window.Counter
 	// teamLocks serializes the changes that could leave a team without an
