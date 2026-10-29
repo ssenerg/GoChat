@@ -36,11 +36,11 @@
 {{template "modal-start" .Heading}}
 <form class="stack" hx-post="{{.URL}}" hx-target="#modal">
   <p class="muted">Your report goes to the team's admins. The person you report is not told who sent it.</p>
-  <fieldset class="stack">
+  <fieldset class="choice">
     <legend>What is wrong?</legend>
-    {{range .Reasons}}<label class="row"><input type="radio" name="reason" value="{{.Value}}" required{{if eq .Value $.Reason}} checked{{end}}>{{.Label}}</label>{{end}}
+    {{range .Reasons}}<label class="inline"><input type="radio" name="reason" value="{{.Value}}" required{{if eq .Value $.Reason}} checked{{end}}> {{.Label}}</label>{{end}}
   </fieldset>
-  <label class="stack">Anything to add?<textarea name="details" rows="3" maxlength="500" placeholder="Say what happened (needed for Something else)">{{.Details}}</textarea></label>
+  <label>Anything to add?<textarea name="details" rows="3" maxlength="500" placeholder="Say what happened (needed for Something else)">{{.Details}}</textarea></label>
   {{with .Error}}<p class="form-error" role="alert">{{.}}</p>{{end}}
   <div class="row"><button class="btn primary" type="submit">Send report</button></div>
 </form>

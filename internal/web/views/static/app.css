@@ -249,7 +249,8 @@ fieldset.choice legend { font-weight: 600; font-size: .92rem; padding: 0 .3rem; 
 .menu > summary .mentions { position: absolute; top: -4px; right: -6px; height: 18px; min-width: 18px; padding: 0 5px; font-size: .66rem; }
 .menu-items .mentions { margin-left: .4rem; }
 .mentions[hidden] { display: none; }
-.report { display: grid; gap: .3rem; }
+.list li.report { display: grid; gap: .3rem; align-items: start; }
+.list li.report > .row { margin-left: 0; flex-wrap: wrap; }
 .report-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: .5rem; }
 .report-excerpt { margin: .2rem 0; padding: .4rem .7rem; border-left: 3px solid var(--border); white-space: pre-wrap; overflow-wrap: anywhere; color: var(--fg-muted); }
 .report-details { margin: 0; overflow-wrap: anywhere; }
