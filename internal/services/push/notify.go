@@ -175,9 +175,10 @@ func (w *worker) deliver(d *models.PushDevice, n *Notice) {
 	cancel()
 	switch {
 	case errors.Is(err, ErrDeadToken):
+		// The session may have a new token by now, which stays.
 		ctx, cancel := context.WithTimeout(context.Background(), w.Cfg.OpTimeout)
 		defer cancel()
-		if err := w.Repo.DeletePushDevice(ctx, d); err != nil {
+		if err := w.Repo.ForgetPushToken(ctx, d); err != nil {
 			w.Logger.Warn("failed to forget a dead device token", zap.Error(err))
 		}
 	case err != nil:
