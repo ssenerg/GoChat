@@ -49,6 +49,7 @@ import io.github.ssenerg.gochat.ui.BackButton
 import io.github.ssenerg.gochat.ui.LocalChatColors
 import io.github.ssenerg.gochat.ui.LocalPlatform
 import io.github.ssenerg.gochat.ui.Loading
+import io.github.ssenerg.gochat.ui.SensitiveScreen
 import io.github.ssenerg.gochat.ui.main.LocalNavigator
 import io.github.ssenerg.gochat.ui.main.LocalToasts
 import kotlinx.coroutines.launch
@@ -66,6 +67,8 @@ fun TwoFactorScreen(session: ChatSession) {
         session.refreshMe()
         loaded = true
     }
+    // The secret and the recovery codes stay out of screenshots and the app switcher.
+    if (setup != null || codes != null) SensitiveScreen()
 
     Scaffold(topBar = { TopAppBar(title = { Text("Two-factor authentication") }, navigationIcon = { BackButton { nav.pop() } }) }) { padding ->
         Column(
@@ -133,7 +136,7 @@ private fun Confirm(session: ChatSession, setup: BeginTOTPSetupResponse, onCodes
             Text(setup.secret.chunked(4).joinToString(" "), fontFamily = FontFamily.Monospace, style = MaterialTheme.typography.bodyLarge)
         }
         OutlinedButton(onClick = {
-            platform.copy(setup.secret)
+            platform.copy(setup.secret, sensitive = true)
             toasts.show("Key copied.")
         }) { Text("Copy") }
     }
@@ -179,7 +182,7 @@ private fun RecoveryCodes(codes: List<String>, onDone: () -> Unit) {
     }
     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         OutlinedButton(onClick = {
-            platform.copy(codes.joinToString("\n"))
+            platform.copy(codes.joinToString("\n"), sensitive = true)
             toasts.show("Recovery codes copied.")
         }) { Text("Copy") }
         OutlinedButton(onClick = { platform.share(codes.joinToString("\n")) }) { Text("Share") }

@@ -4,8 +4,10 @@ import android.Manifest
 import android.app.Activity
 import android.content.ActivityNotFoundException
 import android.content.ClipData
+import android.content.ClipDescription
 import android.content.ClipboardManager
 import android.content.Context
+import android.content.ContextWrapper
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.media.AudioAttributes
@@ -14,13 +16,16 @@ import android.media.MediaRecorder
 import android.media.projection.MediaProjectionManager
 import android.net.Uri
 import android.os.Build
+import android.os.PersistableBundle
 import android.os.SystemClock
 import android.provider.OpenableColumns
+import android.view.WindowManager
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.browser.customtabs.CustomTabsIntent
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -41,7 +46,9 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import java.io.ByteArrayOutputStream
 import java.io.File
+import java.io.InputStream
 
 /** Android's side of the app; the Application keeps one. */
 class AndroidPlatform(private val context: Context, private val scope: CoroutineScope) : Platform {
@@ -88,9 +95,15 @@ class AndroidPlatform(private val context: Context, private val scope: Coroutine
         context.startActivity(Intent.createChooser(send, null).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
     }
 
-    override fun copy(text: String) {
+    override fun copy(text: String, sensitive: Boolean) {
         val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-        clipboard.setPrimaryClip(ClipData.newPlainText("GoChat", text))
+        val clip = ClipData.newPlainText("GoChat", text)
+        // The system then shows it masked, and keeps it out of its suggestions.
+        if (sensitive) {
+            val key = if (Build.VERSION.SDK_INT >= 33) ClipDescription.EXTRA_IS_SENSITIVE else "android.content.extra.IS_SENSITIVE"
+            clip.description.extras = PersistableBundle().apply { putBoolean(key, true) }
+        }
+        clipboard.setPrimaryClip(clip)
     }
 
     // The browser comes back through MainActivity, which claims the scheme.
@@ -428,7 +441,7 @@ actual fun rememberFilePicker(onPicked: (PickedFile) -> Unit, onError: (String) 
         if (uri != null) {
             scope.launch {
                 try {
-                    picked(readPicked(context, uri))
+                    picked(readPicked(context, uri, photos))
                 } catch (e: Exception) {
                     failed(e.message ?: "Could not read the file.")
                 }
@@ -438,7 +451,8 @@ actual fun rememberFilePicker(onPicked: (PickedFile) -> Unit, onError: (String) 
     return { launcher.launch(if (photos) "image/*" else "*/*") }
 }
 
-private suspend fun readPicked(context: Context, uri: Uri): PickedFile = withContext(Dispatchers.IO) {
+private suspend fun readPicked(context: Context, uri: Uri, photos: Boolean): PickedFile = withContext(Dispatchers.IO) {
+    val (limit, tooLarge) = pickLimit(photos)
     val resolver = context.contentResolver
     var name = "file"
     var size = -1L
@@ -448,12 +462,37 @@ private suspend fun readPicked(context: Context, uri: Uri): PickedFile = withCon
             if (!c.isNull(1)) size = c.getLong(1)
         }
     }
-    if (size > MAX_PICKED_BYTES) throw IllegalArgumentException("The file is too large to send.")
-    val bytes = resolver.openInputStream(uri)?.use { it.readBytes() } ?: throw IllegalStateException("Could not read the file.")
+    if (size > limit) throw IllegalArgumentException(tooLarge)
+    // A provider may not say the size, or say it wrong: the read stops past it.
+    val bytes = resolver.openInputStream(uri)?.use { it.readAtMost(limit) } ?: throw IllegalStateException("Could not read the file.")
+    if (bytes.size > limit) throw IllegalArgumentException(tooLarge)
     PickedFile(name, resolver.getType(uri) ?: "application/octet-stream", bytes)
+}
+
+// Up to limit and one byte more, which says it is larger.
+private fun InputStream.readAtMost(limit: Long): ByteArray {
+    val out = ByteArrayOutputStream()
+    val buf = ByteArray(64 * 1024)
+    while (out.size() <= limit) {
+        val n = read(buf)
+        if (n < 0) break
+        out.write(buf, 0, n)
+    }
+    return out.toByteArray()
 }
 
 @Composable
 actual fun PlatformBackHandler(enabled: Boolean, onBack: () -> Unit) {
     BackHandler(enabled = enabled, onBack = onBack)
+}
+
+@Composable
+actual fun SensitiveScreen() {
+    var context = LocalContext.current
+    while (context !is Activity && context is ContextWrapper) context = context.baseContext
+    val window = (context as? Activity)?.window ?: return
+    DisposableEffect(window) {
+        window.addFlags(WindowManager.LayoutParams.FLAG_SECURE)
+        onDispose { window.clearFlags(WindowManager.LayoutParams.FLAG_SECURE) }
+    }
 }
