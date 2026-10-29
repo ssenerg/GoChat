@@ -213,6 +213,16 @@ class SettingsTest {
     }
 
     @Test
+    fun aNewRoleComesAsTheTeamAgain() = runTest {
+        val session = ChatSession(api(Recorder()), User(id = "u-ann", username = "ann"), MemoryStore(), backgroundScope, null) {}
+        session.event(Event(team_joined = TeamJoined(team = Team(id = "t1", display_name = "Acme", role = TeamRole.TEAM_ROLE_MEMBER))))
+        session.event(Event(team_joined = TeamJoined(team = Team(id = "t2", display_name = "Beta", role = TeamRole.TEAM_ROLE_MEMBER))))
+        // Ann was made an admin of Acme: it keeps its place.
+        session.event(Event(team_joined = TeamJoined(team = Team(id = "t1", display_name = "Acme", role = TeamRole.TEAM_ROLE_ADMIN))))
+        assertEquals(listOf("t1" to TeamRole.TEAM_ROLE_ADMIN, "t2" to TeamRole.TEAM_ROLE_MEMBER), session.state.value.teams.map { it.id to it.role })
+    }
+
+    @Test
     fun theSessionKeepsTheTeamsPhotoAndTwoFactorCurrent() = runTest {
         val r = Recorder()
         r.answers["RemoveTeamPhoto"] = RemoveTeamPhotoResponse(team = Team(id = "t1", display_name = "Acme", role = TeamRole.TEAM_ROLE_ADMIN))

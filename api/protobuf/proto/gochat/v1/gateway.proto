@@ -224,6 +224,8 @@ message Presence {
   Status status = 3;
 }
 
+// TeamJoined tells a person they joined a team, or that their role in it
+// changed: the team as they now see it.
 message TeamJoined {
   Team team = 1;
 }

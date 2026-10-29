@@ -761,7 +761,10 @@ class ChatSession internal constructor(
             }
         }
         ev.team_joined?.team?.let { t ->
-            _state.update { s -> s.copy(teams = s.teams.filter { it.id != t.id } + t) }
+            // A team joined, or one whose role changed, which keeps its place.
+            _state.update { s ->
+                s.copy(teams = if (s.teams.any { it.id == t.id }) s.teams.map { if (it.id == t.id) t else it } else s.teams + t)
+            }
             // While the first load runs, it picks the team.
             if (st.teamId == null && synced) selectTeam(t.id)
         }
