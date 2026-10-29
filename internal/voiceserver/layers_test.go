@@ -247,3 +247,26 @@ func TestAskLayersAsksOnTheCameraSlotOnly(t *testing.T) {
 		t.Fatal("an offer without the slot changed")
 	}
 }
+
+func TestTogglingTheFocusAsksNoMoreThanTheThrottle(t *testing.T) {
+	var asked []int
+	f := newFeed("camera-s", "u:camera", func(layer int) { asked = append(asked, layer) })
+	w := &recorder{}
+	v := f.view(false)
+	v.out, v.ssrc, v.pt = w, 7, 96
+	f.add(v)
+	low := &layerStream{rank: 0, seq: 1, pic: 1}
+	full := &layerStream{rank: 2, seq: 40000, ts: 1 << 30, pic: 9000}
+	f.write(0, low.next(true))
+	f.write(2, full.next(false))
+	// A viewer flips its focus as fast as it may: the first flip asks for
+	// the full layer's keyframe at once, the others within the throttle.
+	for i := range 20 {
+		v.setHigh(i%2 == 0)
+		f.write(2, full.next(false))
+		f.write(0, low.next(false))
+	}
+	if len(asked) != 1 || asked[0] != 2 {
+		t.Fatalf("asked for keyframes of %v", asked)
+	}
+}

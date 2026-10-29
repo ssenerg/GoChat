@@ -159,6 +159,8 @@ type view struct {
 	hasPic, hasTL0 bool
 	lastAt         time.Time
 	asked          time.Time
+	// hurried is when a change of focus last let the view ask at once.
+	hurried time.Time
 	// first is the layer's keyframe; fresh says packets from before it may
 	// still come, late.
 	first   uint16
@@ -269,12 +271,18 @@ func (v *view) keyframe() {
 	}
 }
 
-// setHigh says whether the viewer shows the feed big.
+// setHigh says whether the viewer shows the feed big. The change may ask
+// for a keyframe at once, once per askGap: flipping the focus asks no more
+// often than the viewer's browser may.
 func (v *view) setHigh(high bool) {
 	v.mu.Lock()
 	defer v.mu.Unlock()
-	if v.high != high {
-		v.high, v.asked = high, time.Time{}
+	if v.high == high {
+		return
+	}
+	v.high = high
+	if now := time.Now(); now.Sub(v.hurried) >= askGap {
+		v.asked, v.hurried = time.Time{}, now
 	}
 }
 
