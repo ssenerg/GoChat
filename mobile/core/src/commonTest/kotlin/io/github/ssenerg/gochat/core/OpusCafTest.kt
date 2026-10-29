@@ -146,6 +146,32 @@ class OpusCafTest {
     }
 
     @Test
+    fun hostileRecordingsStayBounded() {
+        val head = ebml(
+            0x1654AE6B,
+            ebml(0xAE, ebml(0xD7, byteArrayOf(1)), ebml(0x86, "A_OPUS".encodeToByteArray()), ebml(0x63A2, opusHead(1, 0))),
+        )
+        val webm = { cluster: List<ByteArray> -> ebml(0x1A45DFA3) + ebml(0x18538067, head, ebml(0x1F43B675, concat(cluster))) }
+        // Blocks of 256 empty frames, laced at a fixed size, hold nothing.
+        val empty = ebml(0xA3, byteArrayOf(0x81.toByte(), 0, 0, 0x84.toByte(), 0xFF.toByte()))
+        val one = packet(19, 0, 1)
+        val caf = Caf(assertNotNull(OpusCaf.rewrap(webm(List(20_000) { empty } + ebml(0xA3, block(1, 0, one))))))
+        assertEquals(1, caf.packets.size)
+        // Packets past the bound are dropped as damage is.
+        val many = ebml(0xA3, block(1, 2, *Array(256) { one }))
+        assertEquals(1 shl 18, Caf(assertNotNull(OpusCaf.rewrap(webm(List(1100) { many })))).packets.size)
+        // A track past the bound ends the walk.
+        val sound = ebml(0x1F43B675, ebml(0xA3, block(1, 0, one)))
+        assertNotNull(OpusCaf.rewrap(ebml(0x1A45DFA3) + ebml(0x18538067, head, sound)))
+        val tracks = ebml(0x1A45DFA3) + ebml(0x18538067, concat(List(100_000) { byteArrayOf(0xAE.toByte(), 0x80.toByte()) }), head, sound)
+        assertNull(OpusCaf.rewrap(tracks))
+        // Ogg's empty packets go too.
+        val emptyPage = page(7, 0, *Array(255) { ByteArray(0) })
+        val ogg = page(7, 0, opusHead(1, 0)) + page(7, 0, "OpusTags".encodeToByteArray()) + concat(List(2_000) { emptyPage }) + page(7, 960, one)
+        assertEquals(1, Caf(assertNotNull(OpusCaf.rewrap(ogg))).packets.size)
+    }
+
+    @Test
     fun packetLengths() {
         assertEquals(480, OpusCaf.samples(packet(0, 0, 1)))
         assertEquals(2880, OpusCaf.samples(packet(3, 0, 1)))
@@ -279,6 +305,16 @@ class OpusCafTest {
             ByteArray(4) { (serial shr (8 * it)).toByte() } +
             ByteArray(8) + byteArrayOf(lacing.size.toByte()) + lacing.toByteArray()
         return packets.fold(header) { a, b -> a + b }
+    }
+
+    private fun concat(parts: List<ByteArray>): ByteArray {
+        val out = ByteArray(parts.sumOf { it.size })
+        var at = 0
+        for (p in parts) {
+            p.copyInto(out, at)
+            at += p.size
+        }
+        return out
     }
 
     private fun ByteArray.indexOf(part: ByteArray, from: Int): Int =
