@@ -45,6 +45,9 @@ class GoChatApi(val client: ApiClient) {
     suspend fun redeemSso(code: String, verifier: String) =
         auth("RedeemSSO", RedeemSSORequest(code = code, verifier = verifier), RedeemSSOResponse.ADAPTER)
 
+    /** The accounts at providers the person signs in with. */
+    suspend fun ssoIdentities() = auth("ListSSOIdentities", ListSSOIdentitiesRequest(), ListSSOIdentitiesResponse.ADAPTER).identities
+
     /** Ties the device's push token to the session; false when the server pushes nowhere. */
     suspend fun registerDevice(platform: PushPlatform, token: String, sandbox: Boolean) =
         client.call(
@@ -74,6 +77,19 @@ class GoChatApi(val client: ApiClient) {
     /** Turns it off with the password and a code of the app or a recovery code. */
     suspend fun disableTotp(password: String, code: String) {
         auth("DisableTOTP", DisableTOTPRequest(password = password, code = code), DisableTOTPResponse.ADAPTER)
+    }
+
+    /**
+     * Deletes the account for good, with its password or, for one without,
+     * the code and verifier of a sign-in again in the browser; and a
+     * two-factor code when it is on.
+     */
+    suspend fun deleteAccount(password: String, code: String, ssoCode: String = "", ssoVerifier: String = "") {
+        auth(
+            "DeleteAccount",
+            DeleteAccountRequest(password = password, code = code, sso_token = ssoCode, sso_verifier = ssoVerifier),
+            DeleteAccountResponse.ADAPTER,
+        )
     }
 
     // People.
@@ -114,6 +130,10 @@ class GoChatApi(val client: ApiClient) {
 
     suspend fun removeMember(teamId: String, userId: String) {
         teams("RemoveTeamMember", RemoveTeamMemberRequest(team_id = teamId, user_id = userId), RemoveTeamMemberResponse.ADAPTER)
+    }
+
+    suspend fun leaveTeam(teamId: String) {
+        teams("LeaveTeam", LeaveTeamRequest(team_id = teamId), LeaveTeamResponse.ADAPTER)
     }
 
     suspend fun removeTeamPhoto(teamId: String) =

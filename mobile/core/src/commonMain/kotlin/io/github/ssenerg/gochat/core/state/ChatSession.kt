@@ -142,6 +142,11 @@ class ChatSession internal constructor(
 
     private val _answers = MutableSharedFlow<BotAnswer>(extraBufferCapacity = 8)
 
+    private val _membersChanged = MutableSharedFlow<String>(extraBufferCapacity = 8)
+
+    /** The teams someone left, whose member lists show it on reloading. */
+    val membersChanged: SharedFlow<String> = _membersChanged.asSharedFlow()
+
     /** Bots' answers to the buttons this device pressed. */
     val answers: SharedFlow<BotAnswer> = _answers.asSharedFlow()
 
@@ -293,6 +298,29 @@ class ChatSession internal constructor(
             if (teamId != null) loadSidebar() else _state.update { it.copy(loading = false) }
         } catch (e: Exception) {
             fail(e)
+        }
+    }
+
+    /** Reads the teams again, for what changed in them, keeping the one shown. */
+    private suspend fun refreshTeams() {
+        try {
+            val teams = api.listTeams()
+            _state.update { s -> s.copy(teams = s.teams.map { t -> teams.firstOrNull { it.id == t.id } ?: t }) }
+        } catch (e: CancellationException) {
+            throw e
+        } catch (_: Exception) {
+            // The next load has them.
+        }
+    }
+
+    /** Forgets a team the person left, and opens another if it was shown. */
+    private fun leftTeam(teamId: String) {
+        val wasShown = _state.value.teamId == teamId
+        _state.update { s -> s.copy(teams = s.teams.filter { it.id != teamId }) }
+        if (wasShown) {
+            val next = _state.value.teams.firstOrNull()?.id
+            _state.update { it.copy(teamId = null, channels = emptyList()) }
+            if (next != null) selectTeam(next)
         }
     }
 
@@ -593,6 +621,33 @@ class ChatSession internal constructor(
         _state.update { it.copy(me = it.me.copy(totp_enabled = false)) }
     }
 
+    /**
+     * Deletes the person's account for good, with their [password] or a
+     * [proof] of signing in again, and a two-factor [code]; the app then
+     * signs out. Returns why not, or null.
+     */
+    suspend fun deleteAccount(password: String, code: String, proof: Reauth.Proof? = null): String? {
+        // The server ends the session with the account: no surprise.
+        signingOut = true
+        return try {
+            api.deleteAccount(password, code.trim(), proof?.code.orEmpty(), proof?.verifier.orEmpty())
+            onSignedOut("Your account was deleted.")
+            null
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            signingOut = false
+            if (socket.connection.value is Connection.SignedOut) onSignedOut("Your session ended. Sign in again.")
+            e.userMessage()
+        }
+    }
+
+    /** Takes the person out of a team, its channels and conversations; returns why not, or null. */
+    suspend fun leaveTeam(teamId: String): String? = act {
+        api.leaveTeam(teamId)
+        leftTeam(teamId)
+    }
+
     suspend fun setTeamPhoto(teamId: String, picture: ByteArray): String? = photoProblem(picture) ?: act {
         putTeam(api.client.setTeamPhoto(teamId, picture))
     }
@@ -771,13 +826,12 @@ class ChatSession internal constructor(
             // While the first load runs, it picks the team.
             if (st.teamId == null && synced) selectTeam(t.id)
         }
-        ev.team_left?.let { left ->
-            _state.update { s -> s.copy(teams = s.teams.filter { it.id != left.team_id }) }
-            if (st.teamId == left.team_id) {
-                val next = _state.value.teams.firstOrNull()?.id
-                _state.update { it.copy(teamId = null, channels = emptyList()) }
-                if (next != null) selectTeam(next)
-            }
+        ev.team_left?.let { leftTeam(it.team_id) }
+        ev.team_members_changed?.let { ch ->
+            _membersChanged.tryEmit(ch.team_id)
+            // Their conversations went with them; an owner handed the team on.
+            if (ch.team_id == st.teamId) scope.launch { loadSidebar() }
+            if (st.teams.any { it.id == ch.team_id && it.owner_id == ch.user_id }) scope.launch { refreshTeams() }
         }
         ev.voice_channel_update?.let { up ->
             val ch = up.channel ?: return@let

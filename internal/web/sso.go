@@ -124,7 +124,8 @@ func (h *Handler) ssoStart(w http.ResponseWriter, r *http.Request) {
 	}
 	ctx, cancel := h.client.Context(r.Context(), h.anonymousCtx(r))
 	defer cancel()
-	res, err := h.client.Auth.BeginSSO(ctx, &pb.BeginSSORequest{ProviderId: id, RedirectUri: h.cfg.PublicURL + ssoCallback, AppChallenge: q.Get("app")})
+	// An app signing in again, to delete its account, asks with reauth.
+	res, err := h.client.Auth.BeginSSO(ctx, &pb.BeginSSORequest{ProviderId: id, RedirectUri: h.cfg.PublicURL + ssoCallback, AppChallenge: q.Get("app"), Reauth: q.Has("reauth")})
 	if err != nil {
 		e := drpc.Err(err)
 		if e.Code == ierrors.CodeNotFound && !f.App {

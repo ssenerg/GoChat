@@ -216,3 +216,17 @@ func TestAFailedDeletionSpendsTheSignInAgain(t *testing.T) {
 		t.Fatal("the spent proof stayed")
 	}
 }
+
+func TestAnAppSignsInAgainToDelete(t *testing.T) {
+	b, auth := newFlow(t)
+	challenge := strings.Repeat("c", 43)
+	state := b.toProvider("/login/sso/corp?app=" + challenge + "&reauth=1")
+	if got := auth.begun[0]; got.AppChallenge != challenge || !got.Reauth {
+		t.Fatalf("begin: %+v", got)
+	}
+	b.expect(b.do(http.MethodGet, ssoCallback+"?code=app&state="+state, nil), http.StatusSeeOther, appRedirect+"?code=app-code")
+	b.toProvider("/login/sso/corp?app=" + challenge)
+	if auth.begun[1].Reauth {
+		t.Fatal("a sign-in asked to sign in again")
+	}
+}
