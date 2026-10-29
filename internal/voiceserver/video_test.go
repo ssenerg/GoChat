@@ -329,6 +329,9 @@ type layeredCamera struct {
 	on   bool
 	plis map[string]int
 	want map[string]bool
+	// full, when movable, sends the full layer on another SSRC when told.
+	movable bool
+	full    *movingTrack
 }
 
 func (cam *layeredCamera) attach(c *client, sl *slots) {
@@ -348,7 +351,7 @@ func (cam *layeredCamera) attach(c *client, sl *slots) {
 		cam.t.Error("no slot for the camera")
 		return
 	}
-	tracks := make([]*webrtc.TrackLocalStaticRTP, len(rids))
+	tracks := make([]layerTrack, len(rids))
 	for i, rid := range rids {
 		track, err := webrtc.NewTrackLocalStaticRTP(webrtc.RTPCodecCapability{MimeType: webrtc.MimeTypeVP8, ClockRate: 90000}, "camera", "local", webrtc.WithRTPStreamID(rid))
 		if err != nil {
@@ -356,6 +359,10 @@ func (cam *layeredCamera) attach(c *client, sl *slots) {
 			return
 		}
 		tracks[i] = track
+		if rid == "f" && cam.movable {
+			cam.full = &movingTrack{TrackLocalStaticRTP: track}
+			tracks[i] = cam.full
+		}
 	}
 	s, err := c.api.NewRTPSender(tracks[0], c.pc.SCTP().Transport())
 	if err != nil {
@@ -573,4 +580,49 @@ func TestAViewerGetsTheLayerThatFitsItsTile(t *testing.T) {
 		t.Fatalf("bob got alice's camera on %d tracks", tracks)
 	}
 	eventually(t, "bob gets reports on it", func() bool { return bob.reported("alice:camera") > 0 })
+}
+
+// layerTrack is a layer of a test camera.
+type layerTrack interface {
+	webrtc.TrackLocal
+	WriteRTP(p *rtp.Packet) error
+}
+
+// movingTrack sends its packets on another SSRC once told, as a hostile
+// client may: their mid and rid stay, and name a layer the server has.
+type movingTrack struct {
+	*webrtc.TrackLocalStaticRTP
+	mu sync.Mutex
+	w  webrtc.TrackLocalWriter
+	pt webrtc.PayloadType
+	to uint32
+}
+
+func (m *movingTrack) Bind(ctx webrtc.TrackLocalContext) (webrtc.RTPCodecParameters, error) {
+	codec, err := m.TrackLocalStaticRTP.Bind(ctx)
+	if err == nil {
+		m.mu.Lock()
+		m.w, m.pt = ctx.WriteStream(), codec.PayloadType
+		m.mu.Unlock()
+	}
+	return codec, err
+}
+
+func (m *movingTrack) move(ssrc uint32) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.to = ssrc
+}
+
+func (m *movingTrack) WriteRTP(p *rtp.Packet) error {
+	m.mu.Lock()
+	w, pt, to := m.w, m.pt, m.to
+	m.mu.Unlock()
+	if to == 0 || w == nil {
+		return m.TrackLocalStaticRTP.WriteRTP(p)
+	}
+	h := p.Header
+	h.SSRC, h.PayloadType = to, uint8(pt)
+	_, err := w.WriteRTP(&h, p.Payload)
+	return err
 }
