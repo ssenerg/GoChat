@@ -5,6 +5,12 @@
 	<!-- Pushes from the server. Xcode sets production when it signs for the App Store or TestFlight. -->
 	<key>aps-environment</key>
 	<string>development</string>
+	<!-- Its Keychain items, which the notification service extension reads too.
+	     The group is the app's own, where they were before: none moves. -->
+	<key>keychain-access-groups</key>
+	<array>
+		<string>$(AppIdentifierPrefix)$(GOCHAT_BUNDLE_ID)</string>
+	</array>
 	<!-- The app and its broadcast extension share a container, where the screen passes between them. -->
 	<key>com.apple.security.application-groups</key>
 	<array>
