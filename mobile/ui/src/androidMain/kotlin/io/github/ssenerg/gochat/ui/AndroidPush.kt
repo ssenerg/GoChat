@@ -32,6 +32,10 @@ class AndroidPush(private val context: Context) : PushService {
 
     private val on: Boolean get() = FirebaseApp.getApps(context).isNotEmpty()
 
+    // Whether someone is signed in: a push that comes after signing out,
+    // before FCM forgot the token, is someone else's.
+    @Volatile private var wanted = false
+
     init {
         current = this
         // The channel the server's pushes name.
@@ -40,6 +44,7 @@ class AndroidPush(private val context: Context) : PushService {
     }
 
     override fun enable() {
+        wanted = true
         if (!on) return
         val messaging = FirebaseMessaging.getInstance()
         messaging.isAutoInitEnabled = true
@@ -47,6 +52,7 @@ class AndroidPush(private val context: Context) : PushService {
     }
 
     override fun disable() {
+        wanted = false
         _token.value = null
         if (!on) return
         val messaging = FirebaseMessaging.getInstance()
@@ -60,6 +66,7 @@ class AndroidPush(private val context: Context) : PushService {
 
     /** Shows a push that came while the app ran: the system shows the others. */
     internal fun show(title: String, body: String, data: Map<String, String>) {
+        if (!wanted) return
         if (Build.VERSION.SDK_INT >= 33 && context.checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) return
         val open = context.packageManager.getLaunchIntentForPackage(context.packageName) ?: return
         data.forEach { (k, v) -> open.putExtra(k, v) }
