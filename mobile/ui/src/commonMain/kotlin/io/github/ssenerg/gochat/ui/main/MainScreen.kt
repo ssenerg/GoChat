@@ -123,6 +123,12 @@ class Navigator {
         if (stack.size > 1) stack.removeAt(stack.lastIndex)
     }
 
+    /** Closes every screen but the sidebar. */
+    fun home() {
+        stack.clear()
+        stack.add(Route.Home)
+    }
+
     /** Closes every screen showing [channelId], when the person leaves it. */
     fun closeChannel(channelId: String) {
         stack.removeAll { (it is Route.Channel && it.id == channelId) || (it is Route.Thread && it.channelId == channelId) || (it is Route.ChannelInfo && it.id == channelId) }

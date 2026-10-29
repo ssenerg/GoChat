@@ -21,6 +21,8 @@ type loginData struct {
 	// one that signing in links.
 	Providers []*pb.SSOProvider
 	Link      *pb.GetSSOLinkResponse
+	// Deleted says the account signed out here was just deleted.
+	Deleted bool
 }
 
 func (h *Handler) loginData(w http.ResponseWriter, r *http.Request, next, msg string) loginData {
@@ -58,7 +60,9 @@ func (h *Handler) loginPage(w http.ResponseWriter, r *http.Request) {
 		http.Redirect(w, r, safeNext(next), http.StatusSeeOther) //nolint:gosec // safeNext keeps it on this site
 		return
 	}
-	h.page(w, r, http.StatusOK, "login", h.loginData(w, r, next, ""))
+	data := h.loginData(w, r, next, "")
+	data.Deleted = r.URL.Query().Has("deleted")
+	h.page(w, r, http.StatusOK, "login", data)
 }
 
 func (h *Handler) login(w http.ResponseWriter, r *http.Request) {

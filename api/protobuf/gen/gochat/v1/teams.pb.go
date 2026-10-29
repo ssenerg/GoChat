@@ -543,6 +543,86 @@ func (*RemoveTeamMemberResponse) Descriptor() ([]byte, []int) {
 	return file_gochat_v1_teams_proto_rawDescGZIP(), []int{9}
 }
 
+type LeaveTeamRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	TeamId        string                 `protobuf:"bytes,1,opt,name=team_id,json=teamId,proto3" json:"team_id,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *LeaveTeamRequest) Reset() {
+	*x = LeaveTeamRequest{}
+	mi := &file_gochat_v1_teams_proto_msgTypes[10]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *LeaveTeamRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*LeaveTeamRequest) ProtoMessage() {}
+
+func (x *LeaveTeamRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_gochat_v1_teams_proto_msgTypes[10]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use LeaveTeamRequest.ProtoReflect.Descriptor instead.
+func (*LeaveTeamRequest) Descriptor() ([]byte, []int) {
+	return file_gochat_v1_teams_proto_rawDescGZIP(), []int{10}
+}
+
+func (x *LeaveTeamRequest) GetTeamId() string {
+	if x != nil {
+		return x.TeamId
+	}
+	return ""
+}
+
+type LeaveTeamResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *LeaveTeamResponse) Reset() {
+	*x = LeaveTeamResponse{}
+	mi := &file_gochat_v1_teams_proto_msgTypes[11]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *LeaveTeamResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*LeaveTeamResponse) ProtoMessage() {}
+
+func (x *LeaveTeamResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_gochat_v1_teams_proto_msgTypes[11]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use LeaveTeamResponse.ProtoReflect.Descriptor instead.
+func (*LeaveTeamResponse) Descriptor() ([]byte, []int) {
+	return file_gochat_v1_teams_proto_rawDescGZIP(), []int{11}
+}
+
 type UpdateTeamMemberRoleRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	TeamId        string                 `protobuf:"bytes,1,opt,name=team_id,json=teamId,proto3" json:"team_id,omitempty"`
@@ -554,7 +634,7 @@ type UpdateTeamMemberRoleRequest struct {
 
 func (x *UpdateTeamMemberRoleRequest) Reset() {
 	*x = UpdateTeamMemberRoleRequest{}
-	mi := &file_gochat_v1_teams_proto_msgTypes[10]
+	mi := &file_gochat_v1_teams_proto_msgTypes[12]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -566,7 +646,7 @@ func (x *UpdateTeamMemberRoleRequest) String() string {
 func (*UpdateTeamMemberRoleRequest) ProtoMessage() {}
 
 func (x *UpdateTeamMemberRoleRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_gochat_v1_teams_proto_msgTypes[10]
+	mi := &file_gochat_v1_teams_proto_msgTypes[12]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -579,7 +659,7 @@ func (x *UpdateTeamMemberRoleRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use UpdateTeamMemberRoleRequest.ProtoReflect.Descriptor instead.
 func (*UpdateTeamMemberRoleRequest) Descriptor() ([]byte, []int) {
-	return file_gochat_v1_teams_proto_rawDescGZIP(), []int{10}
+	return file_gochat_v1_teams_proto_rawDescGZIP(), []int{12}
 }
 
 func (x *UpdateTeamMemberRoleRequest) GetTeamId() string {
@@ -611,7 +691,7 @@ type UpdateTeamMemberRoleResponse struct {
 
 func (x *UpdateTeamMemberRoleResponse) Reset() {
 	*x = UpdateTeamMemberRoleResponse{}
-	mi := &file_gochat_v1_teams_proto_msgTypes[11]
+	mi := &file_gochat_v1_teams_proto_msgTypes[13]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -623,7 +703,7 @@ func (x *UpdateTeamMemberRoleResponse) String() string {
 func (*UpdateTeamMemberRoleResponse) ProtoMessage() {}
 
 func (x *UpdateTeamMemberRoleResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_gochat_v1_teams_proto_msgTypes[11]
+	mi := &file_gochat_v1_teams_proto_msgTypes[13]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -636,7 +716,7 @@ func (x *UpdateTeamMemberRoleResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use UpdateTeamMemberRoleResponse.ProtoReflect.Descriptor instead.
 func (*UpdateTeamMemberRoleResponse) Descriptor() ([]byte, []int) {
-	return file_gochat_v1_teams_proto_rawDescGZIP(), []int{11}
+	return file_gochat_v1_teams_proto_rawDescGZIP(), []int{13}
 }
 
 type CreateInviteRequest struct {
@@ -648,7 +728,7 @@ type CreateInviteRequest struct {
 
 func (x *CreateInviteRequest) Reset() {
 	*x = CreateInviteRequest{}
-	mi := &file_gochat_v1_teams_proto_msgTypes[12]
+	mi := &file_gochat_v1_teams_proto_msgTypes[14]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -660,7 +740,7 @@ func (x *CreateInviteRequest) String() string {
 func (*CreateInviteRequest) ProtoMessage() {}
 
 func (x *CreateInviteRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_gochat_v1_teams_proto_msgTypes[12]
+	mi := &file_gochat_v1_teams_proto_msgTypes[14]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -673,7 +753,7 @@ func (x *CreateInviteRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CreateInviteRequest.ProtoReflect.Descriptor instead.
 func (*CreateInviteRequest) Descriptor() ([]byte, []int) {
-	return file_gochat_v1_teams_proto_rawDescGZIP(), []int{12}
+	return file_gochat_v1_teams_proto_rawDescGZIP(), []int{14}
 }
 
 func (x *CreateInviteRequest) GetTeamId() string {
@@ -694,7 +774,7 @@ type CreateInviteResponse struct {
 
 func (x *CreateInviteResponse) Reset() {
 	*x = CreateInviteResponse{}
-	mi := &file_gochat_v1_teams_proto_msgTypes[13]
+	mi := &file_gochat_v1_teams_proto_msgTypes[15]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -706,7 +786,7 @@ func (x *CreateInviteResponse) String() string {
 func (*CreateInviteResponse) ProtoMessage() {}
 
 func (x *CreateInviteResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_gochat_v1_teams_proto_msgTypes[13]
+	mi := &file_gochat_v1_teams_proto_msgTypes[15]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -719,7 +799,7 @@ func (x *CreateInviteResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CreateInviteResponse.ProtoReflect.Descriptor instead.
 func (*CreateInviteResponse) Descriptor() ([]byte, []int) {
-	return file_gochat_v1_teams_proto_rawDescGZIP(), []int{13}
+	return file_gochat_v1_teams_proto_rawDescGZIP(), []int{15}
 }
 
 func (x *CreateInviteResponse) GetToken() string {
@@ -745,7 +825,7 @@ type GetInviteRequest struct {
 
 func (x *GetInviteRequest) Reset() {
 	*x = GetInviteRequest{}
-	mi := &file_gochat_v1_teams_proto_msgTypes[14]
+	mi := &file_gochat_v1_teams_proto_msgTypes[16]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -757,7 +837,7 @@ func (x *GetInviteRequest) String() string {
 func (*GetInviteRequest) ProtoMessage() {}
 
 func (x *GetInviteRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_gochat_v1_teams_proto_msgTypes[14]
+	mi := &file_gochat_v1_teams_proto_msgTypes[16]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -770,7 +850,7 @@ func (x *GetInviteRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetInviteRequest.ProtoReflect.Descriptor instead.
 func (*GetInviteRequest) Descriptor() ([]byte, []int) {
-	return file_gochat_v1_teams_proto_rawDescGZIP(), []int{14}
+	return file_gochat_v1_teams_proto_rawDescGZIP(), []int{16}
 }
 
 func (x *GetInviteRequest) GetToken() string {
@@ -790,7 +870,7 @@ type GetInviteResponse struct {
 
 func (x *GetInviteResponse) Reset() {
 	*x = GetInviteResponse{}
-	mi := &file_gochat_v1_teams_proto_msgTypes[15]
+	mi := &file_gochat_v1_teams_proto_msgTypes[17]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -802,7 +882,7 @@ func (x *GetInviteResponse) String() string {
 func (*GetInviteResponse) ProtoMessage() {}
 
 func (x *GetInviteResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_gochat_v1_teams_proto_msgTypes[15]
+	mi := &file_gochat_v1_teams_proto_msgTypes[17]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -815,7 +895,7 @@ func (x *GetInviteResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetInviteResponse.ProtoReflect.Descriptor instead.
 func (*GetInviteResponse) Descriptor() ([]byte, []int) {
-	return file_gochat_v1_teams_proto_rawDescGZIP(), []int{15}
+	return file_gochat_v1_teams_proto_rawDescGZIP(), []int{17}
 }
 
 func (x *GetInviteResponse) GetValid() bool {
@@ -841,7 +921,7 @@ type AcceptInviteRequest struct {
 
 func (x *AcceptInviteRequest) Reset() {
 	*x = AcceptInviteRequest{}
-	mi := &file_gochat_v1_teams_proto_msgTypes[16]
+	mi := &file_gochat_v1_teams_proto_msgTypes[18]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -853,7 +933,7 @@ func (x *AcceptInviteRequest) String() string {
 func (*AcceptInviteRequest) ProtoMessage() {}
 
 func (x *AcceptInviteRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_gochat_v1_teams_proto_msgTypes[16]
+	mi := &file_gochat_v1_teams_proto_msgTypes[18]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -866,7 +946,7 @@ func (x *AcceptInviteRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AcceptInviteRequest.ProtoReflect.Descriptor instead.
 func (*AcceptInviteRequest) Descriptor() ([]byte, []int) {
-	return file_gochat_v1_teams_proto_rawDescGZIP(), []int{16}
+	return file_gochat_v1_teams_proto_rawDescGZIP(), []int{18}
 }
 
 func (x *AcceptInviteRequest) GetToken() string {
@@ -885,7 +965,7 @@ type AcceptInviteResponse struct {
 
 func (x *AcceptInviteResponse) Reset() {
 	*x = AcceptInviteResponse{}
-	mi := &file_gochat_v1_teams_proto_msgTypes[17]
+	mi := &file_gochat_v1_teams_proto_msgTypes[19]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -897,7 +977,7 @@ func (x *AcceptInviteResponse) String() string {
 func (*AcceptInviteResponse) ProtoMessage() {}
 
 func (x *AcceptInviteResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_gochat_v1_teams_proto_msgTypes[17]
+	mi := &file_gochat_v1_teams_proto_msgTypes[19]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -910,7 +990,7 @@ func (x *AcceptInviteResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AcceptInviteResponse.ProtoReflect.Descriptor instead.
 func (*AcceptInviteResponse) Descriptor() ([]byte, []int) {
-	return file_gochat_v1_teams_proto_rawDescGZIP(), []int{17}
+	return file_gochat_v1_teams_proto_rawDescGZIP(), []int{19}
 }
 
 func (x *AcceptInviteResponse) GetTeam() *Team {
@@ -931,7 +1011,7 @@ type ListInvitesRequest struct {
 
 func (x *ListInvitesRequest) Reset() {
 	*x = ListInvitesRequest{}
-	mi := &file_gochat_v1_teams_proto_msgTypes[18]
+	mi := &file_gochat_v1_teams_proto_msgTypes[20]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -943,7 +1023,7 @@ func (x *ListInvitesRequest) String() string {
 func (*ListInvitesRequest) ProtoMessage() {}
 
 func (x *ListInvitesRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_gochat_v1_teams_proto_msgTypes[18]
+	mi := &file_gochat_v1_teams_proto_msgTypes[20]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -956,7 +1036,7 @@ func (x *ListInvitesRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListInvitesRequest.ProtoReflect.Descriptor instead.
 func (*ListInvitesRequest) Descriptor() ([]byte, []int) {
-	return file_gochat_v1_teams_proto_rawDescGZIP(), []int{18}
+	return file_gochat_v1_teams_proto_rawDescGZIP(), []int{20}
 }
 
 func (x *ListInvitesRequest) GetTeamId() string {
@@ -989,7 +1069,7 @@ type InviteSummary struct {
 
 func (x *InviteSummary) Reset() {
 	*x = InviteSummary{}
-	mi := &file_gochat_v1_teams_proto_msgTypes[19]
+	mi := &file_gochat_v1_teams_proto_msgTypes[21]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1001,7 +1081,7 @@ func (x *InviteSummary) String() string {
 func (*InviteSummary) ProtoMessage() {}
 
 func (x *InviteSummary) ProtoReflect() protoreflect.Message {
-	mi := &file_gochat_v1_teams_proto_msgTypes[19]
+	mi := &file_gochat_v1_teams_proto_msgTypes[21]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1014,7 +1094,7 @@ func (x *InviteSummary) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use InviteSummary.ProtoReflect.Descriptor instead.
 func (*InviteSummary) Descriptor() ([]byte, []int) {
-	return file_gochat_v1_teams_proto_rawDescGZIP(), []int{19}
+	return file_gochat_v1_teams_proto_rawDescGZIP(), []int{21}
 }
 
 func (x *InviteSummary) GetId() string {
@@ -1063,7 +1143,7 @@ type ListInvitesResponse struct {
 
 func (x *ListInvitesResponse) Reset() {
 	*x = ListInvitesResponse{}
-	mi := &file_gochat_v1_teams_proto_msgTypes[20]
+	mi := &file_gochat_v1_teams_proto_msgTypes[22]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1075,7 +1155,7 @@ func (x *ListInvitesResponse) String() string {
 func (*ListInvitesResponse) ProtoMessage() {}
 
 func (x *ListInvitesResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_gochat_v1_teams_proto_msgTypes[20]
+	mi := &file_gochat_v1_teams_proto_msgTypes[22]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1088,7 +1168,7 @@ func (x *ListInvitesResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListInvitesResponse.ProtoReflect.Descriptor instead.
 func (*ListInvitesResponse) Descriptor() ([]byte, []int) {
-	return file_gochat_v1_teams_proto_rawDescGZIP(), []int{20}
+	return file_gochat_v1_teams_proto_rawDescGZIP(), []int{22}
 }
 
 func (x *ListInvitesResponse) GetInvites() []*InviteSummary {
@@ -1115,7 +1195,7 @@ type RevokeInviteRequest struct {
 
 func (x *RevokeInviteRequest) Reset() {
 	*x = RevokeInviteRequest{}
-	mi := &file_gochat_v1_teams_proto_msgTypes[21]
+	mi := &file_gochat_v1_teams_proto_msgTypes[23]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1127,7 +1207,7 @@ func (x *RevokeInviteRequest) String() string {
 func (*RevokeInviteRequest) ProtoMessage() {}
 
 func (x *RevokeInviteRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_gochat_v1_teams_proto_msgTypes[21]
+	mi := &file_gochat_v1_teams_proto_msgTypes[23]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1140,7 +1220,7 @@ func (x *RevokeInviteRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RevokeInviteRequest.ProtoReflect.Descriptor instead.
 func (*RevokeInviteRequest) Descriptor() ([]byte, []int) {
-	return file_gochat_v1_teams_proto_rawDescGZIP(), []int{21}
+	return file_gochat_v1_teams_proto_rawDescGZIP(), []int{23}
 }
 
 func (x *RevokeInviteRequest) GetTeamId() string {
@@ -1165,7 +1245,7 @@ type RevokeInviteResponse struct {
 
 func (x *RevokeInviteResponse) Reset() {
 	*x = RevokeInviteResponse{}
-	mi := &file_gochat_v1_teams_proto_msgTypes[22]
+	mi := &file_gochat_v1_teams_proto_msgTypes[24]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1177,7 +1257,7 @@ func (x *RevokeInviteResponse) String() string {
 func (*RevokeInviteResponse) ProtoMessage() {}
 
 func (x *RevokeInviteResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_gochat_v1_teams_proto_msgTypes[22]
+	mi := &file_gochat_v1_teams_proto_msgTypes[24]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1190,7 +1270,7 @@ func (x *RevokeInviteResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RevokeInviteResponse.ProtoReflect.Descriptor instead.
 func (*RevokeInviteResponse) Descriptor() ([]byte, []int) {
-	return file_gochat_v1_teams_proto_rawDescGZIP(), []int{22}
+	return file_gochat_v1_teams_proto_rawDescGZIP(), []int{24}
 }
 
 type SetTeamPhotoRequest struct {
@@ -1203,7 +1283,7 @@ type SetTeamPhotoRequest struct {
 
 func (x *SetTeamPhotoRequest) Reset() {
 	*x = SetTeamPhotoRequest{}
-	mi := &file_gochat_v1_teams_proto_msgTypes[23]
+	mi := &file_gochat_v1_teams_proto_msgTypes[25]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1215,7 +1295,7 @@ func (x *SetTeamPhotoRequest) String() string {
 func (*SetTeamPhotoRequest) ProtoMessage() {}
 
 func (x *SetTeamPhotoRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_gochat_v1_teams_proto_msgTypes[23]
+	mi := &file_gochat_v1_teams_proto_msgTypes[25]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1228,7 +1308,7 @@ func (x *SetTeamPhotoRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SetTeamPhotoRequest.ProtoReflect.Descriptor instead.
 func (*SetTeamPhotoRequest) Descriptor() ([]byte, []int) {
-	return file_gochat_v1_teams_proto_rawDescGZIP(), []int{23}
+	return file_gochat_v1_teams_proto_rawDescGZIP(), []int{25}
 }
 
 func (x *SetTeamPhotoRequest) GetTeamId() string {
@@ -1254,7 +1334,7 @@ type SetTeamPhotoResponse struct {
 
 func (x *SetTeamPhotoResponse) Reset() {
 	*x = SetTeamPhotoResponse{}
-	mi := &file_gochat_v1_teams_proto_msgTypes[24]
+	mi := &file_gochat_v1_teams_proto_msgTypes[26]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1266,7 +1346,7 @@ func (x *SetTeamPhotoResponse) String() string {
 func (*SetTeamPhotoResponse) ProtoMessage() {}
 
 func (x *SetTeamPhotoResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_gochat_v1_teams_proto_msgTypes[24]
+	mi := &file_gochat_v1_teams_proto_msgTypes[26]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1279,7 +1359,7 @@ func (x *SetTeamPhotoResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SetTeamPhotoResponse.ProtoReflect.Descriptor instead.
 func (*SetTeamPhotoResponse) Descriptor() ([]byte, []int) {
-	return file_gochat_v1_teams_proto_rawDescGZIP(), []int{24}
+	return file_gochat_v1_teams_proto_rawDescGZIP(), []int{26}
 }
 
 func (x *SetTeamPhotoResponse) GetTeam() *Team {
@@ -1298,7 +1378,7 @@ type RemoveTeamPhotoRequest struct {
 
 func (x *RemoveTeamPhotoRequest) Reset() {
 	*x = RemoveTeamPhotoRequest{}
-	mi := &file_gochat_v1_teams_proto_msgTypes[25]
+	mi := &file_gochat_v1_teams_proto_msgTypes[27]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1310,7 +1390,7 @@ func (x *RemoveTeamPhotoRequest) String() string {
 func (*RemoveTeamPhotoRequest) ProtoMessage() {}
 
 func (x *RemoveTeamPhotoRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_gochat_v1_teams_proto_msgTypes[25]
+	mi := &file_gochat_v1_teams_proto_msgTypes[27]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1323,7 +1403,7 @@ func (x *RemoveTeamPhotoRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RemoveTeamPhotoRequest.ProtoReflect.Descriptor instead.
 func (*RemoveTeamPhotoRequest) Descriptor() ([]byte, []int) {
-	return file_gochat_v1_teams_proto_rawDescGZIP(), []int{25}
+	return file_gochat_v1_teams_proto_rawDescGZIP(), []int{27}
 }
 
 func (x *RemoveTeamPhotoRequest) GetTeamId() string {
@@ -1342,7 +1422,7 @@ type RemoveTeamPhotoResponse struct {
 
 func (x *RemoveTeamPhotoResponse) Reset() {
 	*x = RemoveTeamPhotoResponse{}
-	mi := &file_gochat_v1_teams_proto_msgTypes[26]
+	mi := &file_gochat_v1_teams_proto_msgTypes[28]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1354,7 +1434,7 @@ func (x *RemoveTeamPhotoResponse) String() string {
 func (*RemoveTeamPhotoResponse) ProtoMessage() {}
 
 func (x *RemoveTeamPhotoResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_gochat_v1_teams_proto_msgTypes[26]
+	mi := &file_gochat_v1_teams_proto_msgTypes[28]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1367,7 +1447,7 @@ func (x *RemoveTeamPhotoResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RemoveTeamPhotoResponse.ProtoReflect.Descriptor instead.
 func (*RemoveTeamPhotoResponse) Descriptor() ([]byte, []int) {
-	return file_gochat_v1_teams_proto_rawDescGZIP(), []int{26}
+	return file_gochat_v1_teams_proto_rawDescGZIP(), []int{28}
 }
 
 func (x *RemoveTeamPhotoResponse) GetTeam() *Team {
@@ -1408,7 +1488,10 @@ const file_gochat_v1_teams_proto_rawDesc = "" +
 	"\x17RemoveTeamMemberRequest\x12\x17\n" +
 	"\ateam_id\x18\x01 \x01(\tR\x06teamId\x12\x17\n" +
 	"\auser_id\x18\x02 \x01(\tR\x06userId\"\x1a\n" +
-	"\x18RemoveTeamMemberResponse\"x\n" +
+	"\x18RemoveTeamMemberResponse\"+\n" +
+	"\x10LeaveTeamRequest\x12\x17\n" +
+	"\ateam_id\x18\x01 \x01(\tR\x06teamId\"\x13\n" +
+	"\x11LeaveTeamResponse\"x\n" +
 	"\x1bUpdateTeamMemberRoleRequest\x12\x17\n" +
 	"\ateam_id\x18\x01 \x01(\tR\x06teamId\x12\x17\n" +
 	"\auser_id\x18\x02 \x01(\tR\x06userId\x12'\n" +
@@ -1456,14 +1539,15 @@ const file_gochat_v1_teams_proto_rawDesc = "" +
 	"\x16RemoveTeamPhotoRequest\x12\x17\n" +
 	"\ateam_id\x18\x01 \x01(\tR\x06teamId\">\n" +
 	"\x17RemoveTeamPhotoResponse\x12#\n" +
-	"\x04team\x18\x01 \x01(\v2\x0f.gochat.v1.TeamR\x04team2\xb6\b\n" +
+	"\x04team\x18\x01 \x01(\v2\x0f.gochat.v1.TeamR\x04team2\xfe\b\n" +
 	"\vTeamService\x12I\n" +
 	"\n" +
 	"CreateTeam\x12\x1c.gochat.v1.CreateTeamRequest\x1a\x1d.gochat.v1.CreateTeamResponse\x12F\n" +
 	"\tListTeams\x12\x1b.gochat.v1.ListTeamsRequest\x1a\x1c.gochat.v1.ListTeamsResponse\x12@\n" +
 	"\aGetTeam\x12\x19.gochat.v1.GetTeamRequest\x1a\x1a.gochat.v1.GetTeamResponse\x12X\n" +
 	"\x0fListTeamMembers\x12!.gochat.v1.ListTeamMembersRequest\x1a\".gochat.v1.ListTeamMembersResponse\x12[\n" +
-	"\x10RemoveTeamMember\x12\".gochat.v1.RemoveTeamMemberRequest\x1a#.gochat.v1.RemoveTeamMemberResponse\x12g\n" +
+	"\x10RemoveTeamMember\x12\".gochat.v1.RemoveTeamMemberRequest\x1a#.gochat.v1.RemoveTeamMemberResponse\x12F\n" +
+	"\tLeaveTeam\x12\x1b.gochat.v1.LeaveTeamRequest\x1a\x1c.gochat.v1.LeaveTeamResponse\x12g\n" +
 	"\x14UpdateTeamMemberRole\x12&.gochat.v1.UpdateTeamMemberRoleRequest\x1a'.gochat.v1.UpdateTeamMemberRoleResponse\x12O\n" +
 	"\fCreateInvite\x12\x1e.gochat.v1.CreateInviteRequest\x1a\x1f.gochat.v1.CreateInviteResponse\x12F\n" +
 	"\tGetInvite\x12\x1b.gochat.v1.GetInviteRequest\x1a\x1c.gochat.v1.GetInviteResponse\x12O\n" +
@@ -1488,7 +1572,7 @@ func file_gochat_v1_teams_proto_rawDescGZIP() []byte {
 	return file_gochat_v1_teams_proto_rawDescData
 }
 
-var file_gochat_v1_teams_proto_msgTypes = make([]protoimpl.MessageInfo, 27)
+var file_gochat_v1_teams_proto_msgTypes = make([]protoimpl.MessageInfo, 29)
 var file_gochat_v1_teams_proto_goTypes = []any{
 	(*CreateTeamRequest)(nil),            // 0: gochat.v1.CreateTeamRequest
 	(*CreateTeamResponse)(nil),           // 1: gochat.v1.CreateTeamResponse
@@ -1500,71 +1584,75 @@ var file_gochat_v1_teams_proto_goTypes = []any{
 	(*ListTeamMembersResponse)(nil),      // 7: gochat.v1.ListTeamMembersResponse
 	(*RemoveTeamMemberRequest)(nil),      // 8: gochat.v1.RemoveTeamMemberRequest
 	(*RemoveTeamMemberResponse)(nil),     // 9: gochat.v1.RemoveTeamMemberResponse
-	(*UpdateTeamMemberRoleRequest)(nil),  // 10: gochat.v1.UpdateTeamMemberRoleRequest
-	(*UpdateTeamMemberRoleResponse)(nil), // 11: gochat.v1.UpdateTeamMemberRoleResponse
-	(*CreateInviteRequest)(nil),          // 12: gochat.v1.CreateInviteRequest
-	(*CreateInviteResponse)(nil),         // 13: gochat.v1.CreateInviteResponse
-	(*GetInviteRequest)(nil),             // 14: gochat.v1.GetInviteRequest
-	(*GetInviteResponse)(nil),            // 15: gochat.v1.GetInviteResponse
-	(*AcceptInviteRequest)(nil),          // 16: gochat.v1.AcceptInviteRequest
-	(*AcceptInviteResponse)(nil),         // 17: gochat.v1.AcceptInviteResponse
-	(*ListInvitesRequest)(nil),           // 18: gochat.v1.ListInvitesRequest
-	(*InviteSummary)(nil),                // 19: gochat.v1.InviteSummary
-	(*ListInvitesResponse)(nil),          // 20: gochat.v1.ListInvitesResponse
-	(*RevokeInviteRequest)(nil),          // 21: gochat.v1.RevokeInviteRequest
-	(*RevokeInviteResponse)(nil),         // 22: gochat.v1.RevokeInviteResponse
-	(*SetTeamPhotoRequest)(nil),          // 23: gochat.v1.SetTeamPhotoRequest
-	(*SetTeamPhotoResponse)(nil),         // 24: gochat.v1.SetTeamPhotoResponse
-	(*RemoveTeamPhotoRequest)(nil),       // 25: gochat.v1.RemoveTeamPhotoRequest
-	(*RemoveTeamPhotoResponse)(nil),      // 26: gochat.v1.RemoveTeamPhotoResponse
-	(*Team)(nil),                         // 27: gochat.v1.Team
-	(*TeamMember)(nil),                   // 28: gochat.v1.TeamMember
-	(TeamRole)(0),                        // 29: gochat.v1.TeamRole
-	(*timestamppb.Timestamp)(nil),        // 30: google.protobuf.Timestamp
-	(*User)(nil),                         // 31: gochat.v1.User
+	(*LeaveTeamRequest)(nil),             // 10: gochat.v1.LeaveTeamRequest
+	(*LeaveTeamResponse)(nil),            // 11: gochat.v1.LeaveTeamResponse
+	(*UpdateTeamMemberRoleRequest)(nil),  // 12: gochat.v1.UpdateTeamMemberRoleRequest
+	(*UpdateTeamMemberRoleResponse)(nil), // 13: gochat.v1.UpdateTeamMemberRoleResponse
+	(*CreateInviteRequest)(nil),          // 14: gochat.v1.CreateInviteRequest
+	(*CreateInviteResponse)(nil),         // 15: gochat.v1.CreateInviteResponse
+	(*GetInviteRequest)(nil),             // 16: gochat.v1.GetInviteRequest
+	(*GetInviteResponse)(nil),            // 17: gochat.v1.GetInviteResponse
+	(*AcceptInviteRequest)(nil),          // 18: gochat.v1.AcceptInviteRequest
+	(*AcceptInviteResponse)(nil),         // 19: gochat.v1.AcceptInviteResponse
+	(*ListInvitesRequest)(nil),           // 20: gochat.v1.ListInvitesRequest
+	(*InviteSummary)(nil),                // 21: gochat.v1.InviteSummary
+	(*ListInvitesResponse)(nil),          // 22: gochat.v1.ListInvitesResponse
+	(*RevokeInviteRequest)(nil),          // 23: gochat.v1.RevokeInviteRequest
+	(*RevokeInviteResponse)(nil),         // 24: gochat.v1.RevokeInviteResponse
+	(*SetTeamPhotoRequest)(nil),          // 25: gochat.v1.SetTeamPhotoRequest
+	(*SetTeamPhotoResponse)(nil),         // 26: gochat.v1.SetTeamPhotoResponse
+	(*RemoveTeamPhotoRequest)(nil),       // 27: gochat.v1.RemoveTeamPhotoRequest
+	(*RemoveTeamPhotoResponse)(nil),      // 28: gochat.v1.RemoveTeamPhotoResponse
+	(*Team)(nil),                         // 29: gochat.v1.Team
+	(*TeamMember)(nil),                   // 30: gochat.v1.TeamMember
+	(TeamRole)(0),                        // 31: gochat.v1.TeamRole
+	(*timestamppb.Timestamp)(nil),        // 32: google.protobuf.Timestamp
+	(*User)(nil),                         // 33: gochat.v1.User
 }
 var file_gochat_v1_teams_proto_depIdxs = []int32{
-	27, // 0: gochat.v1.CreateTeamResponse.team:type_name -> gochat.v1.Team
-	27, // 1: gochat.v1.ListTeamsResponse.teams:type_name -> gochat.v1.Team
-	27, // 2: gochat.v1.GetTeamResponse.team:type_name -> gochat.v1.Team
-	28, // 3: gochat.v1.ListTeamMembersResponse.members:type_name -> gochat.v1.TeamMember
-	29, // 4: gochat.v1.UpdateTeamMemberRoleRequest.role:type_name -> gochat.v1.TeamRole
-	30, // 5: gochat.v1.CreateInviteResponse.expires_at:type_name -> google.protobuf.Timestamp
-	27, // 6: gochat.v1.AcceptInviteResponse.team:type_name -> gochat.v1.Team
-	31, // 7: gochat.v1.InviteSummary.created_by:type_name -> gochat.v1.User
-	30, // 8: gochat.v1.InviteSummary.created_at:type_name -> google.protobuf.Timestamp
-	30, // 9: gochat.v1.InviteSummary.expires_at:type_name -> google.protobuf.Timestamp
-	19, // 10: gochat.v1.ListInvitesResponse.invites:type_name -> gochat.v1.InviteSummary
-	27, // 11: gochat.v1.SetTeamPhotoResponse.team:type_name -> gochat.v1.Team
-	27, // 12: gochat.v1.RemoveTeamPhotoResponse.team:type_name -> gochat.v1.Team
+	29, // 0: gochat.v1.CreateTeamResponse.team:type_name -> gochat.v1.Team
+	29, // 1: gochat.v1.ListTeamsResponse.teams:type_name -> gochat.v1.Team
+	29, // 2: gochat.v1.GetTeamResponse.team:type_name -> gochat.v1.Team
+	30, // 3: gochat.v1.ListTeamMembersResponse.members:type_name -> gochat.v1.TeamMember
+	31, // 4: gochat.v1.UpdateTeamMemberRoleRequest.role:type_name -> gochat.v1.TeamRole
+	32, // 5: gochat.v1.CreateInviteResponse.expires_at:type_name -> google.protobuf.Timestamp
+	29, // 6: gochat.v1.AcceptInviteResponse.team:type_name -> gochat.v1.Team
+	33, // 7: gochat.v1.InviteSummary.created_by:type_name -> gochat.v1.User
+	32, // 8: gochat.v1.InviteSummary.created_at:type_name -> google.protobuf.Timestamp
+	32, // 9: gochat.v1.InviteSummary.expires_at:type_name -> google.protobuf.Timestamp
+	21, // 10: gochat.v1.ListInvitesResponse.invites:type_name -> gochat.v1.InviteSummary
+	29, // 11: gochat.v1.SetTeamPhotoResponse.team:type_name -> gochat.v1.Team
+	29, // 12: gochat.v1.RemoveTeamPhotoResponse.team:type_name -> gochat.v1.Team
 	0,  // 13: gochat.v1.TeamService.CreateTeam:input_type -> gochat.v1.CreateTeamRequest
 	2,  // 14: gochat.v1.TeamService.ListTeams:input_type -> gochat.v1.ListTeamsRequest
 	4,  // 15: gochat.v1.TeamService.GetTeam:input_type -> gochat.v1.GetTeamRequest
 	6,  // 16: gochat.v1.TeamService.ListTeamMembers:input_type -> gochat.v1.ListTeamMembersRequest
 	8,  // 17: gochat.v1.TeamService.RemoveTeamMember:input_type -> gochat.v1.RemoveTeamMemberRequest
-	10, // 18: gochat.v1.TeamService.UpdateTeamMemberRole:input_type -> gochat.v1.UpdateTeamMemberRoleRequest
-	12, // 19: gochat.v1.TeamService.CreateInvite:input_type -> gochat.v1.CreateInviteRequest
-	14, // 20: gochat.v1.TeamService.GetInvite:input_type -> gochat.v1.GetInviteRequest
-	16, // 21: gochat.v1.TeamService.AcceptInvite:input_type -> gochat.v1.AcceptInviteRequest
-	18, // 22: gochat.v1.TeamService.ListInvites:input_type -> gochat.v1.ListInvitesRequest
-	21, // 23: gochat.v1.TeamService.RevokeInvite:input_type -> gochat.v1.RevokeInviteRequest
-	23, // 24: gochat.v1.TeamService.SetTeamPhoto:input_type -> gochat.v1.SetTeamPhotoRequest
-	25, // 25: gochat.v1.TeamService.RemoveTeamPhoto:input_type -> gochat.v1.RemoveTeamPhotoRequest
-	1,  // 26: gochat.v1.TeamService.CreateTeam:output_type -> gochat.v1.CreateTeamResponse
-	3,  // 27: gochat.v1.TeamService.ListTeams:output_type -> gochat.v1.ListTeamsResponse
-	5,  // 28: gochat.v1.TeamService.GetTeam:output_type -> gochat.v1.GetTeamResponse
-	7,  // 29: gochat.v1.TeamService.ListTeamMembers:output_type -> gochat.v1.ListTeamMembersResponse
-	9,  // 30: gochat.v1.TeamService.RemoveTeamMember:output_type -> gochat.v1.RemoveTeamMemberResponse
-	11, // 31: gochat.v1.TeamService.UpdateTeamMemberRole:output_type -> gochat.v1.UpdateTeamMemberRoleResponse
-	13, // 32: gochat.v1.TeamService.CreateInvite:output_type -> gochat.v1.CreateInviteResponse
-	15, // 33: gochat.v1.TeamService.GetInvite:output_type -> gochat.v1.GetInviteResponse
-	17, // 34: gochat.v1.TeamService.AcceptInvite:output_type -> gochat.v1.AcceptInviteResponse
-	20, // 35: gochat.v1.TeamService.ListInvites:output_type -> gochat.v1.ListInvitesResponse
-	22, // 36: gochat.v1.TeamService.RevokeInvite:output_type -> gochat.v1.RevokeInviteResponse
-	24, // 37: gochat.v1.TeamService.SetTeamPhoto:output_type -> gochat.v1.SetTeamPhotoResponse
-	26, // 38: gochat.v1.TeamService.RemoveTeamPhoto:output_type -> gochat.v1.RemoveTeamPhotoResponse
-	26, // [26:39] is the sub-list for method output_type
-	13, // [13:26] is the sub-list for method input_type
+	10, // 18: gochat.v1.TeamService.LeaveTeam:input_type -> gochat.v1.LeaveTeamRequest
+	12, // 19: gochat.v1.TeamService.UpdateTeamMemberRole:input_type -> gochat.v1.UpdateTeamMemberRoleRequest
+	14, // 20: gochat.v1.TeamService.CreateInvite:input_type -> gochat.v1.CreateInviteRequest
+	16, // 21: gochat.v1.TeamService.GetInvite:input_type -> gochat.v1.GetInviteRequest
+	18, // 22: gochat.v1.TeamService.AcceptInvite:input_type -> gochat.v1.AcceptInviteRequest
+	20, // 23: gochat.v1.TeamService.ListInvites:input_type -> gochat.v1.ListInvitesRequest
+	23, // 24: gochat.v1.TeamService.RevokeInvite:input_type -> gochat.v1.RevokeInviteRequest
+	25, // 25: gochat.v1.TeamService.SetTeamPhoto:input_type -> gochat.v1.SetTeamPhotoRequest
+	27, // 26: gochat.v1.TeamService.RemoveTeamPhoto:input_type -> gochat.v1.RemoveTeamPhotoRequest
+	1,  // 27: gochat.v1.TeamService.CreateTeam:output_type -> gochat.v1.CreateTeamResponse
+	3,  // 28: gochat.v1.TeamService.ListTeams:output_type -> gochat.v1.ListTeamsResponse
+	5,  // 29: gochat.v1.TeamService.GetTeam:output_type -> gochat.v1.GetTeamResponse
+	7,  // 30: gochat.v1.TeamService.ListTeamMembers:output_type -> gochat.v1.ListTeamMembersResponse
+	9,  // 31: gochat.v1.TeamService.RemoveTeamMember:output_type -> gochat.v1.RemoveTeamMemberResponse
+	11, // 32: gochat.v1.TeamService.LeaveTeam:output_type -> gochat.v1.LeaveTeamResponse
+	13, // 33: gochat.v1.TeamService.UpdateTeamMemberRole:output_type -> gochat.v1.UpdateTeamMemberRoleResponse
+	15, // 34: gochat.v1.TeamService.CreateInvite:output_type -> gochat.v1.CreateInviteResponse
+	17, // 35: gochat.v1.TeamService.GetInvite:output_type -> gochat.v1.GetInviteResponse
+	19, // 36: gochat.v1.TeamService.AcceptInvite:output_type -> gochat.v1.AcceptInviteResponse
+	22, // 37: gochat.v1.TeamService.ListInvites:output_type -> gochat.v1.ListInvitesResponse
+	24, // 38: gochat.v1.TeamService.RevokeInvite:output_type -> gochat.v1.RevokeInviteResponse
+	26, // 39: gochat.v1.TeamService.SetTeamPhoto:output_type -> gochat.v1.SetTeamPhotoResponse
+	28, // 40: gochat.v1.TeamService.RemoveTeamPhoto:output_type -> gochat.v1.RemoveTeamPhotoResponse
+	27, // [27:41] is the sub-list for method output_type
+	13, // [13:27] is the sub-list for method input_type
 	13, // [13:13] is the sub-list for extension type_name
 	13, // [13:13] is the sub-list for extension extendee
 	0,  // [0:13] is the sub-list for field type_name
@@ -1586,7 +1674,7 @@ func file_gochat_v1_teams_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_gochat_v1_teams_proto_rawDesc), len(file_gochat_v1_teams_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   27,
+			NumMessages:   29,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

@@ -165,7 +165,7 @@ fun PersonSheet(session: ChatSession, user: User, onDismiss: () -> Unit) {
                         if (blocked) Text("You blocked them.", color = LocalChatColors.current.muted, fontSize = 13.sp)
                     }
                 }
-                if (!me) {
+                if (!me && !user.deleted) {
                     HorizontalDivider()
                     if (!blocked && !user.deactivated && teamId != null) {
                         SheetAction(Icons.AutoMirrored.Filled.Chat, "Message") {

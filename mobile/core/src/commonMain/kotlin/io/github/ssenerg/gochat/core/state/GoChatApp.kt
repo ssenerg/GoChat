@@ -7,6 +7,7 @@ import io.github.ssenerg.gochat.core.api.AppInfo
 import io.github.ssenerg.gochat.core.api.ApiException
 import io.github.ssenerg.gochat.core.api.GoChatApi
 import io.github.ssenerg.gochat.core.api.Pkce
+import io.github.ssenerg.gochat.core.api.SsoReturn
 import io.github.ssenerg.gochat.core.api.normalizeServerUrl
 import io.github.ssenerg.gochat.core.api.parseSsoReturn
 import io.github.ssenerg.gochat.core.api.userMessage
@@ -52,6 +53,14 @@ sealed interface AppState {
     data class Verifying(val server: String, val mfaToken: String) : AppState
 
     data class SignedIn(val session: ChatSession) : AppState
+}
+
+/** What signing in again in the browser came back with, for deleting an account without a password. */
+sealed interface Reauth {
+    /** The code [ChatSession.deleteAccount] takes, with the verifier the sign-in began with. */
+    data class Proof(val code: String, val verifier: String) : Reauth
+
+    data class Failed(val reason: String) : Reauth
 }
 
 /**
@@ -102,6 +111,11 @@ class GoChatApp(
     }
 
     private var session: ChatSession? = null
+
+    private val _reauth = MutableStateFlow<Reauth?>(null)
+
+    /** What the last sign-in again came back with, until [reauthUsed]. */
+    val reauth: StateFlow<Reauth?> = _reauth.asStateFlow()
 
     private val signOuts = SignOuts(store, scope) { server, token ->
         val api = api(server, token)
@@ -269,10 +283,43 @@ class GoChatApp(
             if (token.isEmpty()) "" else "&invite=${token.encodeURLParameter()}"
     }
 
-    /** Finishes a sign-in the browser came back from at [callback], unless someone is signed in. */
+    /**
+     * The page that signs the person in again at [provider] in the system
+     * browser: the proof an account without a password deletes itself
+     * with. It comes back to [SSO_REDIRECT], for [ssoReturned], which keeps
+     * it in [reauth].
+     */
+    fun reauthUrl(provider: String, server: String = session?.api?.client?.baseUrl.orEmpty()): String {
+        val pkce = Pkce.create()
+        store.put(KEY_REAUTH, pkce.verifier)
+        _reauth.value = null
+        return "${normalizeServerUrl(server)}/login/sso/${provider.encodeURLParameter()}?app=${pkce.challenge}&reauth=1"
+    }
+
+    /** The screen took what [reauth] held. */
+    fun reauthUsed() {
+        _reauth.value = null
+    }
+
+    /** Keeps what a sign-in again came back with, for the screen deleting the account. */
+    internal fun reauthReturned(ret: SsoReturn) {
+        val verifier = store.get(KEY_REAUTH) ?: return
+        store.put(KEY_REAUTH, null)
+        val code = ret.code
+        _reauth.value = if (ret.error == null && code != null) {
+            Reauth.Proof(code, verifier)
+        } else {
+            Reauth.Failed(ret.error.orEmpty().replaceFirstChar { it.uppercase() }.ifEmpty { "The sign-in failed." })
+        }
+    }
+
+    /** Finishes a sign-in the browser came back from at [callback]; signed in, it was a sign-in again. */
     fun ssoReturned(callback: String) {
         val ret = parseSsoReturn(callback, SSO_REDIRECT) ?: return
-        if (_state.value is AppState.SignedIn) return
+        if (_state.value is AppState.SignedIn) {
+            reauthReturned(ret)
+            return
+        }
         val pending = store.get(KEY_SSO)?.split('\n', limit = 2)
         store.put(KEY_SSO, null)
         if (pending?.size != 2) {
@@ -365,6 +412,8 @@ class GoChatApp(
         val s = session ?: return
         session = null
         s.stop()
+        store.put(KEY_REAUTH, null)
+        _reauth.value = null
         if (!keepToken) {
             store.put(KEY_TOKEN, null)
             store.put(KEY_ME, null)
@@ -383,6 +432,7 @@ class GoChatApp(
         private const val KEY_ME = "me"
         private const val KEY_PTS = ChatSession.KEY_PTS
         private const val KEY_SSO = "sso"
+        private const val KEY_REAUTH = "sso_reauth"
 
         /** The scheme the apps claim, where a sign-in in the browser comes back. */
         const val SSO_SCHEME = "io.github.ssenerg.gochat"

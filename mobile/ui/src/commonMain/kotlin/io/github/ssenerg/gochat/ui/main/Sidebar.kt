@@ -196,7 +196,7 @@ private fun TeamHeader(st: ChatState, session: ChatSession) {
             }
             DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
                 val team = st.team
-                // As on the web: inviting and the team's settings are its admins'.
+                // As on the web: inviting and the team's reports are its admins'.
                 if (team?.isAdmin == true) {
                     DropdownMenuItem(text = { Text("Invite people") }, onClick = {
                         menu = false
@@ -209,7 +209,6 @@ private fun TeamHeader(st: ChatState, session: ChatSession) {
                             }
                         }
                     })
-                    DropdownMenuItem(text = { Text("Team settings") }, onClick = { menu = false; nav.open(Route.TeamSettings(team.id)) })
                     val open = st.reports[team.id] ?: 0
                     DropdownMenuItem(
                         text = { Text(if (open > 0) "Reports ($open)" else "Reports") },
@@ -217,6 +216,7 @@ private fun TeamHeader(st: ChatState, session: ChatSession) {
                     )
                 }
                 if (team != null) {
+                    DropdownMenuItem(text = { Text("Team settings") }, onClick = { menu = false; nav.open(Route.TeamSettings(team.id)) })
                     DropdownMenuItem(text = { Text("Team members") }, onClick = { menu = false; nav.open(Route.TeamMembers(team.id)) })
                 }
                 DropdownMenuItem(text = { Text("Browse channels") }, onClick = { menu = false; nav.open(Route.Browse) })

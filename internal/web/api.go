@@ -49,7 +49,7 @@ const (
 var apiCalls = map[string][]string{
 	"gochat.v1.AuthService": {
 		"GetSignupInfo", "SignUp", "Login", "VerifyMFA", "Logout", "Me",
-		"ChangePassword", "BeginTOTPSetup", "ConfirmTOTPSetup", "DisableTOTP",
+		"ChangePassword", "BeginTOTPSetup", "ConfirmTOTPSetup", "DisableTOTP", "DeleteAccount",
 		"ListSessions", "RevokeSession", "RevokeSessions",
 		"ListSSOProviders", "RedeemSSO", "ListSSOIdentities", "UnlinkSSO",
 	},
@@ -57,7 +57,7 @@ var apiCalls = map[string][]string{
 		"GetUser", "UpdateProfile", "GetPresence", "RemovePhoto", "SetStatus", "SetCustomStatus",
 	},
 	"gochat.v1.TeamService": {
-		"CreateTeam", "ListTeams", "GetTeam", "ListTeamMembers", "RemoveTeamMember",
+		"CreateTeam", "ListTeams", "GetTeam", "ListTeamMembers", "RemoveTeamMember", "LeaveTeam",
 		"UpdateTeamMemberRole", "CreateInvite", "GetInvite", "AcceptInvite", "ListInvites",
 		"RevokeInvite", "RemoveTeamPhoto",
 	},
@@ -94,6 +94,7 @@ var apiLimited = map[string]bool{
 	"gochat.v1.AuthService/ChangePassword":   true,
 	"gochat.v1.AuthService/ConfirmTOTPSetup": true,
 	"gochat.v1.AuthService/DisableTOTP":      true,
+	"gochat.v1.AuthService/DeleteAccount":    true,
 	"gochat.v1.AuthService/RedeemSSO":        true,
 	"gochat.v1.TeamService/GetInvite":        true,
 	"gochat.v1.TeamService/AcceptInvite":     true,

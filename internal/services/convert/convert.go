@@ -104,6 +104,7 @@ func User(u *models.User) *pb.User {
 		CustomStatus: Custom(u, time.Now()),
 		Bot:          u.Bot,
 		BotOwnerId:   ID(u.BotOwner),
+		Deleted:      !u.DeletedAt.IsZero(),
 	}
 }
 
@@ -136,6 +137,7 @@ func PublicUser(u *models.User) *pb.User {
 		CustomStatus: Custom(u, time.Now()),
 		Bot:          u.Bot,
 		BotOwnerId:   ID(u.BotOwner),
+		Deleted:      !u.DeletedAt.IsZero(),
 	}
 }
 

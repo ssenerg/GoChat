@@ -15,6 +15,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ExitToApp
 import androidx.compose.material.icons.filled.Flag
 import androidx.compose.material.icons.filled.Group
 import androidx.compose.material.icons.filled.Link
@@ -101,7 +102,10 @@ private fun TeamMark(team: Team) {
 
 private fun Instant.millis() = getEpochSecond() * 1000 + getNano() / 1_000_000
 
-/** A team's photo and open invites, for its admins, as the web's team settings and invites show them. */
+/**
+ * A team's settings, as the web shows them: leaving it, for everyone, and
+ * its photo and open invites for its admins.
+ */
 @Composable
 fun TeamSettingsScreen(session: ChatSession, teamId: String) {
     val nav = LocalNavigator.current
@@ -110,10 +114,12 @@ fun TeamSettingsScreen(session: ChatSession, teamId: String) {
     val scope = rememberCoroutineScope()
     val st by session.state.collectAsState()
     val team = st.teams.firstOrNull { it.id == teamId }
-    if (team == null || !team.isAdmin) {
-        Screen("Team settings") { EmptyState("Only the team's admins change its settings.", it) }
+    if (team == null) {
+        Screen("Team settings") { EmptyState("You are no longer in this team.", it) }
         return
     }
+    val admin = team.isAdmin
+    var leaving by remember { mutableStateOf(false) }
     var uploading by remember { mutableStateOf(false) }
     var invites by remember { mutableStateOf<List<InviteSummary>?>(null) }
     var next by remember { mutableStateOf("") }
@@ -131,7 +137,8 @@ fun TeamSettingsScreen(session: ChatSession, teamId: String) {
         onError = { toasts.show(it) },
         photos = true,
     )
-    LaunchedEffect(teamId, reload) {
+    LaunchedEffect(teamId, reload, admin) {
+        if (!admin) return@LaunchedEffect
         // So the next page loads again after a reload, even with the same token.
         next = ""
         try {
@@ -157,7 +164,7 @@ fun TeamSettingsScreen(session: ChatSession, teamId: String) {
         LazyColumn(modifier) {
             item {
                 Row(Modifier.fillMaxWidth().padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Box(Modifier.clip(RoundedCornerShape(16.dp)).clickable(enabled = !uploading) { pickPhoto() }) { TeamMark(team) }
+                    Box(Modifier.clip(RoundedCornerShape(16.dp)).clickable(enabled = admin && !uploading) { pickPhoto() }) { TeamMark(team) }
                     Spacer(Modifier.width(16.dp))
                     Column(Modifier.weight(1f)) {
                         Text(team.display_name, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.SemiBold)
@@ -165,6 +172,8 @@ fun TeamSettingsScreen(session: ChatSession, teamId: String) {
                     }
                 }
                 if (team.description.isNotEmpty()) Text(team.description, modifier = Modifier.padding(horizontal = 16.dp))
+            }
+            if (admin) item {
                 Row(Modifier.padding(horizontal = 8.dp), verticalAlignment = Alignment.CenterVertically) {
                     TextButton(onClick = { pickPhoto() }, enabled = !uploading) { Text(if (team.photo.isEmpty()) "Upload a photo" else "Change photo") }
                     if (team.photo.isNotEmpty()) {
@@ -180,15 +189,17 @@ fun TeamSettingsScreen(session: ChatSession, teamId: String) {
                     fontSize = 12.sp,
                     modifier = Modifier.padding(horizontal = 16.dp),
                 )
+            }
+            item {
                 HorizontalDivider(Modifier.padding(top = 12.dp))
                 ListItem(
                     headlineContent = { Text("Team members") },
-                    supportingContent = { Text("Make admins, or remove people from the team.") },
+                    supportingContent = { Text(if (admin) "Make admins, or remove people from the team." else "Who is in the team.") },
                     leadingContent = { Icon(Icons.Filled.Group, contentDescription = null) },
                     modifier = Modifier.clickable { nav.open(Route.TeamMembers(teamId)) },
                 )
                 // Reports are the team's admins' alone.
-                if (team.isAdmin) {
+                if (admin) {
                     val open = st.reports[teamId] ?: 0
                     ListItem(
                         headlineContent = { Text("Reports") },
@@ -198,7 +209,15 @@ fun TeamSettingsScreen(session: ChatSession, teamId: String) {
                         modifier = Modifier.clickable { nav.open(Route.Reports(teamId)) },
                     )
                 }
+                ListItem(
+                    headlineContent = { Text("Leave team", color = MaterialTheme.colorScheme.error) },
+                    supportingContent = { Text("You leave its channels and conversations too.") },
+                    leadingContent = { Icon(Icons.AutoMirrored.Filled.ExitToApp, contentDescription = null, tint = MaterialTheme.colorScheme.error) },
+                    modifier = Modifier.clickable { leaving = true },
+                )
                 HorizontalDivider()
+            }
+            if (admin) item {
                 SectionTitle("Open invites")
                 ListItem(
                     headlineContent = { Text("Create invite link") },
@@ -219,6 +238,7 @@ fun TeamSettingsScreen(session: ChatSession, teamId: String) {
             }
             val list = invites
             when {
+                !admin -> {}
                 error != null && list == null -> item { ErrorState(error ?: "", onRetry = { reload++ }) }
                 list == null -> item { Loading(Modifier.fillMaxWidth().padding(16.dp)) }
                 list.isEmpty() -> item { Text("No open invites.", color = LocalChatColors.current.muted, modifier = Modifier.padding(16.dp)) }
@@ -228,6 +248,24 @@ fun TeamSettingsScreen(session: ChatSession, teamId: String) {
                 }
             }
         }
+    }
+
+    if (leaving) {
+        AlertDialog(
+            onDismissRequest = { leaving = false },
+            title = { Text("Leave ${team.display_name}?") },
+            text = { Text("You leave its channels and conversations too, and need a new invite to come back.") },
+            confirmButton = {
+                TextButton(onClick = {
+                    leaving = false
+                    session.launch({ session.leaveTeam(teamId) }) { err ->
+                        // Out of the team, its screens have nothing to show.
+                        if (err == null) nav.home() else toasts.show(err)
+                    }
+                }) { Text("Leave", color = MaterialTheme.colorScheme.error) }
+            },
+            dismissButton = { TextButton(onClick = { leaving = false }) { Text("Cancel") } },
+        )
     }
 
     revoking?.let { invite ->
@@ -286,6 +324,8 @@ fun TeamMembersScreen(session: ChatSession, teamId: String) {
     var error by remember { mutableStateOf<String?>(null) }
     var reload by remember { mutableStateOf(0) }
     var removing by remember { mutableStateOf<TeamMember?>(null) }
+    // Someone who left goes from the list.
+    LaunchedEffect(teamId) { session.membersChanged.collect { if (it == teamId) reload++ } }
     LaunchedEffect(teamId, reload) {
         try {
             val page = session.api.teamMembersPage(teamId)

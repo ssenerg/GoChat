@@ -32,7 +32,7 @@ func (s *authService) ListSSOProviders(ctx context.Context, _ *pb.ListSSOProvide
 
 func (s *authService) BeginSSO(ctx context.Context, req *pb.BeginSSORequest) (*pb.BeginSSOResponse, error) {
 	start, err := actors.Ask[*accounts.SSOStart](ctx, s.sys.Engine, s.sys.Accounts, accounts.BeginSSO{
-		Provider: req.ProviderId, RedirectURI: req.RedirectUri, AppChallenge: req.AppChallenge, P: optionalPrincipal(ctx),
+		Provider: req.ProviderId, RedirectURI: req.RedirectUri, AppChallenge: req.AppChallenge, Reauth: req.Reauth, P: optionalPrincipal(ctx),
 	})
 	if err != nil {
 		return nil, err
@@ -54,6 +54,8 @@ func (s *authService) FinishSSO(ctx context.Context, req *pb.FinishSSORequest) (
 		out.Result = &pb.FinishSSOResponse_Linked{Linked: true}
 	case res.LinkToken != "":
 		out.Result = &pb.FinishSSOResponse_LinkToken{LinkToken: res.LinkToken}
+	case res.ReauthToken != "":
+		out.Result = &pb.FinishSSOResponse_ReauthToken{ReauthToken: res.ReauthToken}
 	case res.AppCode != "":
 		out.Result = &pb.FinishSSOResponse_AppCode{AppCode: res.AppCode}
 	case res.Login != nil && res.Login.MFAToken != "":

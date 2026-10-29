@@ -183,6 +183,9 @@ func (w *worker) beginSSO(ctx context.Context, msg BeginSSO) (*SSOStart, error) 
 	if msg.P != nil && msg.P.Bot {
 		return nil, ierrors.PermissionDenied()
 	}
+	if msg.Reauth && msg.P == nil && msg.AppChallenge == "" {
+		return nil, ierrors.InvalidArgument("signing in again needs a session or an app")
+	}
 	op, err := p.discover(ctx)
 	if err != nil {
 		return nil, err
@@ -196,6 +199,7 @@ func (w *worker) beginSSO(ctx context.Context, msg BeginSSO) (*SSOStart, error) 
 		RedirectURI:  msg.RedirectURI,
 		AppChallenge: msg.AppChallenge,
 		ExpiresAt:    now.Add(w.Cfg.SSO.FlowTTL),
+		Reauth:       msg.Reauth,
 	}
 	f.Verifier = w.sealer.Seal([]byte(verifier), f.StateHash)
 	if msg.P != nil {
@@ -299,6 +303,9 @@ func (w *worker) finishSSO(ctx context.Context, msg FinishSSO) (*SSOResult, erro
 	}
 	out := &SSOResult{Provider: p.cfg.Name}
 
+	if f.Reauth {
+		return w.reauthed(ctx, p, f, id, msg.P, out)
+	}
 	if !ids.IsZero(f.LinkUser) {
 		if msg.P == nil || msg.P.UserID != f.LinkUser {
 			return nil, ierrors.New(ierrors.CodePermissionDenied, "sign in to the account you were linking, then link it again")
@@ -347,6 +354,34 @@ func (w *worker) finishSSO(ctx context.Context, msg FinishSSO) (*SSOResult, erro
 	}
 	out.Login, err = w.signIn(ctx, user, msg.IP, msg.UserAgent)
 	return out, err
+}
+
+// reauthTTL bounds how long a reauth proves who signed in.
+const reauthTTL = 5 * time.Minute
+
+// reauthed proves who signed in again at a provider: only someone whose
+// account it is linked to, and with a session, the one who began.
+func (w *worker) reauthed(ctx context.Context, p *ssoProvider, f *models.SSOFlow, id *models.SSOIdentity, caller *models.Principal, out *SSOResult) (*SSOResult, error) {
+	userID, err := w.Repo.GetSSOIdentity(ctx, id.Issuer, id.Subject)
+	if ierrors.Is(err, ierrors.CodeNotFound) || (err == nil && !ids.IsZero(f.LinkUser) && userID != f.LinkUser) {
+		return nil, ierrors.FailedPrecondition("sign in with the " + p.cfg.Name + " account linked to yours")
+	}
+	if err != nil {
+		return nil, err
+	}
+	if !ids.IsZero(f.LinkUser) && (caller == nil || caller.UserID != f.LinkUser) {
+		return nil, ierrors.New(ierrors.CodePermissionDenied, "sign in to the account you were deleting, then try again")
+	}
+	token, err := w.ticket(ctx, &models.SSOTicket{Kind: models.SSOTicketReauth, UserID: userID, Challenge: f.AppChallenge, Provider: p.cfg.ID}, reauthTTL)
+	if err != nil {
+		return nil, err
+	}
+	if f.AppChallenge != "" {
+		out.AppCode = token
+	} else {
+		out.ReauthToken = token
+	}
+	return out, nil
 }
 
 func (w *worker) emailTaken(ctx context.Context, email string) (bool, error) {

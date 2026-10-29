@@ -139,6 +139,12 @@ func (r *Repository) ListUserTeams(ctx context.Context, userID gocql.UUID) ([]*m
 	return out, wrap(err)
 }
 
+// SetTeamOwner makes userID the team's owner, its creator as far as the
+// rules go.
+func (r *Repository) SetTeamOwner(ctx context.Context, teamID, userID gocql.UUID) error {
+	return wrap(r.query(ctx, "UPDATE teams SET created_by = ? WHERE id = ?", userID, teamID).ExecRelease())
+}
+
 func (r *Repository) RemoveTeamMember(ctx context.Context, teamID, userID gocql.UUID) error {
 	if _, err := r.query(ctx, "DELETE FROM user_teams WHERE user_id = ? AND team_id = ? IF EXISTS", userID, teamID).ExecCASRelease(); err != nil {
 		return wrap(err)

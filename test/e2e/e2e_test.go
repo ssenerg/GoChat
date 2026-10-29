@@ -1815,6 +1815,84 @@ func TestEndToEnd(t *testing.T) {
 		}
 	})
 
+	run("people leave a team, its last admin only once alone", func(t *testing.T) {
+		owner, _, _ := join(t, admin, "leaver")
+		team := "lv-" + random(6)
+		if res, body := owner.form("/teams", url.Values{"name": {team}, "display_name": {"Leavers"}}); res.StatusCode != http.StatusSeeOther {
+			t.Fatalf("create a team: %d %s", res.StatusCode, body)
+		}
+		x, _, _ := joinTeam(t, owner, team, "lx")
+		if _, page := x.do(http.MethodGet, "/t/"+team+"/settings", nil, "", true); !strings.Contains(page, `hx-post="/t/`+team+`/leave"`) || strings.Contains(page, "team-photo") {
+			t.Fatalf("a member's team settings: %s", page)
+		}
+		if _, body := owner.hx("/t/"+team+"/leave", url.Values{}); !strings.Contains(body, "you are the only admin of Leavers") {
+			t.Fatalf("the last admin left: %s", body)
+		}
+		// The owner's tab shows the team, whose member list reloads.
+		res, _ := owner.get("/t/" + team)
+		ch := channelRe.FindStringSubmatch(res.Header.Get("Location"))
+		if ch == nil {
+			t.Fatalf("team home: %s", res.Header.Get("Location"))
+		}
+		_, page := owner.get("/t/" + team + "/ch/" + ch[1])
+		ws, _, err := owner.socket(baseURL)
+		if err != nil {
+			t.Fatal(err)
+		}
+		ws.t = t
+		ws.send(map[string]string{"op": "view", "team_id": teamIDRe.FindStringSubmatch(page)[1], "team_name": team, "channel_id": ch[1]})
+		settle(ws)
+		if res, _ := x.hx("/t/"+team+"/leave", url.Values{}); res.Header.Get("HX-Redirect") != "/" {
+			t.Fatalf("leaving: %d", res.StatusCode)
+		}
+		ws.expect(5*time.Second, `id="members-changed"`)
+		if res, _ := x.get("/t/" + team); res.StatusCode == http.StatusOK {
+			t.Fatal("still in the team after leaving it")
+		}
+		if res, _ := owner.hx("/t/"+team+"/leave", url.Values{}); res.Header.Get("HX-Redirect") != "/" {
+			t.Fatalf("the last one out: %d", res.StatusCode)
+		}
+	})
+
+	run("people delete their account, and their messages stay", func(t *testing.T) {
+		eve, eveName, evePass := join(t, admin, "eve")
+		ws := live(t, eve)
+		word := "bye-" + random(4)
+		ws.send(map[string]string{"op": "post", "channel_id": town, "content": word})
+		ws.expect(5*time.Second, word)
+		if _, body := eve.hx("/settings/delete", url.Values{"password": {"wrong-password"}}); !strings.Contains(body, "password is incorrect") {
+			t.Fatalf("a wrong password: %s", body)
+		}
+		if res, _ := eve.hx("/settings/delete", url.Values{"password": {evePass}}); res.Header.Get("HX-Redirect") != "/login?deleted=1" {
+			t.Fatalf("deleting: %d", res.StatusCode)
+		}
+		ws.expect(5*time.Second, `data-redirect="/login"`)
+		ws.closed(5 * time.Second)
+		if !signedOut(eve) {
+			t.Fatal("a deleted account's session still works")
+		}
+		fresh := newClient(t, "eve2")
+		if res, body := fresh.form("/login", url.Values{"login": {eveName}, "password": {evePass}}); res.StatusCode == http.StatusSeeOther || !strings.Contains(body, "invalid username or password") {
+			t.Fatalf("a deleted account signed in: %d %s", res.StatusCode, body)
+		}
+		if _, page := admin.get("/t/" + teamName + "/ch/" + town); !strings.Contains(page, word) || !strings.Contains(page, "Deleted user") {
+			t.Fatal("the message lost its author, or kept her name")
+		}
+		// The username and the email are free.
+		_, body := admin.hx("/t/"+teamName+"/invites", url.Values{})
+		link := inviteRe.FindStringSubmatch(body)
+		if link == nil {
+			t.Fatalf("no invite link in %s", body)
+		}
+		fresh.get("/signup?invite=" + link[1])
+		if res, body := fresh.form("/signup", url.Values{
+			"username": {eveName}, "display_name": {"Eve again"}, "email": {eveName + "@example.test"},
+			"password": {evePass}, "confirm": {evePass}, "invite": {link[1]},
+		}); res.StatusCode != http.StatusSeeOther {
+			t.Fatalf("signing up with a deleted account's name: %d %s", res.StatusCode, body)
+		}
+	})
+
 	run("the web signs apps out: session list and deactivation", func(t *testing.T) {
 		fran, franName, franPass := join(t, admin, "fran")
 		phone := newApp(t)

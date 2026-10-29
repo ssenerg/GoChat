@@ -12,7 +12,7 @@ import (
 )
 
 const (
-	ssoFlowColumns     = "state_hash, provider, nonce, verifier, redirect_uri, link_user, app_challenge, expires_at"
+	ssoFlowColumns     = "state_hash, provider, nonce, verifier, redirect_uri, link_user, app_challenge, expires_at, reauth"
 	ssoTicketColumns   = "token_hash, kind, user_id, challenge, provider, issuer, subject, email, expires_at"
 	ssoIdentityColumns = "issuer, subject, user_id, provider, email, linked_at"
 )
@@ -22,8 +22,8 @@ func (r *Repository) CreateSSOFlow(ctx context.Context, f *models.SSOFlow, now t
 	if !ids.IsZero(f.LinkUser) {
 		linkUser = &f.LinkUser
 	}
-	return wrap(r.query(ctx, "INSERT INTO sso_flows ("+ssoFlowColumns+") VALUES (?, ?, ?, ?, ?, ?, ?, ?) USING TTL ?",
-		f.StateHash, f.Provider, f.Nonce, f.Verifier, f.RedirectURI, linkUser, nullable(f.AppChallenge), f.ExpiresAt,
+	return wrap(r.query(ctx, "INSERT INTO sso_flows ("+ssoFlowColumns+") VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?) USING TTL ?",
+		f.StateHash, f.Provider, f.Nonce, f.Verifier, f.RedirectURI, linkUser, nullable(f.AppChallenge), f.ExpiresAt, f.Reauth,
 		ttlSeconds(f.ExpiresAt, now)).ExecRelease())
 }
 

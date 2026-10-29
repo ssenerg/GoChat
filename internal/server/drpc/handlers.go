@@ -3,6 +3,7 @@ package drpc
 import (
 	"context"
 	"sync"
+	"time"
 
 	"github.com/gocql/gocql"
 
@@ -16,6 +17,7 @@ import (
 	"github.com/ssenerg/gochat/internal/repos/minio"
 	"github.com/ssenerg/gochat/internal/services"
 	"github.com/ssenerg/gochat/internal/services/accounts"
+	"github.com/ssenerg/gochat/internal/services/bots"
 	"github.com/ssenerg/gochat/internal/services/channels"
 	"github.com/ssenerg/gochat/internal/services/convert"
 	"github.com/ssenerg/gochat/internal/services/directory"
@@ -247,6 +249,50 @@ func (s *authService) RevokeSessions(ctx context.Context, req *pb.RevokeSessions
 	return &pb.RevokeSessionsResponse{Revoked: int32(n)}, nil //nolint:gosec // bounded by the sessions one user holds
 }
 
+// deleteTimeout bounds deleting an account once its owner proved who
+// they are.
+const deleteTimeout = 2 * time.Minute
+
+// DeleteAccount deletes the caller's account. Until its last step it may
+// be tried again; that step leaves no way back in.
+func (s *authService) DeleteAccount(ctx context.Context, req *pb.DeleteAccountRequest) (*pb.DeleteAccountResponse, error) {
+	p, err := Principal(ctx)
+	if err != nil {
+		return nil, err
+	}
+	// A team's last admin hands it on first, which takes no secret to say.
+	if _, err := actors.Ask[directory.Done](ctx, s.sys.Engine, s.sys.Directory, directory.LeaveTeams{P: p, Check: true}); err != nil {
+		return nil, err
+	}
+	if _, err := actors.Ask[accounts.Done](ctx, s.sys.Engine, s.sys.Accounts, accounts.DeleteAccount{
+		P: p, Password: req.Password, Code: req.Code, SSOToken: req.SsoToken, SSOVerifier: req.SsoVerifier,
+	}); err != nil {
+		return nil, err
+	}
+	// A caller who stops waiting does not stop it halfway.
+	ctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), deleteTimeout)
+	defer cancel()
+	owned, err := actors.Ask[[]*pb.Bot](ctx, s.sys.Engine, s.sys.Bots, bots.List{P: p})
+	if err != nil {
+		return nil, err
+	}
+	for _, b := range owned {
+		if _, err := actors.Ask[bots.Done](ctx, s.sys.Engine, s.sys.Bots, bots.Delete{P: p, BotID: b.GetUser().GetId()}); err != nil {
+			return nil, err
+		}
+	}
+	if _, err := actors.Ask[directory.Done](ctx, s.sys.Engine, s.sys.Directory, directory.LeaveTeams{P: p}); err != nil {
+		return nil, err
+	}
+	if _, err := actors.Ask[*pb.User](ctx, s.sys.Engine, s.sys.Directory, directory.SetPhoto{P: p}); err != nil {
+		return nil, err
+	}
+	if _, err := actors.Ask[accounts.Done](ctx, s.sys.Engine, s.sys.Accounts, accounts.EraseAccount{P: p}); err != nil {
+		return nil, err
+	}
+	return &pb.DeleteAccountResponse{}, nil
+}
+
 type pushService struct{ *base }
 
 // RegisterDevice keeps no token while the server pushes nowhere.
@@ -377,6 +423,17 @@ func (s *teamService) RemoveTeamMember(ctx context.Context, req *pb.RemoveTeamMe
 		return nil, err
 	}
 	return &pb.RemoveTeamMemberResponse{}, nil
+}
+
+func (s *teamService) LeaveTeam(ctx context.Context, req *pb.LeaveTeamRequest) (*pb.LeaveTeamResponse, error) {
+	p, err := Principal(ctx)
+	if err != nil {
+		return nil, err
+	}
+	if _, err := actors.Ask[directory.Done](ctx, s.sys.Engine, s.sys.Directory, directory.LeaveTeam{P: p, TeamID: req.TeamId}); err != nil {
+		return nil, err
+	}
+	return &pb.LeaveTeamResponse{}, nil
 }
 
 func (s *teamService) UpdateTeamMemberRole(ctx context.Context, req *pb.UpdateTeamMemberRoleRequest) (*pb.UpdateTeamMemberRoleResponse, error) {

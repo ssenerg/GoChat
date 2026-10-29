@@ -59,6 +59,8 @@ type Repo interface {
 	ListUserSessions(ctx context.Context, userID gocql.UUID) ([]*models.Session, error)
 	TouchSession(ctx context.Context, s *models.Session, at time.Time, ip string) error
 	SetDeactivated(ctx context.Context, id gocql.UUID, deactivated bool, now time.Time) error
+	EraseUser(ctx context.Context, u *models.User, name string, now time.Time) error
+	ListSystemAdmins(ctx context.Context) ([]gocql.UUID, error)
 	CreateMFAChallenge(ctx context.Context, c *models.MFAChallenge, now time.Time) error
 	GetMFAChallenge(ctx context.Context, hash []byte) (*models.MFAChallenge, error)
 	CountMFAAttempt(ctx context.Context, c *models.MFAChallenge, now time.Time) (bool, error)
@@ -118,7 +120,9 @@ type Deps struct {
 	// totp serializes each user's two-factor changes, so the recovery codes
 	// a confirmation shows are the ones it stored.
 	totp *keylock.Locks
-	sso  *ssoProviders
+	// admins serializes the deletions of system admins, so one stays.
+	admins *keylock.Locks
+	sso    *ssoProviders
 }
 
 func NewDeps(logger *zap.Logger, cfg *Config, repo Repo, userCache *users.Cache, az *authz.Authorizer, engine *actor.Engine, hubPID *actor.PID) (*Deps, error) {
@@ -149,6 +153,7 @@ func NewDeps(logger *zap.Logger, cfg *Config, repo Repo, userCache *users.Cache,
 		failures:        window.New(cfg.LoginFailures, cfg.LoginWindow),
 		accountFailures: window.New(cfg.LoginFailures*accountFailureFactor, cfg.LoginWindow),
 		totp:            keylock.New(),
+		admins:          keylock.New(),
 		sso:             sso,
 	}, nil
 }
@@ -201,6 +206,10 @@ func (w *worker) Receive(c *actor.Context) {
 		out, err = lockTOTP(ctx, w, msg.P, msg, w.confirmTOTP)
 	case DisableTOTP:
 		out, err = lockTOTP(ctx, w, msg.P, msg, w.disableTOTP)
+	case DeleteAccount:
+		out, err = lockTOTP(ctx, w, msg.P, msg, w.deleteAccount)
+	case EraseAccount:
+		out, err = w.eraseAccount(ctx, msg)
 	case ListSessions:
 		out, err = w.listSessions(ctx, msg)
 	case RevokeSession:

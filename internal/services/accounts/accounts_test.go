@@ -199,8 +199,15 @@ func (f *fakeRepo) EnableTOTP(context.Context, gocql.UUID, []byte, int64, time.T
 	return false, errUnused
 }
 func (f *fakeRepo) DisableTOTP(context.Context, gocql.UUID, time.Time) error { return errUnused }
-func (f *fakeRepo) AdvanceTOTPStep(context.Context, gocql.UUID, int64) (bool, error) {
-	return false, errUnused
+func (f *fakeRepo) AdvanceTOTPStep(_ context.Context, id gocql.UUID, step int64) (bool, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	u := f.users[id]
+	if u.TOTPLastStep >= step {
+		return false, nil
+	}
+	u.TOTPLastStep = step
+	return true, nil
 }
 func (f *fakeRepo) ReplaceRecoveryCodes(context.Context, gocql.UUID, [][]byte) error {
 	return errUnused

@@ -59,10 +59,11 @@ type botTeams struct{ *fakeRepo }
 func (f botTeams) ListUserTeams(_ context.Context, userID gocql.UUID) ([]*models.TeamMember, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
-	if _, in := f.members[userID]; !in {
+	e, in := f.members[userID]
+	if !in {
 		return nil, nil
 	}
-	return []*models.TeamMember{{TeamID: f.team, UserID: userID}}, nil
+	return []*models.TeamMember{{TeamID: f.team, UserID: userID, Role: e.Role}}, nil
 }
 
 func TestADeletedBotLeavesItsTeams(t *testing.T) {

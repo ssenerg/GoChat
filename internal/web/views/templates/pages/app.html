@@ -10,8 +10,8 @@
           <summary class="icon-btn" aria-label="Team menu">{{icon "more"}}{{if isAdmin .Team}}{{template "reports-badge" (dict "ID" "team" "Count" 0)}}{{end}}</summary>
           {{if or (isAdmin .Team) (isSystemAdmin .User)}}<span hidden hx-get="/t/{{.Team.Name}}/reports/count" hx-trigger="load" hx-swap="none"></span>{{end}}
           <div class="menu-items">
-            {{if isAdmin .Team}}<button hx-get="/t/{{.Team.Name}}/invite" hx-target="#modal">Invite people</button>
-            <button hx-get="/t/{{.Team.Name}}/settings" hx-target="#modal">Team settings</button>{{end}}
+            {{if isAdmin .Team}}<button hx-get="/t/{{.Team.Name}}/invite" hx-target="#modal">Invite people</button>{{end}}
+            <button hx-get="/t/{{.Team.Name}}/settings" hx-target="#modal">Team settings</button>
             <button hx-get="/t/{{.Team.Name}}/members" hx-target="#modal">Team members</button>
             <button hx-get="/t/{{.Team.Name}}/channels/new" hx-target="#modal">Create a channel</button>
             <button hx-get="/t/{{.Team.Name}}/channels/browse" hx-target="#modal">Browse channels</button>
@@ -56,6 +56,7 @@
   <div id="notify" hidden></div>
   <div id="threads-refresh" hidden></div>
   <div id="saved-changed" hidden></div>
+  <div id="members-changed" hidden></div>
   <div id="voice-audio" hidden></div>
 </div>
 {{end}}

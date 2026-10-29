@@ -11,6 +11,9 @@ service TeamService {
   rpc GetTeam(GetTeamRequest) returns (GetTeamResponse);
   rpc ListTeamMembers(ListTeamMembersRequest) returns (ListTeamMembersResponse);
   rpc RemoveTeamMember(RemoveTeamMemberRequest) returns (RemoveTeamMemberResponse);
+  // LeaveTeam takes the caller out of a team, its channels and its
+  // conversations. The last admin leaves only a team no one else is in.
+  rpc LeaveTeam(LeaveTeamRequest) returns (LeaveTeamResponse);
   rpc UpdateTeamMemberRole(UpdateTeamMemberRoleRequest) returns (UpdateTeamMemberRoleResponse);
   rpc CreateInvite(CreateInviteRequest) returns (CreateInviteResponse);
   rpc GetInvite(GetInviteRequest) returns (GetInviteResponse);
@@ -70,6 +73,12 @@ message RemoveTeamMemberRequest {
 }
 
 message RemoveTeamMemberResponse {}
+
+message LeaveTeamRequest {
+  string team_id = 1;
+}
+
+message LeaveTeamResponse {}
 
 message UpdateTeamMemberRoleRequest {
   string team_id = 1;

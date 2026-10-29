@@ -139,17 +139,26 @@ func (h *Handler) setPhoto(w http.ResponseWriter, r *http.Request) {
 	h.fragment(w, r, http.StatusOK, "photo-field", field)
 }
 
+type teamSettingsData struct {
+	Team *pb.Team
+	// Photo is the team's photo, which its admins change.
+	Photo *photoField
+	Error string
+}
+
+// teamSettings shows every member how to leave the team, and its admins
+// its photo.
 func (h *Handler) teamSettings(w http.ResponseWriter, r *http.Request) {
 	_, team, _, cancel := h.teamFor(w, r)
 	if team == nil {
 		return
 	}
 	defer cancel()
-	if team.Role != pb.TeamRole_TEAM_ROLE_ADMIN {
-		h.fail(w, r, ierrors.PermissionDenied())
-		return
+	data := teamSettingsData{Team: team}
+	if team.Role == pb.TeamRole_TEAM_ROLE_ADMIN {
+		data.Photo = &photoField{ID: "team-photo", URL: "/t/" + team.Name + "/photo", Team: team}
 	}
-	h.fragment(w, r, http.StatusOK, "team-settings", photoField{ID: "team-photo", URL: "/t/" + team.Name + "/photo", Team: team})
+	h.fragment(w, r, http.StatusOK, "team-settings", data)
 }
 
 // setTeamPhoto answers with the photo field and the refreshed team rail.

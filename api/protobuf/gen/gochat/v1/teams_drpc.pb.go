@@ -43,6 +43,7 @@ type DRPCTeamServiceClient interface {
 	GetTeam(ctx context.Context, in *GetTeamRequest) (*GetTeamResponse, error)
 	ListTeamMembers(ctx context.Context, in *ListTeamMembersRequest) (*ListTeamMembersResponse, error)
 	RemoveTeamMember(ctx context.Context, in *RemoveTeamMemberRequest) (*RemoveTeamMemberResponse, error)
+	LeaveTeam(ctx context.Context, in *LeaveTeamRequest) (*LeaveTeamResponse, error)
 	UpdateTeamMemberRole(ctx context.Context, in *UpdateTeamMemberRoleRequest) (*UpdateTeamMemberRoleResponse, error)
 	CreateInvite(ctx context.Context, in *CreateInviteRequest) (*CreateInviteResponse, error)
 	GetInvite(ctx context.Context, in *GetInviteRequest) (*GetInviteResponse, error)
@@ -102,6 +103,15 @@ func (c *drpcTeamServiceClient) ListTeamMembers(ctx context.Context, in *ListTea
 func (c *drpcTeamServiceClient) RemoveTeamMember(ctx context.Context, in *RemoveTeamMemberRequest) (*RemoveTeamMemberResponse, error) {
 	out := new(RemoveTeamMemberResponse)
 	err := c.cc.Invoke(ctx, "/gochat.v1.TeamService/RemoveTeamMember", drpcEncoding_File_gochat_v1_teams_proto{}, in, out)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *drpcTeamServiceClient) LeaveTeam(ctx context.Context, in *LeaveTeamRequest) (*LeaveTeamResponse, error) {
+	out := new(LeaveTeamResponse)
+	err := c.cc.Invoke(ctx, "/gochat.v1.TeamService/LeaveTeam", drpcEncoding_File_gochat_v1_teams_proto{}, in, out)
 	if err != nil {
 		return nil, err
 	}
@@ -186,6 +196,7 @@ type DRPCTeamServiceServer interface {
 	GetTeam(context.Context, *GetTeamRequest) (*GetTeamResponse, error)
 	ListTeamMembers(context.Context, *ListTeamMembersRequest) (*ListTeamMembersResponse, error)
 	RemoveTeamMember(context.Context, *RemoveTeamMemberRequest) (*RemoveTeamMemberResponse, error)
+	LeaveTeam(context.Context, *LeaveTeamRequest) (*LeaveTeamResponse, error)
 	UpdateTeamMemberRole(context.Context, *UpdateTeamMemberRoleRequest) (*UpdateTeamMemberRoleResponse, error)
 	CreateInvite(context.Context, *CreateInviteRequest) (*CreateInviteResponse, error)
 	GetInvite(context.Context, *GetInviteRequest) (*GetInviteResponse, error)
@@ -215,6 +226,10 @@ func (s *DRPCTeamServiceUnimplementedServer) ListTeamMembers(context.Context, *L
 }
 
 func (s *DRPCTeamServiceUnimplementedServer) RemoveTeamMember(context.Context, *RemoveTeamMemberRequest) (*RemoveTeamMemberResponse, error) {
+	return nil, drpcerr.WithCode(errors.New("Unimplemented"), drpcerr.Unimplemented)
+}
+
+func (s *DRPCTeamServiceUnimplementedServer) LeaveTeam(context.Context, *LeaveTeamRequest) (*LeaveTeamResponse, error) {
 	return nil, drpcerr.WithCode(errors.New("Unimplemented"), drpcerr.Unimplemented)
 }
 
@@ -252,7 +267,7 @@ func (s *DRPCTeamServiceUnimplementedServer) RemoveTeamPhoto(context.Context, *R
 
 type DRPCTeamServiceDescription struct{}
 
-func (DRPCTeamServiceDescription) NumMethods() int { return 13 }
+func (DRPCTeamServiceDescription) NumMethods() int { return 14 }
 
 func (DRPCTeamServiceDescription) Method(n int) (string, drpc.Encoding, drpc.Receiver, interface{}, bool) {
 	switch n {
@@ -302,6 +317,15 @@ func (DRPCTeamServiceDescription) Method(n int) (string, drpc.Encoding, drpc.Rec
 					)
 			}, DRPCTeamServiceServer.RemoveTeamMember, true
 	case 5:
+		return "/gochat.v1.TeamService/LeaveTeam", drpcEncoding_File_gochat_v1_teams_proto{},
+			func(srv interface{}, ctx context.Context, in1, in2 interface{}) (drpc.Message, error) {
+				return srv.(DRPCTeamServiceServer).
+					LeaveTeam(
+						ctx,
+						in1.(*LeaveTeamRequest),
+					)
+			}, DRPCTeamServiceServer.LeaveTeam, true
+	case 6:
 		return "/gochat.v1.TeamService/UpdateTeamMemberRole", drpcEncoding_File_gochat_v1_teams_proto{},
 			func(srv interface{}, ctx context.Context, in1, in2 interface{}) (drpc.Message, error) {
 				return srv.(DRPCTeamServiceServer).
@@ -310,7 +334,7 @@ func (DRPCTeamServiceDescription) Method(n int) (string, drpc.Encoding, drpc.Rec
 						in1.(*UpdateTeamMemberRoleRequest),
 					)
 			}, DRPCTeamServiceServer.UpdateTeamMemberRole, true
-	case 6:
+	case 7:
 		return "/gochat.v1.TeamService/CreateInvite", drpcEncoding_File_gochat_v1_teams_proto{},
 			func(srv interface{}, ctx context.Context, in1, in2 interface{}) (drpc.Message, error) {
 				return srv.(DRPCTeamServiceServer).
@@ -319,7 +343,7 @@ func (DRPCTeamServiceDescription) Method(n int) (string, drpc.Encoding, drpc.Rec
 						in1.(*CreateInviteRequest),
 					)
 			}, DRPCTeamServiceServer.CreateInvite, true
-	case 7:
+	case 8:
 		return "/gochat.v1.TeamService/GetInvite", drpcEncoding_File_gochat_v1_teams_proto{},
 			func(srv interface{}, ctx context.Context, in1, in2 interface{}) (drpc.Message, error) {
 				return srv.(DRPCTeamServiceServer).
@@ -328,7 +352,7 @@ func (DRPCTeamServiceDescription) Method(n int) (string, drpc.Encoding, drpc.Rec
 						in1.(*GetInviteRequest),
 					)
 			}, DRPCTeamServiceServer.GetInvite, true
-	case 8:
+	case 9:
 		return "/gochat.v1.TeamService/AcceptInvite", drpcEncoding_File_gochat_v1_teams_proto{},
 			func(srv interface{}, ctx context.Context, in1, in2 interface{}) (drpc.Message, error) {
 				return srv.(DRPCTeamServiceServer).
@@ -337,7 +361,7 @@ func (DRPCTeamServiceDescription) Method(n int) (string, drpc.Encoding, drpc.Rec
 						in1.(*AcceptInviteRequest),
 					)
 			}, DRPCTeamServiceServer.AcceptInvite, true
-	case 9:
+	case 10:
 		return "/gochat.v1.TeamService/ListInvites", drpcEncoding_File_gochat_v1_teams_proto{},
 			func(srv interface{}, ctx context.Context, in1, in2 interface{}) (drpc.Message, error) {
 				return srv.(DRPCTeamServiceServer).
@@ -346,7 +370,7 @@ func (DRPCTeamServiceDescription) Method(n int) (string, drpc.Encoding, drpc.Rec
 						in1.(*ListInvitesRequest),
 					)
 			}, DRPCTeamServiceServer.ListInvites, true
-	case 10:
+	case 11:
 		return "/gochat.v1.TeamService/RevokeInvite", drpcEncoding_File_gochat_v1_teams_proto{},
 			func(srv interface{}, ctx context.Context, in1, in2 interface{}) (drpc.Message, error) {
 				return srv.(DRPCTeamServiceServer).
@@ -355,7 +379,7 @@ func (DRPCTeamServiceDescription) Method(n int) (string, drpc.Encoding, drpc.Rec
 						in1.(*RevokeInviteRequest),
 					)
 			}, DRPCTeamServiceServer.RevokeInvite, true
-	case 11:
+	case 12:
 		return "/gochat.v1.TeamService/SetTeamPhoto", drpcEncoding_File_gochat_v1_teams_proto{},
 			func(srv interface{}, ctx context.Context, in1, in2 interface{}) (drpc.Message, error) {
 				return srv.(DRPCTeamServiceServer).
@@ -364,7 +388,7 @@ func (DRPCTeamServiceDescription) Method(n int) (string, drpc.Encoding, drpc.Rec
 						in1.(*SetTeamPhotoRequest),
 					)
 			}, DRPCTeamServiceServer.SetTeamPhoto, true
-	case 12:
+	case 13:
 		return "/gochat.v1.TeamService/RemoveTeamPhoto", drpcEncoding_File_gochat_v1_teams_proto{},
 			func(srv interface{}, ctx context.Context, in1, in2 interface{}) (drpc.Message, error) {
 				return srv.(DRPCTeamServiceServer).
@@ -476,6 +500,26 @@ func (x *drpcTeamService_RemoveTeamMemberStream) GetStream() drpc.Stream {
 }
 
 func (x *drpcTeamService_RemoveTeamMemberStream) SendAndClose(m *RemoveTeamMemberResponse) error {
+	if err := x.MsgSend(m, drpcEncoding_File_gochat_v1_teams_proto{}); err != nil {
+		return err
+	}
+	return x.CloseSend()
+}
+
+type DRPCTeamService_LeaveTeamStream interface {
+	drpc.Stream
+	SendAndClose(*LeaveTeamResponse) error
+}
+
+type drpcTeamService_LeaveTeamStream struct {
+	drpc.Stream
+}
+
+func (x *drpcTeamService_LeaveTeamStream) GetStream() drpc.Stream {
+	return x.Stream
+}
+
+func (x *drpcTeamService_LeaveTeamStream) SendAndClose(m *LeaveTeamResponse) error {
 	if err := x.MsgSend(m, drpcEncoding_File_gochat_v1_teams_proto{}); err != nil {
 		return err
 	}
