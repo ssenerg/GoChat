@@ -350,18 +350,33 @@ that carry what people post.
 - Bootstrap: the first account, which becomes the system admin, needs the
   setup token unless `services.accounts.allow_open_bootstrap` is set.
 - Leaving a team: anyone leaves a team from its settings, with its channels
-  and conversations, and their bots go with them. Its last admin leaves only
-  once no one else is in it; an owner who leaves hands the team to the admin
-  who joined first.
+  and conversations, and their bots go with them. Its last active admin
+  leaves only once no one active is in it; an owner who leaves hands the
+  team to the active admin who joined first. A leave cut short of the
+  team's channels is finished in the background.
 - Deleting an account: people delete their own in Settings, on the web or in
   the apps, with their password, or for an account without one, a sign-in
   again at its provider, which lasts five minutes; and with their second
   factor when it is on. It is refused to the last admin of a team others
-  are in, and to the server's last system admin. It signs out every session
-  at once, forgets their devices' push tokens, leaves every team, channel
-  and conversation, unlinks their single sign-on accounts and erases their
-  name, photo and statuses. Their username and email are free for anyone to
-  take, and their account cannot be reactivated.
+  are in, and to the server's last system admin, before any code is spent.
+  Once the person proved who they are, the account is deactivated: its
+  sessions are refused but for the call deleting it, so nothing they do
+  elsewhere races the deletion. It then leaves every team, channel and
+  conversation, deletes their bots, signs out every session, forgets their
+  devices' push tokens, unlinks their single sign-on accounts and erases
+  their name, photo and statuses. A deletion that fails partway reactivates
+  the account, sessions and all, to try again; one cut short by the server
+  stopping leaves it deactivated, for an admin to reactivate. Deleting may
+  take up to two minutes, which the web and the apps wait for. Their
+  username and email are free for anyone to take, and their account cannot
+  be reactivated.
+  - The sign-in again asks the provider for `max_age=0` and takes it only
+    with an `auth_time` from after it began, as OpenID Connect requires of
+    a provider asked for `max_age`: a session already open at the provider
+    proves nothing of who is at the keyboard.
+  - Whom they blocked is forgotten; others' blocks of them stay theirs.
+    Reports they made, or that name them, stay with the admins they went
+    to, with the excerpt of the message each was about, by "Deleted user".
   - Messages stay, by "Deleted user", with their reactions, pins and
     threads, as Slack and Discord keep them. Attachments stay with their
     messages, so deleting an account frees none of their space: it stays

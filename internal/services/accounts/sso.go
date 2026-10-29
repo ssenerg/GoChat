@@ -146,6 +146,7 @@ type ssoClaims struct {
 	EmailVerified     flexBool `json:"email_verified"`
 	Name              string   `json:"name"`
 	PreferredUsername string   `json:"preferred_username"`
+	AuthTime          int64    `json:"auth_time"`
 }
 
 // admits reports whether the claims satisfy the provider's domains.
@@ -208,7 +209,12 @@ func (w *worker) beginSSO(ctx context.Context, msg BeginSSO) (*SSOStart, error) 
 	if err := w.Repo.CreateSSOFlow(ctx, f, now); err != nil {
 		return nil, err
 	}
-	return &SSOStart{URL: p.oauth(op, msg.RedirectURI).AuthCodeURL(state, oidc.Nonce(nonce), oauth2.S256ChallengeOption(verifier)), State: state}, nil
+	opts := []oauth2.AuthCodeOption{oidc.Nonce(nonce), oauth2.S256ChallengeOption(verifier)}
+	// A sign-in again must ask for the password, not ride a live session.
+	if msg.Reauth {
+		opts = append(opts, oauth2.SetAuthURLParam("max_age", "0"))
+	}
+	return &SSOStart{URL: p.oauth(op, msg.RedirectURI).AuthCodeURL(state, opts...), State: state}, nil
 }
 
 // identify trades the code for the ID token and checks it: signed by the
@@ -301,9 +307,18 @@ func (w *worker) finishSSO(ctx context.Context, msg FinishSSO) (*SSOResult, erro
 	if err != nil && !ierrors.Is(err, ierrors.CodeNotFound) {
 		return nil, err
 	}
+	if known {
+		if known, err = w.stillHeld(ctx, id, userID); err != nil {
+			return nil, err
+		}
+	}
 	out := &SSOResult{Provider: p.cfg.Name}
 
 	if f.Reauth {
+		if !w.signedInSince(c, f) {
+			w.Logger.Warn("sso reauth without a fresh sign-in", zap.String("provider", p.cfg.ID))
+			return nil, ierrors.FailedPrecondition(p.cfg.Name + " did not ask you to sign in again: sign out of it, then try again")
+		}
 		return w.reauthed(ctx, p, f, id, msg.P, out)
 	}
 	if !ids.IsZero(f.LinkUser) {
@@ -358,6 +373,35 @@ func (w *worker) finishSSO(ctx context.Context, msg FinishSSO) (*SSOResult, erro
 
 // reauthTTL bounds how long a reauth proves who signed in.
 const reauthTTL = 5 * time.Minute
+
+// authSkew allows for a provider's clock running behind this one.
+const authSkew = time.Minute
+
+// signedInSince reports whether the provider says the person signed in
+// after the flow began, as max_age=0 asks; one that does not say is not
+// taken at its word.
+func (w *worker) signedInSince(c *ssoClaims, f *models.SSOFlow) bool {
+	began := f.ExpiresAt.Add(-w.Cfg.SSO.FlowTTL)
+	return c.AuthTime > 0 && !time.Unix(c.AuthTime, 0).Before(began.Add(-authSkew))
+}
+
+// stillHeld reports whether the identity's account is still there. One
+// whose deletion failed to unlink it is freed here instead.
+func (w *worker) stillHeld(ctx context.Context, id *models.SSOIdentity, userID gocql.UUID) (bool, error) {
+	u, err := w.Repo.GetUser(ctx, userID)
+	if err != nil && !ierrors.Is(err, ierrors.CodeNotFound) {
+		return false, err
+	}
+	if err == nil && u.DeletedAt.IsZero() {
+		return true, nil
+	}
+	stale := &models.SSOIdentity{UserID: userID, Issuer: id.Issuer, Subject: id.Subject}
+	if err := w.Repo.UnlinkSSOIdentity(ctx, stale); err != nil {
+		return false, err
+	}
+	w.Logger.Info("freed a deleted account's sign-in", zap.String("user", userID.String()))
+	return false, nil
+}
 
 // reauthed proves who signed in again at a provider: only someone whose
 // account it is linked to, and with a session, the one who began.

@@ -87,6 +87,29 @@ var apiCalls = map[string][]string{
 
 // apiLimited are the calls on the stricter budget of the sign-in pages:
 // those that guess at a password, a code or an invite.
+// apiSlow are the calls that may outlast the request timeout, and how long
+// they may take: deleting an account, whose sweep the server gives two
+// minutes once it knows who asks.
+var apiSlow = map[string]time.Duration{
+	"gochat.v1.AuthService/DeleteAccount": 150 * time.Second,
+}
+
+// callContext bounds a call of method by the request timeout, or a slow
+// one by its own.
+func (h *Handler) callContext(ctx context.Context, method string, call drpc.Call) (context.Context, context.CancelFunc) {
+	if wait, ok := apiSlow[method]; ok {
+		return context.WithTimeout(h.client.Stream(ctx, call), wait)
+	}
+	return h.client.Context(ctx, call)
+}
+
+// waitFor gives the response to a slow call of method the time it takes.
+func (h *Handler) waitFor(w http.ResponseWriter, method string) {
+	if wait, ok := apiSlow[method]; ok {
+		_ = http.NewResponseController(w).SetWriteDeadline(time.Now().Add(wait + h.cfg.HTTP.WriteTimeout))
+	}
+}
+
 var apiLimited = map[string]bool{
 	"gochat.v1.AuthService/Login":            true,
 	"gochat.v1.AuthService/VerifyMFA":        true,
@@ -282,7 +305,8 @@ func (h *Handler) apiRPC(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	out := m.out.New().Interface()
-	ctx, cancel := h.client.Context(r.Context(), h.apiCall(r))
+	h.waitFor(w, full)
+	ctx, cancel := h.callContext(r.Context(), full, h.apiCall(r))
 	defer cancel()
 	if err := h.client.Invoke(ctx, "/"+full, in, out); err != nil {
 		h.apiFail(w, r, enc, err)

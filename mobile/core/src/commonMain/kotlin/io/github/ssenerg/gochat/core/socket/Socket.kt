@@ -263,7 +263,7 @@ class Socket internal constructor(
 
     /** Makes one call of the chat API, such as "gochat.v1.MessageService/PostMessage". */
     suspend fun call(method: String, payload: ByteArray): ByteArray {
-        val result = withTimeoutOrNull(CALL_TIMEOUT_MS) { exchange(method, payload) }
+        val result = withTimeoutOrNull(SLOW_CALLS[method] ?: CALL_TIMEOUT_MS) { exchange(method, payload) }
             ?: throw ConnectionLost("The server did not answer in time.")
         result.error?.let { throw ApiException(it.code, it.message.ifEmpty { "The server refused the request." }) }
         return result.payload?.toByteArray() ?: ByteArray(0)
@@ -490,6 +490,9 @@ class Socket internal constructor(
         const val MAX_WATCHED = 1000
 
         internal const val CALL_TIMEOUT_MS = 30_000L
+
+        /** Calls the server may take longer over, as it waits for them. */
+        private val SLOW_CALLS = mapOf("gochat.v1.AuthService/DeleteAccount" to 150_000L)
         internal const val PING_EVERY_MS = 30_000L
         internal const val PONG_WAIT_MS = 15_000L
         private const val MIN_DELAY_MS = 1_000L

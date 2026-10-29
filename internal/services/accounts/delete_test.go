@@ -3,6 +3,8 @@ package accounts
 import (
 	"context"
 	"errors"
+	"net/url"
+	"slices"
 	"sync"
 	"testing"
 	"time"
@@ -10,6 +12,7 @@ import (
 	"github.com/gocql/gocql"
 	potp "github.com/pquerna/otp/totp"
 
+	"github.com/ssenerg/gochat/internal/core/ids"
 	"github.com/ssenerg/gochat/internal/core/models"
 	"github.com/ssenerg/gochat/internal/core/secure"
 	ierrors "github.com/ssenerg/gochat/internal/errors"
@@ -114,25 +117,150 @@ func TestDeleteAccountAsksForTheSecondFactor(t *testing.T) {
 
 func TestTheLastSystemAdminStays(t *testing.T) {
 	f := newFixture(t, nil)
+	ctx := context.Background()
 	ada := f.user("ada", models.SystemRoleAdmin)
 	ap, _ := f.login(ada, "10.0.0.1")
-	if err := f.deleted(DeleteAccount{P: ap, Password: "ada-password"}); !errors.Is(err, errOnlyAdmin) {
+	// Refused before the password is checked, so no code would be spent.
+	if err := f.deleted(DeleteAccount{P: ap, Password: "wrong-password"}); !errors.Is(err, errOnlyAdmin) {
 		t.Fatalf("the only admin: %v", err)
 	}
-	// Two admins deleting at once: one stays.
+	// Two admins deleting at once: the second is refused before anything
+	// of theirs is taken apart.
 	bea := f.user("bea", models.SystemRoleAdmin)
 	bp, _ := f.login(bea, "10.0.0.2")
+	msgs := []DeleteAccount{{P: ap, Password: "ada-password"}, {P: bp, Password: "bea-password"}}
 	errs := make([]error, 2)
 	var wg sync.WaitGroup
-	for i, msg := range []DeleteAccount{{P: ap, Password: "ada-password"}, {P: bp, Password: "bea-password"}} {
-		wg.Go(func() { errs[i] = f.deleted(msg) })
+	for i, msg := range msgs {
+		wg.Go(func() { _, errs[i] = ask[Done](f, msg) })
 	}
 	wg.Wait()
 	if (errs[0] == nil) == (errs[1] == nil) {
 		t.Fatalf("both or neither admin went: %v, %v", errs[0], errs[1])
 	}
-	if admins, _ := f.repo.ListSystemAdmins(context.Background()); len(admins) != 1 {
-		t.Fatalf("%d admins stayed", len(admins))
+	stays := 0
+	if errs[0] == nil {
+		stays = 1
+	}
+	going, staying := msgs[1-stays].P, msgs[stays].P
+	if !errors.Is(errs[stays], errOnlyAdmin) {
+		t.Fatalf("the admin who stays: %v", errs[stays])
+	}
+	if admins, _ := f.repo.ListSystemAdmins(ctx); len(admins) != 1 || admins[0] != staying.UserID {
+		t.Fatalf("active admins: %v", admins)
+	}
+	// Nor does the one going take the other with them.
+	if _, err := ask[*models.User](f, SetDeactivated{P: going, UserID: staying.UserID.String(), Deactivated: true}); !ierrors.Is(err, ierrors.CodeFailedPrecondition) {
+		t.Fatalf("deactivated the last admin: %v", err)
+	}
+	if _, err := ask[Done](f, EraseAccount{P: going}); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestADeletionSuspendsTheAccountUntilItEnds(t *testing.T) {
+	f := newFixture(t, nil)
+	ctx := context.Background()
+	bob := f.user("bob", models.SystemRoleUser)
+	bp, token := f.login(bob, "10.0.0.2")
+	// Its session cached, as one in use is.
+	if _, err := ask[*models.Principal](f, Authenticate{Token: token}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := ask[Done](f, DeleteAccount{P: bp, Password: "bob-password"}); err != nil {
+		t.Fatal(err)
+	}
+	// While it is taken apart, nothing they do races it, though the
+	// sessions stay and the call deleting it gets its answer.
+	if _, err := ask[*models.Principal](f, Authenticate{Token: token}); !ierrors.Is(err, ierrors.CodeUnauthenticated) {
+		t.Fatalf("a session of an account being deleted: %v", err)
+	}
+	if _, err := ask[*LoginResult](f, Login{Login: "bob", Password: "bob-password"}); !ierrors.Is(err, ierrors.CodePermissionDenied) {
+		t.Fatalf("signed in to an account being deleted: %v", err)
+	}
+	select {
+	case got := <-f.hub:
+		t.Fatalf("suspending revoked %+v", got)
+	case <-time.After(100 * time.Millisecond):
+	}
+	// One that stops short gives the account back, sessions and all.
+	if _, err := ask[Done](f, ResumeAccount{P: bp}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := ask[*models.Principal](f, Authenticate{Token: token}); err != nil {
+		t.Fatalf("the session once resumed: %v", err)
+	}
+	// Erased, there is no way back.
+	if err := f.deleted(DeleteAccount{P: bp, Password: "bob-password"}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := ask[Done](f, ResumeAccount{P: bp}); err != nil {
+		t.Fatal(err)
+	}
+	if u, _ := f.repo.GetUser(ctx, bob.ID); !u.Deactivated || u.DeletedAt.IsZero() {
+		t.Fatalf("resumed a deleted account: %+v", u)
+	}
+}
+
+func TestTeammatesHearOfADeletion(t *testing.T) {
+	f := newFixture(t, nil)
+	bob := f.user("bob", models.SystemRoleUser)
+	bp, _ := f.login(bob, "10.0.0.2")
+	ann := ids.New()
+	if _, err := ask[Done](f, DeleteAccount{P: bp, Password: "bob-password"}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := ask[Done](f, EraseAccount{P: bp, Tell: []gocql.UUID{ann}}); err != nil {
+		t.Fatal(err)
+	}
+	select {
+	case d := <-f.delivered:
+		if u := d.Event.GetProfileChanged().GetUser(); !slices.Equal(d.UserIDs, []string{ann.String()}) || u.GetId() != bob.ID.String() || u.GetDisplayName() != DeletedName {
+			t.Fatalf("told %v of %v", d.UserIDs, u)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("no teammate was told")
+	}
+}
+
+func TestASignInAgainIsFresh(t *testing.T) {
+	f, idp := newSSOFixture(t, nil)
+	ann := f.signedIn(f.sso(idp, person{}, BeginSSO{}, FinishSSO{}))
+	for reauth, want := range map[bool]string{true: "0", false: ""} {
+		start, err := ask[*SSOStart](f, BeginSSO{P: ann, Provider: "idp", RedirectURI: testRedirect, Reauth: reauth})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if u, _ := url.Parse(start.URL); u.Query().Get("max_age") != want {
+			t.Fatalf("reauth %v asked for %s", reauth, start.URL)
+		}
+	}
+	// A provider that let a live session through, or does not say.
+	for name, claims := range map[string]map[string]any{
+		"an hour-old sign-in": {"auth_time": time.Now().Add(-time.Hour).Unix()},
+		"no time of sign-in":  {"auth_time": nil},
+	} {
+		if _, err := f.sso(idp, person{claims: claims}, BeginSSO{P: ann, Reauth: true}, FinishSSO{P: ann}); !ierrors.Is(err, ierrors.CodeFailedPrecondition) {
+			t.Fatalf("%s: %v", name, err)
+		}
+	}
+	if res, err := f.sso(idp, person{}, BeginSSO{P: ann, Reauth: true}, FinishSSO{P: ann}); err != nil || res.ReauthToken == "" {
+		t.Fatalf("a fresh sign-in: %v %+v", err, res)
+	}
+}
+
+func TestADeletedAccountsSignInIsFreed(t *testing.T) {
+	f, idp := newSSOFixture(t, nil)
+	ctx := context.Background()
+	ann := f.signedIn(f.sso(idp, person{}, BeginSSO{}, FinishSSO{}))
+	// Erased by a deletion that failed to unlink it.
+	u, _ := f.repo.GetUser(ctx, ann.UserID)
+	if err := f.repo.EraseUser(ctx, u, DeletedName, time.Now()); err != nil {
+		t.Fatal(err)
+	}
+	again := f.signedIn(f.sso(idp, person{}, BeginSSO{}, FinishSSO{}))
+	if again.UserID == ann.UserID {
+		t.Fatal("signed in to the deleted account")
 	}
 }
 

@@ -4,15 +4,18 @@ import (
 	"context"
 	"slices"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
 	"github.com/anthdm/hollywood/actor"
 	"github.com/gocql/gocql"
 
+	"github.com/ssenerg/gochat/internal/actors"
 	"github.com/ssenerg/gochat/internal/core/ids"
 	"github.com/ssenerg/gochat/internal/core/models"
 	ierrors "github.com/ssenerg/gochat/internal/errors"
+	"github.com/ssenerg/gochat/internal/services/channels"
 	"github.com/ssenerg/gochat/internal/services/hub"
 )
 
@@ -170,11 +173,16 @@ func TestLeaveEveryTeam(t *testing.T) {
 	if _, err := w.leaveTeams(ctx, LeaveTeams{P: principal(admin)}); !ierrors.Is(err, ierrors.CodeFailedPrecondition) {
 		t.Fatalf("the last admin left: %v", err)
 	}
-	if _, err := w.leaveTeams(ctx, LeaveTeams{P: principal(bob)}); err != nil {
+	stayed, err := w.leaveTeams(ctx, LeaveTeams{P: principal(bob)})
+	if err != nil {
 		t.Fatal(err)
 	}
 	if _, in := repo.members[bob]; in || len(repo.channels[bob]) != 0 {
 		t.Fatal("bob stayed")
+	}
+	// Those to tell of the deletion.
+	if !slices.Equal(stayed, []gocql.UUID{admin}) {
+		t.Fatalf("stayed: %v", stayed)
 	}
 	// Channels a leave left behind go too, team or none.
 	repo.channels[bob] = []gocql.UUID{ids.New()}
@@ -183,6 +191,77 @@ func TestLeaveEveryTeam(t *testing.T) {
 	}
 	if len(repo.channels[bob]) != 0 {
 		t.Fatal("a channel kept bob")
+	}
+}
+
+func TestADeactivatedAdminInheritsNothing(t *testing.T) {
+	repo := newFakeRepo()
+	owner := repo.addMember("owner", models.TeamRoleAdmin)
+	gone := repo.addMember("gone", models.TeamRoleAdmin)
+	bob := repo.addMember("bob", models.TeamRoleMember)
+	repo.owner = owner
+	repo.users[gone].Deactivated = true
+	w := newWorker(t, repo)
+	leave := func() error {
+		_, err := w.leaveTeam(context.Background(), LeaveTeam{P: principal(owner), TeamID: repo.team.String()})
+		return err
+	}
+	// Bob would be left with no admin who can act.
+	if err := leave(); !ierrors.Is(err, ierrors.CodeFailedPrecondition) {
+		t.Fatalf("the last active admin left: %v", err)
+	}
+	// Once no one active stays, they may go.
+	repo.mu.Lock()
+	repo.users[bob].Deactivated = true
+	repo.mu.Unlock()
+	w.Users.Invalidate(bob)
+	if err := leave(); err != nil {
+		t.Fatal(err)
+	}
+	if repo.owner == gone {
+		t.Fatal("the team went to a deactivated admin")
+	}
+}
+
+func TestALeaveThatStopsShortIsFinished(t *testing.T) {
+	repo := newFakeRepo()
+	repo.addMember("admin", models.TeamRoleAdmin)
+	bob := repo.addMember("bob", models.TeamRoleMember)
+	repo.channels[bob] = []gocql.UUID{ids.New(), ids.New()}
+	w := newWorker(t, repo)
+	was := leaveRetries
+	leaveRetries = []time.Duration{10 * time.Millisecond}
+	t.Cleanup(func() { leaveRetries = was })
+	// The first removal from a channel fails.
+	var refused atomic.Bool
+	w.Channels = w.Engine.SpawnFunc(func(c *actor.Context) {
+		msg, ok := c.Message().(channels.RemoveMember)
+		if !ok {
+			return
+		}
+		if refused.CompareAndSwap(false, true) {
+			actors.Reply(c, ierrors.Unavailable("busy"))
+			return
+		}
+		repo.mu.Lock()
+		repo.channels[msg.UserID] = slices.DeleteFunc(repo.channels[msg.UserID], func(id gocql.UUID) bool { return id == msg.ChannelID })
+		repo.mu.Unlock()
+		actors.Reply(c, channels.Done{})
+	}, "flaky-channels")
+	// Out of the team, they could not try again.
+	if _, err := w.leaveTeam(context.Background(), LeaveTeam{P: principal(bob), TeamID: repo.team.String()}); err != nil {
+		t.Fatalf("leaving: %v", err)
+	}
+	for deadline := time.Now().Add(5 * time.Second); ; time.Sleep(10 * time.Millisecond) {
+		repo.mu.Lock()
+		n := len(repo.channels[bob])
+		repo.mu.Unlock()
+		if n == 0 {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("bob is still in %d of the team's channels", n)
+		}
 	}
 }
 

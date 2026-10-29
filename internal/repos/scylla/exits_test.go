@@ -40,6 +40,12 @@ func TestEraseUserLive(t *testing.T) {
 	if err := r.ReplaceRecoveryCodes(ctx, u.ID, [][]byte{{1}, {2}}); err != nil {
 		t.Fatal(err)
 	}
+	other := ids.New()
+	for _, b := range []*models.Block{{UserID: u.ID, BlockedID: other}, {UserID: other, BlockedID: u.ID}} {
+		if err := r.Block(ctx, b); err != nil {
+			t.Fatal(err)
+		}
+	}
 	now := time.Now().UTC().Truncate(time.Millisecond)
 	if err := r.EraseUser(ctx, u, "Deleted user", now); err != nil {
 		t.Fatal(err)
@@ -54,6 +60,13 @@ func TestEraseUserLive(t *testing.T) {
 	}
 	if ok, err := r.ConsumeRecoveryCode(ctx, u.ID, []byte{1}); err != nil || ok {
 		t.Fatalf("a recovery code outlived the account: %v %v", ok, err)
+	}
+	// Its blocks go; someone's block of it is theirs.
+	if list, err := r.ListBlocks(ctx, u.ID, 10); err != nil || len(list) != 0 {
+		t.Fatalf("the account's blocks: %v %v", list, err)
+	}
+	if list, err := r.ListBlocks(ctx, other, 10); err != nil || len(list) != 1 {
+		t.Fatalf("a block of the account: %v %v", list, err)
 	}
 	for _, lookup := range []func() (gocql.UUID, error){
 		func() (gocql.UUID, error) { return r.GetUserIDByUsername(ctx, u.Username) },

@@ -81,15 +81,22 @@ type Done struct{}
 
 // DeleteAccount checks P may delete their account: their password, or for
 // an account without one a sign-in at its provider that just finished, and
-// their second factor. It refuses the last system admin.
+// their second factor. It refuses the last system admin, and suspends the
+// account it lets through until EraseAccount or ResumeAccount.
 type DeleteAccount struct {
 	P                                     *models.Principal
 	Password, Code, SSOToken, SSOVerifier string
 }
 
 // EraseAccount deletes the account of P, which DeleteAccount let through,
-// once it left its teams.
-type EraseAccount struct{ P *models.Principal }
+// once it left its teams, and tells those of Tell it is gone.
+type EraseAccount struct {
+	P    *models.Principal
+	Tell []gocql.UUID
+}
+
+// ResumeAccount lifts the suspension of a deletion that failed.
+type ResumeAccount struct{ P *models.Principal }
 
 // ListSessions replies with the []*pb.SessionInfo of the caller, or of
 // UserID for someone who may manage any.

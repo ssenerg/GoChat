@@ -91,6 +91,8 @@ func (w *worker) Receive(c *actor.Context) {
 		out, err = w.resetToken(ctx, msg)
 	case Delete:
 		out, err = w.delete(ctx, msg)
+	case DeleteOwned:
+		out, err = w.deleteOwned(ctx, msg.P)
 	case AddToTeam:
 		out, err = w.addToTeam(ctx, msg)
 	case ChannelCommands:
@@ -269,11 +271,35 @@ func (w *worker) delete(ctx context.Context, msg Delete) (Done, error) {
 	if err != nil {
 		return Done{}, err
 	}
-	if _, err := actors.Ask[directory.Done](ctx, w.Engine, w.Directory, directory.RemoveBot{P: msg.P, BotID: b.ID}); err != nil {
+	return Done{}, w.remove(ctx, msg.P, b)
+}
+
+func (w *worker) deleteOwned(ctx context.Context, p *models.Principal) (Done, error) {
+	if p.Bot {
+		return Done{}, ierrors.PermissionDenied()
+	}
+	botIDs, err := w.Repo.ListBotIDs(ctx, p.UserID)
+	if err != nil {
 		return Done{}, err
 	}
-	if err := w.Repo.DeleteBot(ctx, b); err != nil {
+	found, err := w.Repo.GetBots(ctx, botIDs)
+	if err != nil {
 		return Done{}, err
+	}
+	for _, b := range found {
+		if err := w.remove(ctx, p, b); err != nil {
+			return Done{}, err
+		}
+	}
+	return Done{}, nil
+}
+
+func (w *worker) remove(ctx context.Context, p *models.Principal, b *models.Bot) error {
+	if _, err := actors.Ask[directory.Done](ctx, w.Engine, w.Directory, directory.RemoveBot{P: p, BotID: b.ID}); err != nil {
+		return err
+	}
+	if err := w.Repo.DeleteBot(ctx, b); err != nil {
+		return err
 	}
 	w.Users.Invalidate(b.ID)
 	w.Revoke(b.ID, [][]byte{b.TokenHash}, true)
@@ -281,7 +307,7 @@ func (w *worker) delete(ctx context.Context, msg Delete) (Done, error) {
 		w.Engine.Send(w.Webhooks, Hooked{BotID: b.ID})
 	}
 	w.Logger.Info("bot deleted", zap.String("bot", b.ID.String()))
-	return Done{}, nil
+	return nil
 }
 
 func (w *worker) addToTeam(ctx context.Context, msg AddToTeam) (Done, error) {

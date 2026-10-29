@@ -38,6 +38,11 @@ func TestAPICallsAreUnaryCallsOfPeopleServices(t *testing.T) {
 			t.Errorf("limited call %s is not a call", full)
 		}
 	}
+	for full := range apiSlow {
+		if _, ok := apiMethods[full]; !ok {
+			t.Errorf("slow call %s is not a call", full)
+		}
+	}
 }
 
 func TestAPIToken(t *testing.T) {

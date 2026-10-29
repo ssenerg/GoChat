@@ -24,8 +24,15 @@ func (w *worker) deleteAccount(ctx context.Context, msg DeleteAccount) (Done, er
 	if msg.P.Bot {
 		return Done{}, ierrors.PermissionDenied()
 	}
-	user, err := w.reauthenticate(ctx, msg)
+	// The only admin is refused before a code or a ticket is spent.
+	user, err := w.Repo.GetUser(ctx, msg.P.UserID)
 	if err != nil {
+		return Done{}, err
+	}
+	if err := w.keepAnAdmin(ctx, user); err != nil {
+		return Done{}, err
+	}
+	if user, err = w.reauthenticate(ctx, msg); err != nil {
 		return Done{}, err
 	}
 	if user.TOTPEnabled {
@@ -41,7 +48,65 @@ func (w *worker) deleteAccount(ctx context.Context, msg DeleteAccount) (Done, er
 			return Done{}, ierrors.InvalidArgument("invalid code")
 		}
 	}
-	return Done{}, w.keepAnAdmin(ctx, user)
+	return Done{}, w.suspend(ctx, user)
+}
+
+// suspendedTTL outlasts any deletion; suspendedSize, any number at once.
+const (
+	suspendedTTL  = 10 * time.Minute
+	suspendedSize = 1024
+)
+
+// suspend deactivates the account while it is taken apart, so nothing its
+// sessions do races it: they stay, for a deletion that fails, but are read
+// again and refused, all but the call deleting it. Under the admins' lock,
+// the last active admin's check and the suspension go together: of two
+// admins deleting at once, the second finds the first gone.
+func (w *worker) suspend(ctx context.Context, user *models.User) error {
+	if user.Role == models.SystemRoleAdmin {
+		unlock, err := w.admins.Lock(ctx, "system")
+		if err != nil {
+			return ierrors.Unavailable("busy, try again")
+		}
+		defer unlock()
+		if err := w.keepAnAdmin(ctx, user); err != nil {
+			return err
+		}
+	}
+	w.suspended.Set(user.ID, struct{}{})
+	if err := w.Repo.SetDeactivated(ctx, user.ID, true, time.Now().UTC()); err != nil {
+		w.suspended.Delete(user.ID)
+		return err
+	}
+	w.Users.Invalidate(user.ID)
+	sessions, err := w.Repo.ListUserSessions(ctx, user.ID)
+	if err != nil {
+		_, _ = w.resumeAccount(ctx, ResumeAccount{P: &models.Principal{UserID: user.ID}})
+		return err
+	}
+	for _, s := range sessions {
+		w.sessions.Delete(string(s.TokenHash))
+	}
+	return nil
+}
+
+// resumeAccount undoes suspend for a deletion that stopped short of erasing
+// the account, so its owner can sign in again and retry.
+func (w *worker) resumeAccount(ctx context.Context, msg ResumeAccount) (Done, error) {
+	user, err := w.Repo.GetUser(ctx, msg.P.UserID)
+	if err != nil {
+		return Done{}, err
+	}
+	if !user.DeletedAt.IsZero() || !user.Deactivated {
+		return Done{}, nil
+	}
+	if err := w.Repo.SetDeactivated(ctx, user.ID, false, time.Now().UTC()); err != nil {
+		w.Logger.Warn("failed to resume an account whose deletion failed", zap.String("user", user.ID.String()), zap.Error(err))
+		return Done{}, err
+	}
+	w.Users.Invalidate(user.ID)
+	w.suspended.Delete(user.ID)
+	return Done{}, nil
 }
 
 // reauthenticate proves the caller owns the account: by its password, or
@@ -116,9 +181,16 @@ func (w *worker) eraseAccount(ctx context.Context, msg EraseAccount) (Done, erro
 		w.Logger.Warn("failed to end a deleted account's sessions", zap.String("user", user.ID.String()), zap.Error(err))
 	}
 	if u, err := w.Repo.GetUser(ctx, user.ID); err == nil {
-		w.Engine.Send(w.Hub, hub.About{UserID: u.ID.String(), Event: &pb.Event{Payload: &pb.Event_ProfileChanged{
-			ProfileChanged: &pb.ProfileChanged{User: convert.PublicUser(u)},
-		}}})
+		ev := &pb.Event{Payload: &pb.Event_ProfileChanged{ProfileChanged: &pb.ProfileChanged{User: convert.PublicUser(u)}}}
+		w.Engine.Send(w.Hub, hub.About{UserID: u.ID.String(), Event: ev})
+		// Those it shared a team with stopped watching it as it left.
+		if len(msg.Tell) > 0 {
+			to := make([]string, len(msg.Tell))
+			for i, id := range msg.Tell {
+				to[i] = id.String()
+			}
+			w.Engine.Send(w.Hub, hub.Deliver{UserIDs: to, Event: ev})
+		}
 	}
 	w.Logger.Info("account deleted", zap.String("user", user.ID.String()))
 	return Done{}, nil

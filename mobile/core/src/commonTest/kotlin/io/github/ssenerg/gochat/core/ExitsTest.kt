@@ -149,5 +149,14 @@ class ExitsTest {
         app.reauthUrl("corp", "chat.example.com")
         app.reauthReturned(SsoReturn(null, "sign in with the Corp ID account linked to yours"))
         assertEquals(Reauth.Failed("Sign in with the Corp ID account linked to yours"), app.reauth.value)
+
+        // Back from the browser into an app that restarted meanwhile and is
+        // not signed in yet: still a sign-in again.
+        app.reauthUrl("corp", "chat.example.com")
+        val pending = store.get("sso_reauth")!!
+        val before = app.state.value
+        app.ssoReturned("${GoChatApp.SSO_REDIRECT}?code=code-3")
+        assertEquals(Reauth.Proof("code-3", pending), app.reauth.value)
+        assertEquals(before, app.state.value)
     }
 }

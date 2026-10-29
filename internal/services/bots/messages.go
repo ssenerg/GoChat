@@ -41,6 +41,10 @@ type Delete struct {
 	BotID string
 }
 
+// DeleteOwned deletes every bot of P, deactivated ones too, for an account
+// being deleted.
+type DeleteOwned struct{ P *models.Principal }
+
 type AddToTeam struct {
 	P             *models.Principal
 	BotID, TeamID string

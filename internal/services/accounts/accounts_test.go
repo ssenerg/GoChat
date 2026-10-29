@@ -272,8 +272,9 @@ func (f *fakeRepo) ReleaseInvite(_ context.Context, inv *models.Invite, userID g
 
 // recorder keeps what the accounts send the hub, and push.
 type recorder struct {
-	got    chan hub.RevokeSessions
-	forget chan push.Forget
+	got     chan hub.RevokeSessions
+	forget  chan push.Forget
+	deliver chan hub.Deliver
 }
 
 func (r *recorder) Receive(c *actor.Context) {
@@ -282,6 +283,11 @@ func (r *recorder) Receive(c *actor.Context) {
 		r.got <- msg
 	case push.Forget:
 		r.forget <- msg
+	case hub.Deliver:
+		select {
+		case r.deliver <- msg:
+		default:
+		}
 	}
 }
 
@@ -294,7 +300,9 @@ type fixture struct {
 	pid    *actor.PID
 	hub    chan hub.RevokeSessions
 	push   chan push.Forget
-	deps   *Deps
+	// delivered is what the hub was asked to deliver to people.
+	delivered chan hub.Deliver
+	deps      *Deps
 }
 
 func newFixture(t *testing.T, mutate func(*Config)) *fixture {
@@ -316,14 +324,15 @@ func newFixture(t *testing.T, mutate func(*Config)) *fixture {
 	repo := newFakeRepo()
 	got := make(chan hub.RevokeSessions, 16)
 	forget := make(chan push.Forget, 16)
-	hubPID := engine.Spawn(func() actor.Receiver { return &recorder{got: got} }, "hub")
+	delivered := make(chan hub.Deliver, 16)
+	hubPID := engine.Spawn(func() actor.Receiver { return &recorder{got: got, deliver: delivered} }, "hub")
 	pushPID := engine.Spawn(func() actor.Receiver { return &recorder{forget: forget} }, "push")
 	deps, err := NewDeps(zap.NewNop(), cfg, repo, users.NewCache(repo, 100, time.Minute), authztest.New(t), engine, hubPID)
 	if err != nil {
 		t.Fatal(err)
 	}
 	deps.Push = pushPID
-	f := &fixture{t: t, repo: repo, engine: engine, hub: got, push: forget, deps: deps}
+	f := &fixture{t: t, repo: repo, engine: engine, hub: got, push: forget, delivered: delivered, deps: deps}
 	f.pid = engine.Spawn(Pool(deps), "accounts")
 	t.Cleanup(func() { <-engine.Poison(f.pid).Done() })
 	return f

@@ -253,6 +253,9 @@ func (s *authService) RevokeSessions(ctx context.Context, req *pb.RevokeSessions
 // they are.
 const deleteTimeout = 2 * time.Minute
 
+// resumeTimeout bounds lifting a failed deletion's suspension.
+const resumeTimeout = 10 * time.Second
+
 // DeleteAccount deletes the caller's account. Until its last step it may
 // be tried again; that step leaves no way back in.
 func (s *authService) DeleteAccount(ctx context.Context, req *pb.DeleteAccountRequest) (*pb.DeleteAccountResponse, error) {
@@ -261,9 +264,11 @@ func (s *authService) DeleteAccount(ctx context.Context, req *pb.DeleteAccountRe
 		return nil, err
 	}
 	// A team's last admin hands it on first, which takes no secret to say.
-	if _, err := actors.Ask[directory.Done](ctx, s.sys.Engine, s.sys.Directory, directory.LeaveTeams{P: p, Check: true}); err != nil {
+	if _, err := actors.Ask[[]gocql.UUID](ctx, s.sys.Engine, s.sys.Directory, directory.LeaveTeams{P: p, Check: true}); err != nil {
 		return nil, err
 	}
+	// From here the account is suspended: its sessions race none of what
+	// follows.
 	if _, err := actors.Ask[accounts.Done](ctx, s.sys.Engine, s.sys.Accounts, accounts.DeleteAccount{
 		P: p, Password: req.Password, Code: req.Code, SSOToken: req.SsoToken, SSOVerifier: req.SsoVerifier,
 	}); err != nil {
@@ -272,25 +277,31 @@ func (s *authService) DeleteAccount(ctx context.Context, req *pb.DeleteAccountRe
 	// A caller who stops waiting does not stop it halfway.
 	ctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), deleteTimeout)
 	defer cancel()
-	owned, err := actors.Ask[[]*pb.Bot](ctx, s.sys.Engine, s.sys.Bots, bots.List{P: p})
-	if err != nil {
-		return nil, err
-	}
-	for _, b := range owned {
-		if _, err := actors.Ask[bots.Done](ctx, s.sys.Engine, s.sys.Bots, bots.Delete{P: p, BotID: b.GetUser().GetId()}); err != nil {
-			return nil, err
-		}
-	}
-	if _, err := actors.Ask[directory.Done](ctx, s.sys.Engine, s.sys.Directory, directory.LeaveTeams{P: p}); err != nil {
-		return nil, err
-	}
-	if _, err := actors.Ask[*pb.User](ctx, s.sys.Engine, s.sys.Directory, directory.SetPhoto{P: p}); err != nil {
-		return nil, err
-	}
-	if _, err := actors.Ask[accounts.Done](ctx, s.sys.Engine, s.sys.Accounts, accounts.EraseAccount{P: p}); err != nil {
+	if err := s.takeApart(ctx, p); err != nil {
+		// Its owner may sign in again and finish it; resuming logs a failure.
+		rctx, rcancel := context.WithTimeout(context.WithoutCancel(ctx), resumeTimeout)
+		defer rcancel()
+		_, _ = actors.Ask[accounts.Done](rctx, s.sys.Engine, s.sys.Accounts, accounts.ResumeAccount{P: p})
 		return nil, err
 	}
 	return &pb.DeleteAccountResponse{}, nil
+}
+
+// takeApart deletes the account of p: its teams first, as a co-admin's
+// leaving may yet refuse one, then what cannot come back.
+func (s *authService) takeApart(ctx context.Context, p *models.Principal) error {
+	stayed, err := actors.Ask[[]gocql.UUID](ctx, s.sys.Engine, s.sys.Directory, directory.LeaveTeams{P: p})
+	if err != nil {
+		return err
+	}
+	if _, err := actors.Ask[bots.Done](ctx, s.sys.Engine, s.sys.Bots, bots.DeleteOwned{P: p}); err != nil {
+		return err
+	}
+	if _, err := actors.Ask[*pb.User](ctx, s.sys.Engine, s.sys.Directory, directory.SetPhoto{P: p}); err != nil {
+		return err
+	}
+	_, err = actors.Ask[accounts.Done](ctx, s.sys.Engine, s.sys.Accounts, accounts.EraseAccount{P: p, Tell: stayed})
+	return err
 }
 
 type pushService struct{ *base }

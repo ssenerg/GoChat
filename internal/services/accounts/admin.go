@@ -2,6 +2,7 @@ package accounts
 
 import (
 	"context"
+	"errors"
 	"strings"
 	"time"
 
@@ -75,6 +76,21 @@ func (w *worker) setDeactivated(ctx context.Context, msg SetDeactivated) (*model
 	}
 	if !user.DeletedAt.IsZero() {
 		return nil, ierrors.FailedPrecondition("the account was deleted")
+	}
+	// As a deletion would, it keeps an active admin: the caller may be one
+	// deleting their own account.
+	if msg.Deactivated && !user.Deactivated && user.Role == models.SystemRoleAdmin {
+		unlock, err := w.admins.Lock(ctx, "system")
+		if err != nil {
+			return nil, ierrors.Unavailable("busy, try again")
+		}
+		defer unlock()
+		if err := w.keepAnAdmin(ctx, user); err != nil {
+			if errors.Is(err, errOnlyAdmin) {
+				err = ierrors.FailedPrecondition("they are this server's only active system admin")
+			}
+			return nil, err
+		}
 	}
 	if user.Deactivated != msg.Deactivated {
 		if err := w.Repo.SetDeactivated(ctx, id, msg.Deactivated, time.Now().UTC()); err != nil {
