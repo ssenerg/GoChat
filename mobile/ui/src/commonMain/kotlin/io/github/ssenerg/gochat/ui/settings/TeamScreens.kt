@@ -187,14 +187,17 @@ fun TeamSettingsScreen(session: ChatSession, teamId: String) {
                     leadingContent = { Icon(Icons.Filled.Group, contentDescription = null) },
                     modifier = Modifier.clickable { nav.open(Route.TeamMembers(teamId)) },
                 )
-                val open = st.reports[teamId] ?: 0
-                ListItem(
-                    headlineContent = { Text("Reports") },
-                    supportingContent = { Text(if (open == 0) "No open reports." else "$open open: messages and people reported to the admins.") },
-                    leadingContent = { Icon(Icons.Filled.Flag, contentDescription = null) },
-                    trailingContent = if (open > 0) ({ MentionBadge(open) }) else null,
-                    modifier = Modifier.clickable { nav.open(Route.Reports(teamId)) },
-                )
+                // Reports are the team's admins' alone.
+                if (team.isAdmin) {
+                    val open = st.reports[teamId] ?: 0
+                    ListItem(
+                        headlineContent = { Text("Reports") },
+                        supportingContent = { Text(if (open == 0) "No open reports." else "$open open: messages and people reported to the admins.") },
+                        leadingContent = { Icon(Icons.Filled.Flag, contentDescription = null) },
+                        trailingContent = if (open > 0) ({ MentionBadge(open) }) else null,
+                        modifier = Modifier.clickable { nav.open(Route.Reports(teamId)) },
+                    )
+                }
                 HorizontalDivider()
                 SectionTitle("Open invites")
                 ListItem(

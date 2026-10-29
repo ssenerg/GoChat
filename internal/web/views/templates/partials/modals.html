@@ -277,10 +277,12 @@
 {{template "modal-start" "Team settings"}}
 <p class="muted">{{.Team.DisplayName}} · /t/{{.Team.Name}}</p>
 {{template "photo-field" .}}
+{{if isAdmin .Team}}
 <section class="stack" aria-labelledby="team-reports-title">
   <h3 id="team-reports-title">Open reports</h3>
   <div id="team-reports" hx-get="/t/{{.Team.Name}}/reports" hx-trigger="load"><span class="spinner" aria-label="Loading reports"></span></div>
 </section>
+{{end}}
 {{template "modal-end"}}
 {{end}}
 
