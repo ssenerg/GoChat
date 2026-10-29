@@ -24,9 +24,11 @@ type Message struct {
 	Mentioned bool
 	Focus     bool
 	OOB       bool
-	// Saved is whether the reader saved the message.
-	Saved bool
-	bar   ReactionsView
+	// Saved is whether the reader saved the message, Blocked whether they
+	// blocked its author: it shows folded.
+	Saved   bool
+	Blocked bool
+	bar     ReactionsView
 }
 
 // Message prepares m for the viewer meID; moderators may delete any message.
@@ -51,6 +53,13 @@ func (r *Renderer) Messages(list []*pb.Message, me *pb.User, moderator bool) []*
 		out[i] = r.Message(m, me, moderator)
 	}
 	return out
+}
+
+// Fold folds the messages whose author the reader blocked.
+func Fold(list []*Message, blocked map[string]bool) {
+	for _, m := range list {
+		m.Blocked = !m.Mine && blocked[m.GetAuthor().GetId()]
+	}
 }
 
 // Mentions reports whether m calls out me, by name or as one of everyone.
@@ -156,7 +165,10 @@ type ChannelView struct {
 	// Voice is who talks in a voice channel, MeID the viewer.
 	Voice *pb.VoiceChannelState
 	MeID  string
-	OOB   bool
+	// PeerBlocked is set when the viewer blocked the other of a direct
+	// conversation: it reads, but takes no messages.
+	PeerBlocked bool
+	OOB         bool
 }
 
 // Manage reports whether the viewer may change the channel's settings.

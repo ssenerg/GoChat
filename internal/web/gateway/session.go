@@ -63,8 +63,9 @@ type (
 		lists  *render.Lists
 	}
 	railReady  struct{ rail *render.Rail }
-	mutedReady struct{ ids []string }
-	savedReady struct{ ids []string }
+	mutedReady   struct{ ids []string }
+	savedReady   struct{ ids []string }
+	blockedReady struct{ ids []string }
 	// refetched is a message read again to show it as it now is.
 	refetched struct{ m *pb.Message }
 	failed    struct{ text string }
@@ -104,8 +105,10 @@ type session struct {
 	// muted holds the channels the user muted, names the sidebar's titles.
 	muted map[string]bool
 	names map[string]string
-	// saved holds the messages the user saved.
-	saved map[string]bool
+	// saved holds the messages the user saved, blocked the people they
+	// blocked.
+	saved   map[string]bool
+	blocked map[string]bool
 	// peerOf names the other person of each direct conversation.
 	peerOf map[string]string
 	// dnd is set while the user does not want to be disturbed.
@@ -158,6 +161,7 @@ func NewSession(d *Deps, connID uint64, call drpc.Call, ws *websocket.Conn, in *
 			unread:   make(map[string]bool),
 			muted:    make(map[string]bool),
 			saved:    make(map[string]bool),
+			blocked:  make(map[string]bool),
 			peerOf:   make(map[string]string),
 			names:    make(map[string]string),
 			peers:    make(map[string]bool),
@@ -219,6 +223,17 @@ func (s *session) Receive(c *actor.Context) {
 				return nil
 			}
 			return savedReady{ids: res.MessageIds}
+		})
+		s.rpc(c, func(ctx context.Context) any {
+			res, err := s.Client.Safety.ListBlocked(ctx, &pb.ListBlockedRequest{})
+			if err != nil {
+				return nil
+			}
+			ids := make([]string, len(res.Blocked))
+			for i, b := range res.Blocked {
+				ids[i] = b.GetUser().GetId()
+			}
+			return blockedReady{ids: ids}
 		})
 	case Rejected:
 		if msg.Retry {
@@ -299,6 +314,10 @@ func (s *session) Receive(c *actor.Context) {
 	case savedReady:
 		for _, id := range msg.ids {
 			s.saved[id] = true
+		}
+	case blockedReady:
+		for _, id := range msg.ids {
+			s.blocked[id] = true
 		}
 	case refetched:
 		if s.inView(msg.m.ChannelId, msg.m.RootId) {
@@ -401,6 +420,7 @@ func (s *session) message(name string, m *render.Message) {
 func (s *session) show(m *pb.Message) *render.Message {
 	view := s.Render.Message(m, s.user, s.moderator)
 	view.Saved = s.saved[m.Id]
+	view.Blocked = !view.Mine && s.blocked[m.GetAuthor().GetId()]
 	return view
 }
 
@@ -740,7 +760,7 @@ func (s *session) view(c *actor.Context, f *clientFrame) {
 // user, in a direct conversation, by mention or in a thread they take part
 // in. The tab shows it when it is in the background or elsewhere.
 func (s *session) notify(m *pb.Message, participants []string) {
-	if s.muted[m.ChannelId] || (s.dnd && (s.dndUntil.IsZero() || time.Now().Before(s.dndUntil))) {
+	if s.muted[m.ChannelId] || s.blocked[m.GetAuthor().GetId()] || (s.dnd && (s.dndUntil.IsZero() || time.Now().Before(s.dndUntil))) {
 		return
 	}
 	direct := s.directs[m.ChannelId]
@@ -818,6 +838,8 @@ func (s *session) event(c *actor.Context, ev *pb.Event) {
 	case *pb.Event_MessagePosted:
 		m := p.MessagePosted.Message
 		mine := m.GetAuthor().GetId() == me
+		// A blocked person's messages show folded, and mark nothing unread.
+		ignored := s.blocked[m.GetAuthor().GetId()]
 		// Another team's conversations and threads are shown there alone.
 		elsewhere := p.MessagePosted.TeamId != s.teamID
 		if !mine && (!elsewhere || !p.MessagePosted.Conversation) {
@@ -829,10 +851,10 @@ func (s *session) event(c *actor.Context, ev *pb.Event) {
 				if !mine {
 					s.readThread(c)
 				}
-			} else if !mine && m.ChannelId != s.channelID && render.Mentions(m, s.user) {
+			} else if !mine && !ignored && m.ChannelId != s.channelID && render.Mentions(m, s.user) {
 				s.mentioned(m.ChannelId)
 			}
-			if !mine && !elsewhere && m.RootId != s.threadID && slices.Contains(p.MessagePosted.ParticipantIds, me) {
+			if !mine && !ignored && !elsewhere && m.RootId != s.threadID && slices.Contains(p.MessagePosted.ParticipantIds, me) {
 				s.fragment("threads-unread", true)
 				if s.inThreads {
 					s.fragment("threads-refresh", s.teamName)
@@ -855,7 +877,7 @@ func (s *session) event(c *actor.Context, ev *pb.Event) {
 				s.typingSeq++
 				s.clearTyping()
 			}
-		} else if !mine && s.sidebar[m.ChannelId] {
+		} else if !mine && !ignored && s.sidebar[m.ChannelId] {
 			if s.direct(m.ChannelId) || render.Mentions(m, s.user) {
 				s.mentioned(m.ChannelId)
 			} else if s.mentions[m.ChannelId] == 0 && !s.muted[m.ChannelId] && !s.unread[m.ChannelId] {
@@ -1000,6 +1022,26 @@ func (s *session) event(c *actor.Context, ev *pb.Event) {
 		}
 	case *pb.Event_CallbackAnswer:
 		s.answered(p.CallbackAnswer)
+	case *pb.Event_BlocksChanged:
+		d := p.BlocksChanged
+		if d.Blocked {
+			s.blocked[d.GetUser().GetId()] = true
+		} else {
+			delete(s.blocked, d.GetUser().GetId())
+		}
+		// The channel shows again, folded or not, and a direct
+		// conversation takes messages or not.
+		if s.channelID != "" && !s.anchored {
+			s.fragment("resync", s.channelURL())
+		}
+	case *pb.Event_ReportsChanged:
+		d := p.ReportsChanged
+		switch d.TeamId {
+		case "":
+			s.fragment("reports-badge", map[string]any{"ID": "admin", "Count": d.Open, "OOB": true})
+		case s.teamID:
+			s.fragment("reports-badge", map[string]any{"ID": "team", "Count": d.Open, "OOB": true})
+		}
 	case *pb.Event_ProfileChanged:
 		u := p.ProfileChanged.User
 		if u.GetId() == me {

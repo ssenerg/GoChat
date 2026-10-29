@@ -361,6 +361,13 @@ kbd {
 .msg-main { flex: 1; min-width: 0; }
 .msg header { display: flex; align-items: baseline; gap: .5rem; min-width: 0; }
 .msg .author { font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.msg button.author { background: none; border: 0; padding: 0; font: inherit; font-weight: 700; color: inherit; cursor: pointer; }
+.msg button.author:hover { text-decoration: underline; }
+/* A blocked person's message shows folded until opened. */
+.msg.folded { display: block; }
+.msg.folded summary { display: flex; align-items: center; gap: .4rem; color: var(--fg-muted); font-size: .85rem; cursor: pointer; padding: .15rem 0; }
+.msg.folded summary svg { width: 1rem; height: 1rem; }
+.folded-body { display: flex; gap: .75rem; padding-top: .3rem; }
 .msg time, .msg .edited { color: var(--fg-muted); font-size: .76rem; flex: none; font-variant-numeric: tabular-nums; }
 /* Display names are free text: the handle says who it really is. */
 .msg .handle { color: var(--fg-muted); font-size: .8rem; min-width: 0; flex: 0 1 auto; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
