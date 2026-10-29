@@ -15,9 +15,11 @@ import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Logout
+import androidx.compose.material.icons.filled.DeleteForever
 import androidx.compose.material.icons.filled.Key
 import androidx.compose.material.icons.filled.Security
 import androidx.compose.material3.AlertDialog
@@ -33,6 +35,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -43,18 +46,23 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.KeyboardCapitalization
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import gochat.v1.SSOIdentity
 import gochat.v1.Status
 import io.github.ssenerg.gochat.core.api.userMessage
 import io.github.ssenerg.gochat.core.model.Emojis
 import io.github.ssenerg.gochat.core.model.displayName
 import io.github.ssenerg.gochat.core.state.ChatSession
 import io.github.ssenerg.gochat.core.state.GoChatApp
+import io.github.ssenerg.gochat.core.state.Reauth
 import io.github.ssenerg.gochat.ui.Avatar
 import io.github.ssenerg.gochat.ui.BackButton
 import io.github.ssenerg.gochat.ui.LocalChatColors
+import io.github.ssenerg.gochat.ui.LocalPlatform
 import io.github.ssenerg.gochat.ui.PresenceDot
 import io.github.ssenerg.gochat.ui.main.LocalNavigator
 import io.github.ssenerg.gochat.ui.main.Route
@@ -79,6 +87,7 @@ fun SettingsScreen(session: ChatSession, app: GoChatApp) {
     var editCustom by remember { mutableStateOf(false) }
     var changePassword by remember { mutableStateOf(false) }
     var confirmSignOut by remember { mutableStateOf(false) }
+    var deleteAccount by remember { mutableStateOf(false) }
     val pickPhoto = rememberFilePicker(
         onPicked = { file -> session.launch({ session.setPhoto(file.bytes) }) { err -> err?.let { toasts.show(it) } } },
         onError = { toasts.show(it) },
@@ -149,6 +158,12 @@ fun SettingsScreen(session: ChatSession, app: GoChatApp) {
                 leadingContent = { Icon(Icons.AutoMirrored.Filled.Logout, contentDescription = null, tint = MaterialTheme.colorScheme.error) },
                 modifier = Modifier.clickable { confirmSignOut = true },
             )
+            ListItem(
+                headlineContent = { Text("Delete account", color = MaterialTheme.colorScheme.error) },
+                supportingContent = { Text("For good: your messages stay, by “Deleted user”.") },
+                leadingContent = { Icon(Icons.Filled.DeleteForever, contentDescription = null, tint = MaterialTheme.colorScheme.error) },
+                modifier = Modifier.clickable { deleteAccount = true },
+            )
         }
     }
 
@@ -166,6 +181,7 @@ fun SettingsScreen(session: ChatSession, app: GoChatApp) {
     }
     if (editCustom) CustomStatusDialog(session, onDone = { editCustom = false })
     if (changePassword) PasswordDialog(session, onDone = { changePassword = false })
+    if (deleteAccount) DeleteAccountDialog(session, app, onDone = { deleteAccount = false })
     if (confirmSignOut) {
         AlertDialog(
             onDismissRequest = { confirmSignOut = false },
@@ -299,6 +315,87 @@ private fun PasswordDialog(session: ChatSession, onDone: () -> Unit) {
                     }
                 }
             }, enabled = current.isNotEmpty() && new.isNotEmpty()) { Text("Change") }
+        },
+        dismissButton = { TextButton(onClick = onDone) { Text("Cancel") } },
+    )
+}
+
+/**
+ * Deletes the account for good, as the web's settings do: with its
+ * password, or for one without, a sign-in again in the browser; and a
+ * two-factor code when it is on. The app then signs out.
+ */
+@Composable
+private fun DeleteAccountDialog(session: ChatSession, app: GoChatApp, onDone: () -> Unit) {
+    val platform = LocalPlatform.current
+    val st by session.state.collectAsState()
+    val totp = st.me.totp_enabled
+    val reauth by app.reauth.collectAsState()
+    val proof = reauth as? Reauth.Proof
+    var hasPassword by remember { mutableStateOf<Boolean?>(null) }
+    var providers by remember { mutableStateOf(emptyList<SSOIdentity>()) }
+    var password by remember { mutableStateOf("") }
+    var code by remember { mutableStateOf("") }
+    var error by remember { mutableStateOf<String?>(null) }
+    var busy by remember { mutableStateOf(false) }
+    LaunchedEffect(Unit) {
+        try {
+            val me = session.api.me()
+            if (!me.has_password) providers = session.api.ssoIdentities().distinctBy { it.provider_id }
+            hasPassword = me.has_password
+        } catch (e: Exception) {
+            error = e.userMessage()
+        }
+    }
+    LaunchedEffect(reauth) {
+        (reauth as? Reauth.Failed)?.let {
+            error = it.reason
+            app.reauthUsed()
+        }
+    }
+    val ready = (hasPassword == true && password.isNotEmpty() || proof != null) && (!totp || code.isNotBlank())
+    AlertDialog(
+        onDismissRequest = onDone,
+        title = { Text("Delete your account?") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text("This deletes it for good: you are signed out everywhere, leave every team, and your bots are deleted. Your messages stay, by “Deleted user”.")
+                when {
+                    hasPassword == true -> OutlinedTextField(
+                        password, { password = it }, label = { Text("Password") }, singleLine = true,
+                        visualTransformation = PasswordVisualTransformation(),
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
+                    )
+                    proof != null -> Text("You signed in again.")
+                    hasPassword == false -> {
+                        Text("Your account has no password: sign in again to delete it.", color = LocalChatColors.current.muted)
+                        providers.forEach { p ->
+                            TextButton(onClick = {
+                                error = null
+                                platform.signInInBrowser(app.reauthUrl(p.provider_id)) { app.ssoReturned(it) }
+                            }) { Text("Continue with ${p.provider_name}") }
+                        }
+                    }
+                }
+                if (totp && (hasPassword == true || proof != null)) {
+                    OutlinedTextField(
+                        code, { code = it }, label = { Text("Two-factor or recovery code") }, singleLine = true,
+                        keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.None, autoCorrectEnabled = false, keyboardType = KeyboardType.Ascii),
+                    )
+                }
+                error?.let { Text(it, color = MaterialTheme.colorScheme.error) }
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = {
+                busy = true
+                session.launch({ session.deleteAccount(password, code, proof) }) { err ->
+                    busy = false
+                    // The server spent it either way.
+                    if (proof != null) app.reauthUsed()
+                    error = err
+                }
+            }, enabled = ready && !busy) { Text("Delete", color = MaterialTheme.colorScheme.error) }
         },
         dismissButton = { TextButton(onClick = onDone) { Text("Cancel") } },
     )

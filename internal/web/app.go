@@ -830,6 +830,26 @@ func (h *Handler) removeTeamMember(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusOK)
 }
 
+// leaveTeam takes the caller out of the team, then home; a refusal shows in
+// the team's settings.
+func (h *Handler) leaveTeam(w http.ResponseWriter, r *http.Request) {
+	_, team, ctx, cancel := h.teamFor(w, r)
+	if team == nil {
+		return
+	}
+	defer cancel()
+	if _, err := h.client.Teams.LeaveTeam(ctx, &pb.LeaveTeamRequest{TeamId: team.Id}); err != nil {
+		msg, ok := formError(err)
+		if !ok {
+			h.fail(w, r, err)
+			return
+		}
+		h.fragment(w, r, http.StatusOK, "leave-team", teamSettingsData{Team: team, Error: msg})
+		return
+	}
+	h.reload(w, r, "/")
+}
+
 func (h *Handler) teamMemberRole(w http.ResponseWriter, r *http.Request) {
 	u, team, ctx, cancel := h.teamFor(w, r)
 	if team == nil {

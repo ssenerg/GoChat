@@ -108,6 +108,7 @@ message Event {
     VoiceChannelUpdate voice_channel_update = 18;
     CallbackQuery callback_query = 23;
     CallbackAnswer callback_answer = 24;
+    TeamMembersChanged team_members_changed = 25;
   }
   // The update's number, set on updates of a sequence: of the channel
   // pts_channel_id names, or of the recipient's account without it.
@@ -149,6 +150,12 @@ message SavedChanged {
   string message_id = 2;
   string root_id = 3;
   bool saved = 4;
+}
+
+// TeamMembersChanged tells a team's members someone left it.
+message TeamMembersChanged {
+  string team_id = 1;
+  string user_id = 2;
 }
 
 // ProfileChanged tells everyone a person changed how others see them.

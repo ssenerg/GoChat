@@ -57,6 +57,7 @@ type Repo interface {
 	GetTeamMember(ctx context.Context, teamID, userID gocql.UUID) (*models.TeamMember, error)
 	ListTeamMembers(ctx context.Context, teamID gocql.UUID) ([]*scylla.TeamMemberEntry, error)
 	ListUserTeams(ctx context.Context, userID gocql.UUID) ([]*models.TeamMember, error)
+	SetTeamOwner(ctx context.Context, teamID, userID gocql.UUID) error
 	RemoveTeamMember(ctx context.Context, teamID, userID gocql.UUID) error
 	UpdateTeamMemberRole(ctx context.Context, teamID, userID gocql.UUID, role models.TeamRole) error
 	CreateInvite(ctx context.Context, inv *models.Invite) error
@@ -80,6 +81,7 @@ type Repo interface {
 	GetChannelIDByName(ctx context.Context, teamID gocql.UUID, name string) (gocql.UUID, error)
 	ListTeamChannels(ctx context.Context, teamID gocql.UUID) ([]*scylla.TeamChannel, error)
 	ListUserChannels(ctx context.Context, userID, teamID gocql.UUID) ([]*models.ChannelMember, error)
+	ListAllUserChannels(ctx context.Context, userID gocql.UUID) ([]*models.ChannelMember, error)
 	ListLastReads(ctx context.Context, userID gocql.UUID) ([]*scylla.ChannelRead, error)
 	CountMentions(ctx context.Context, userID gocql.UUID) (map[gocql.UUID]int, error)
 	ListMuted(ctx context.Context, userID gocql.UUID) (map[gocql.UUID]bool, error)
@@ -144,6 +146,10 @@ func (w *worker) Receive(c *actor.Context) {
 		out, err = w.listTeamMembers(ctx, msg)
 	case RemoveTeamMember:
 		out, err = w.removeTeamMember(ctx, msg)
+	case LeaveTeam:
+		out, err = w.leaveTeam(ctx, msg)
+	case LeaveTeams:
+		out, err = w.leaveTeams(ctx, msg)
 	case AddBot:
 		out, err = w.addBot(ctx, msg)
 	case RemoveBot:
@@ -468,21 +474,12 @@ func (w *worker) removeTeamMember(ctx context.Context, msg RemoveTeamMember) (Do
 		return Done{}, err
 	}
 	if target == msg.P.UserID {
-		return Done{}, ierrors.FailedPrecondition("you cannot remove yourself")
+		return Done{}, ierrors.FailedPrecondition("you cannot remove yourself: leave the team instead")
 	}
 	if err := w.dropTeamMember(ctx, msg.P, teamID, target); err != nil {
 		return Done{}, err
 	}
-	// The channels go after the team: a join racing the removal then finds
-	// no team, or joined in time to be listed here.
-	if err := w.leaveChannels(ctx, msg.P, teamID, target); err != nil {
-		return Done{}, err
-	}
-	if err := w.dropBots(ctx, msg.P, teamID, target); err != nil {
-		return Done{}, err
-	}
-	go w.recheckWatches(context.WithoutCancel(ctx), target)
-	return Done{}, nil
+	return Done{}, w.afterLeaving(ctx, msg.P, teamID, target)
 }
 
 // dropTeamMember removes target from the team, keeping it an admin. A

@@ -685,9 +685,11 @@
     if (t.id.indexOf("replies-") === 0) scrollThread(false);
     if (t.id === "notify") showNotice(t.dataset);
     if (t.id === "channel-lists" || t.id.indexOf("unread-") === 0) updateTitle();
-    // A pin or save elsewhere refreshes the list showing it.
+    // A pin or save elsewhere, or someone leaving the team, refreshes the
+    // list showing it.
     var list = t.id.indexOf("pins-btn-") === 0 ? document.querySelector('[data-pins="' + t.id.slice(9) + '"]')
-      : t.id === "saved-changed" ? document.getElementById("saved-list") : null;
+      : t.id === "saved-changed" ? document.getElementById("saved-list")
+      : t.id === "members-changed" ? document.getElementById("team-member-list") : null;
     if (list) htmx.trigger(list, "refresh");
   });
 

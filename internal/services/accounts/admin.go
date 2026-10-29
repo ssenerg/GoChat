@@ -73,6 +73,9 @@ func (w *worker) setDeactivated(ctx context.Context, msg SetDeactivated) (*model
 		}
 		return nil, err
 	}
+	if !user.DeletedAt.IsZero() {
+		return nil, ierrors.FailedPrecondition("the account was deleted")
+	}
 	if user.Deactivated != msg.Deactivated {
 		if err := w.Repo.SetDeactivated(ctx, id, msg.Deactivated, time.Now().UTC()); err != nil {
 			return nil, err

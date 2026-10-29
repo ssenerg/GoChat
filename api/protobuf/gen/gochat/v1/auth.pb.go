@@ -1060,6 +1060,115 @@ func (*DisableTOTPResponse) Descriptor() ([]byte, []int) {
 	return file_gochat_v1_auth_proto_rawDescGZIP(), []int{19}
 }
 
+type DeleteAccountRequest struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// The account's password. An account without one signs in again at its
+	// provider instead: BeginSSO with reauth.
+	Password string `protobuf:"bytes,1,opt,name=password,proto3" json:"password,omitempty"`
+	// A TOTP or recovery code, when two-factor is on.
+	Code string `protobuf:"bytes,2,opt,name=code,proto3" json:"code,omitempty"`
+	// What that sign-in gave: FinishSSO's reauth_token, or an app's app_code.
+	SsoToken string `protobuf:"bytes,3,opt,name=sso_token,json=ssoToken,proto3" json:"sso_token,omitempty"`
+	// For an app_code, the PKCE verifier of the app_challenge it began with.
+	SsoVerifier   string `protobuf:"bytes,4,opt,name=sso_verifier,json=ssoVerifier,proto3" json:"sso_verifier,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *DeleteAccountRequest) Reset() {
+	*x = DeleteAccountRequest{}
+	mi := &file_gochat_v1_auth_proto_msgTypes[20]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *DeleteAccountRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*DeleteAccountRequest) ProtoMessage() {}
+
+func (x *DeleteAccountRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_gochat_v1_auth_proto_msgTypes[20]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use DeleteAccountRequest.ProtoReflect.Descriptor instead.
+func (*DeleteAccountRequest) Descriptor() ([]byte, []int) {
+	return file_gochat_v1_auth_proto_rawDescGZIP(), []int{20}
+}
+
+func (x *DeleteAccountRequest) GetPassword() string {
+	if x != nil {
+		return x.Password
+	}
+	return ""
+}
+
+func (x *DeleteAccountRequest) GetCode() string {
+	if x != nil {
+		return x.Code
+	}
+	return ""
+}
+
+func (x *DeleteAccountRequest) GetSsoToken() string {
+	if x != nil {
+		return x.SsoToken
+	}
+	return ""
+}
+
+func (x *DeleteAccountRequest) GetSsoVerifier() string {
+	if x != nil {
+		return x.SsoVerifier
+	}
+	return ""
+}
+
+type DeleteAccountResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *DeleteAccountResponse) Reset() {
+	*x = DeleteAccountResponse{}
+	mi := &file_gochat_v1_auth_proto_msgTypes[21]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *DeleteAccountResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*DeleteAccountResponse) ProtoMessage() {}
+
+func (x *DeleteAccountResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_gochat_v1_auth_proto_msgTypes[21]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use DeleteAccountResponse.ProtoReflect.Descriptor instead.
+func (*DeleteAccountResponse) Descriptor() ([]byte, []int) {
+	return file_gochat_v1_auth_proto_rawDescGZIP(), []int{21}
+}
+
 type ListSessionsRequest struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	// Empty for the caller.
@@ -1070,7 +1179,7 @@ type ListSessionsRequest struct {
 
 func (x *ListSessionsRequest) Reset() {
 	*x = ListSessionsRequest{}
-	mi := &file_gochat_v1_auth_proto_msgTypes[20]
+	mi := &file_gochat_v1_auth_proto_msgTypes[22]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1082,7 +1191,7 @@ func (x *ListSessionsRequest) String() string {
 func (*ListSessionsRequest) ProtoMessage() {}
 
 func (x *ListSessionsRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_gochat_v1_auth_proto_msgTypes[20]
+	mi := &file_gochat_v1_auth_proto_msgTypes[22]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1095,7 +1204,7 @@ func (x *ListSessionsRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListSessionsRequest.ProtoReflect.Descriptor instead.
 func (*ListSessionsRequest) Descriptor() ([]byte, []int) {
-	return file_gochat_v1_auth_proto_rawDescGZIP(), []int{20}
+	return file_gochat_v1_auth_proto_rawDescGZIP(), []int{22}
 }
 
 func (x *ListSessionsRequest) GetUserId() string {
@@ -1115,7 +1224,7 @@ type ListSessionsResponse struct {
 
 func (x *ListSessionsResponse) Reset() {
 	*x = ListSessionsResponse{}
-	mi := &file_gochat_v1_auth_proto_msgTypes[21]
+	mi := &file_gochat_v1_auth_proto_msgTypes[23]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1127,7 +1236,7 @@ func (x *ListSessionsResponse) String() string {
 func (*ListSessionsResponse) ProtoMessage() {}
 
 func (x *ListSessionsResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_gochat_v1_auth_proto_msgTypes[21]
+	mi := &file_gochat_v1_auth_proto_msgTypes[23]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1140,7 +1249,7 @@ func (x *ListSessionsResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListSessionsResponse.ProtoReflect.Descriptor instead.
 func (*ListSessionsResponse) Descriptor() ([]byte, []int) {
-	return file_gochat_v1_auth_proto_rawDescGZIP(), []int{21}
+	return file_gochat_v1_auth_proto_rawDescGZIP(), []int{23}
 }
 
 func (x *ListSessionsResponse) GetSessions() []*SessionInfo {
@@ -1159,7 +1268,7 @@ type RevokeSessionRequest struct {
 
 func (x *RevokeSessionRequest) Reset() {
 	*x = RevokeSessionRequest{}
-	mi := &file_gochat_v1_auth_proto_msgTypes[22]
+	mi := &file_gochat_v1_auth_proto_msgTypes[24]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1171,7 +1280,7 @@ func (x *RevokeSessionRequest) String() string {
 func (*RevokeSessionRequest) ProtoMessage() {}
 
 func (x *RevokeSessionRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_gochat_v1_auth_proto_msgTypes[22]
+	mi := &file_gochat_v1_auth_proto_msgTypes[24]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1184,7 +1293,7 @@ func (x *RevokeSessionRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RevokeSessionRequest.ProtoReflect.Descriptor instead.
 func (*RevokeSessionRequest) Descriptor() ([]byte, []int) {
-	return file_gochat_v1_auth_proto_rawDescGZIP(), []int{22}
+	return file_gochat_v1_auth_proto_rawDescGZIP(), []int{24}
 }
 
 func (x *RevokeSessionRequest) GetSessionId() string {
@@ -1202,7 +1311,7 @@ type RevokeSessionResponse struct {
 
 func (x *RevokeSessionResponse) Reset() {
 	*x = RevokeSessionResponse{}
-	mi := &file_gochat_v1_auth_proto_msgTypes[23]
+	mi := &file_gochat_v1_auth_proto_msgTypes[25]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1214,7 +1323,7 @@ func (x *RevokeSessionResponse) String() string {
 func (*RevokeSessionResponse) ProtoMessage() {}
 
 func (x *RevokeSessionResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_gochat_v1_auth_proto_msgTypes[23]
+	mi := &file_gochat_v1_auth_proto_msgTypes[25]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1227,7 +1336,7 @@ func (x *RevokeSessionResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RevokeSessionResponse.ProtoReflect.Descriptor instead.
 func (*RevokeSessionResponse) Descriptor() ([]byte, []int) {
-	return file_gochat_v1_auth_proto_rawDescGZIP(), []int{23}
+	return file_gochat_v1_auth_proto_rawDescGZIP(), []int{25}
 }
 
 type RevokeSessionsRequest struct {
@@ -1240,7 +1349,7 @@ type RevokeSessionsRequest struct {
 
 func (x *RevokeSessionsRequest) Reset() {
 	*x = RevokeSessionsRequest{}
-	mi := &file_gochat_v1_auth_proto_msgTypes[24]
+	mi := &file_gochat_v1_auth_proto_msgTypes[26]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1252,7 +1361,7 @@ func (x *RevokeSessionsRequest) String() string {
 func (*RevokeSessionsRequest) ProtoMessage() {}
 
 func (x *RevokeSessionsRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_gochat_v1_auth_proto_msgTypes[24]
+	mi := &file_gochat_v1_auth_proto_msgTypes[26]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1265,7 +1374,7 @@ func (x *RevokeSessionsRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RevokeSessionsRequest.ProtoReflect.Descriptor instead.
 func (*RevokeSessionsRequest) Descriptor() ([]byte, []int) {
-	return file_gochat_v1_auth_proto_rawDescGZIP(), []int{24}
+	return file_gochat_v1_auth_proto_rawDescGZIP(), []int{26}
 }
 
 func (x *RevokeSessionsRequest) GetUserId() string {
@@ -1284,7 +1393,7 @@ type RevokeSessionsResponse struct {
 
 func (x *RevokeSessionsResponse) Reset() {
 	*x = RevokeSessionsResponse{}
-	mi := &file_gochat_v1_auth_proto_msgTypes[25]
+	mi := &file_gochat_v1_auth_proto_msgTypes[27]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1296,7 +1405,7 @@ func (x *RevokeSessionsResponse) String() string {
 func (*RevokeSessionsResponse) ProtoMessage() {}
 
 func (x *RevokeSessionsResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_gochat_v1_auth_proto_msgTypes[25]
+	mi := &file_gochat_v1_auth_proto_msgTypes[27]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1309,7 +1418,7 @@ func (x *RevokeSessionsResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RevokeSessionsResponse.ProtoReflect.Descriptor instead.
 func (*RevokeSessionsResponse) Descriptor() ([]byte, []int) {
-	return file_gochat_v1_auth_proto_rawDescGZIP(), []int{25}
+	return file_gochat_v1_auth_proto_rawDescGZIP(), []int{27}
 }
 
 func (x *RevokeSessionsResponse) GetRevoked() int32 {
@@ -1327,7 +1436,7 @@ type ListSSOProvidersRequest struct {
 
 func (x *ListSSOProvidersRequest) Reset() {
 	*x = ListSSOProvidersRequest{}
-	mi := &file_gochat_v1_auth_proto_msgTypes[26]
+	mi := &file_gochat_v1_auth_proto_msgTypes[28]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1339,7 +1448,7 @@ func (x *ListSSOProvidersRequest) String() string {
 func (*ListSSOProvidersRequest) ProtoMessage() {}
 
 func (x *ListSSOProvidersRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_gochat_v1_auth_proto_msgTypes[26]
+	mi := &file_gochat_v1_auth_proto_msgTypes[28]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1352,7 +1461,7 @@ func (x *ListSSOProvidersRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListSSOProvidersRequest.ProtoReflect.Descriptor instead.
 func (*ListSSOProvidersRequest) Descriptor() ([]byte, []int) {
-	return file_gochat_v1_auth_proto_rawDescGZIP(), []int{26}
+	return file_gochat_v1_auth_proto_rawDescGZIP(), []int{28}
 }
 
 type ListSSOProvidersResponse struct {
@@ -1364,7 +1473,7 @@ type ListSSOProvidersResponse struct {
 
 func (x *ListSSOProvidersResponse) Reset() {
 	*x = ListSSOProvidersResponse{}
-	mi := &file_gochat_v1_auth_proto_msgTypes[27]
+	mi := &file_gochat_v1_auth_proto_msgTypes[29]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1376,7 +1485,7 @@ func (x *ListSSOProvidersResponse) String() string {
 func (*ListSSOProvidersResponse) ProtoMessage() {}
 
 func (x *ListSSOProvidersResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_gochat_v1_auth_proto_msgTypes[27]
+	mi := &file_gochat_v1_auth_proto_msgTypes[29]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1389,7 +1498,7 @@ func (x *ListSSOProvidersResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListSSOProvidersResponse.ProtoReflect.Descriptor instead.
 func (*ListSSOProvidersResponse) Descriptor() ([]byte, []int) {
-	return file_gochat_v1_auth_proto_rawDescGZIP(), []int{27}
+	return file_gochat_v1_auth_proto_rawDescGZIP(), []int{29}
 }
 
 func (x *ListSSOProvidersResponse) GetProviders() []*SSOProvider {
@@ -1407,14 +1516,17 @@ type BeginSSORequest struct {
 	RedirectUri string `protobuf:"bytes,2,opt,name=redirect_uri,json=redirectUri,proto3" json:"redirect_uri,omitempty"`
 	// For an app: the S256 PKCE challenge of a verifier it keeps, which
 	// RedeemSSO takes.
-	AppChallenge  string `protobuf:"bytes,3,opt,name=app_challenge,json=appChallenge,proto3" json:"app_challenge,omitempty"`
+	AppChallenge string `protobuf:"bytes,3,opt,name=app_challenge,json=appChallenge,proto3" json:"app_challenge,omitempty"`
+	// reauth proves who signs in, for DeleteAccount, without signing in: the
+	// caller with a session, an app's account with app_challenge.
+	Reauth        bool `protobuf:"varint,4,opt,name=reauth,proto3" json:"reauth,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
 func (x *BeginSSORequest) Reset() {
 	*x = BeginSSORequest{}
-	mi := &file_gochat_v1_auth_proto_msgTypes[28]
+	mi := &file_gochat_v1_auth_proto_msgTypes[30]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1426,7 +1538,7 @@ func (x *BeginSSORequest) String() string {
 func (*BeginSSORequest) ProtoMessage() {}
 
 func (x *BeginSSORequest) ProtoReflect() protoreflect.Message {
-	mi := &file_gochat_v1_auth_proto_msgTypes[28]
+	mi := &file_gochat_v1_auth_proto_msgTypes[30]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1439,7 +1551,7 @@ func (x *BeginSSORequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use BeginSSORequest.ProtoReflect.Descriptor instead.
 func (*BeginSSORequest) Descriptor() ([]byte, []int) {
-	return file_gochat_v1_auth_proto_rawDescGZIP(), []int{28}
+	return file_gochat_v1_auth_proto_rawDescGZIP(), []int{30}
 }
 
 func (x *BeginSSORequest) GetProviderId() string {
@@ -1463,6 +1575,13 @@ func (x *BeginSSORequest) GetAppChallenge() string {
 	return ""
 }
 
+func (x *BeginSSORequest) GetReauth() bool {
+	if x != nil {
+		return x.Reauth
+	}
+	return false
+}
+
 type BeginSSOResponse struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	// Where to send the browser.
@@ -1475,7 +1594,7 @@ type BeginSSOResponse struct {
 
 func (x *BeginSSOResponse) Reset() {
 	*x = BeginSSOResponse{}
-	mi := &file_gochat_v1_auth_proto_msgTypes[29]
+	mi := &file_gochat_v1_auth_proto_msgTypes[31]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1487,7 +1606,7 @@ func (x *BeginSSOResponse) String() string {
 func (*BeginSSOResponse) ProtoMessage() {}
 
 func (x *BeginSSOResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_gochat_v1_auth_proto_msgTypes[29]
+	mi := &file_gochat_v1_auth_proto_msgTypes[31]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1500,7 +1619,7 @@ func (x *BeginSSOResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use BeginSSOResponse.ProtoReflect.Descriptor instead.
 func (*BeginSSOResponse) Descriptor() ([]byte, []int) {
-	return file_gochat_v1_auth_proto_rawDescGZIP(), []int{29}
+	return file_gochat_v1_auth_proto_rawDescGZIP(), []int{31}
 }
 
 func (x *BeginSSOResponse) GetUrl() string {
@@ -1529,7 +1648,7 @@ type FinishSSORequest struct {
 
 func (x *FinishSSORequest) Reset() {
 	*x = FinishSSORequest{}
-	mi := &file_gochat_v1_auth_proto_msgTypes[30]
+	mi := &file_gochat_v1_auth_proto_msgTypes[32]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1541,7 +1660,7 @@ func (x *FinishSSORequest) String() string {
 func (*FinishSSORequest) ProtoMessage() {}
 
 func (x *FinishSSORequest) ProtoReflect() protoreflect.Message {
-	mi := &file_gochat_v1_auth_proto_msgTypes[30]
+	mi := &file_gochat_v1_auth_proto_msgTypes[32]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1554,7 +1673,7 @@ func (x *FinishSSORequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use FinishSSORequest.ProtoReflect.Descriptor instead.
 func (*FinishSSORequest) Descriptor() ([]byte, []int) {
-	return file_gochat_v1_auth_proto_rawDescGZIP(), []int{30}
+	return file_gochat_v1_auth_proto_rawDescGZIP(), []int{32}
 }
 
 func (x *FinishSSORequest) GetState() string {
@@ -1587,6 +1706,7 @@ type FinishSSOResponse struct {
 	//	*FinishSSOResponse_AppCode
 	//	*FinishSSOResponse_LinkToken
 	//	*FinishSSOResponse_Linked
+	//	*FinishSSOResponse_ReauthToken
 	Result       isFinishSSOResponse_Result `protobuf_oneof:"result"`
 	ProviderName string                     `protobuf:"bytes,6,opt,name=provider_name,json=providerName,proto3" json:"provider_name,omitempty"`
 	// The team an invite joined, for a new account.
@@ -1597,7 +1717,7 @@ type FinishSSOResponse struct {
 
 func (x *FinishSSOResponse) Reset() {
 	*x = FinishSSOResponse{}
-	mi := &file_gochat_v1_auth_proto_msgTypes[31]
+	mi := &file_gochat_v1_auth_proto_msgTypes[33]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1609,7 +1729,7 @@ func (x *FinishSSOResponse) String() string {
 func (*FinishSSOResponse) ProtoMessage() {}
 
 func (x *FinishSSOResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_gochat_v1_auth_proto_msgTypes[31]
+	mi := &file_gochat_v1_auth_proto_msgTypes[33]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1622,7 +1742,7 @@ func (x *FinishSSOResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use FinishSSOResponse.ProtoReflect.Descriptor instead.
 func (*FinishSSOResponse) Descriptor() ([]byte, []int) {
-	return file_gochat_v1_auth_proto_rawDescGZIP(), []int{31}
+	return file_gochat_v1_auth_proto_rawDescGZIP(), []int{33}
 }
 
 func (x *FinishSSOResponse) GetResult() isFinishSSOResponse_Result {
@@ -1677,6 +1797,15 @@ func (x *FinishSSOResponse) GetLinked() bool {
 	return false
 }
 
+func (x *FinishSSOResponse) GetReauthToken() string {
+	if x != nil {
+		if x, ok := x.Result.(*FinishSSOResponse_ReauthToken); ok {
+			return x.ReauthToken
+		}
+	}
+	return ""
+}
+
 func (x *FinishSSOResponse) GetProviderName() string {
 	if x != nil {
 		return x.ProviderName
@@ -1720,6 +1849,11 @@ type FinishSSOResponse_Linked struct {
 	Linked bool `protobuf:"varint,5,opt,name=linked,proto3,oneof"`
 }
 
+type FinishSSOResponse_ReauthToken struct {
+	// For a reauth: what DeleteAccount takes, for a few minutes.
+	ReauthToken string `protobuf:"bytes,8,opt,name=reauth_token,json=reauthToken,proto3,oneof"`
+}
+
 func (*FinishSSOResponse_Session) isFinishSSOResponse_Result() {}
 
 func (*FinishSSOResponse_MfaToken) isFinishSSOResponse_Result() {}
@@ -1729,6 +1863,8 @@ func (*FinishSSOResponse_AppCode) isFinishSSOResponse_Result() {}
 func (*FinishSSOResponse_LinkToken) isFinishSSOResponse_Result() {}
 
 func (*FinishSSOResponse_Linked) isFinishSSOResponse_Result() {}
+
+func (*FinishSSOResponse_ReauthToken) isFinishSSOResponse_Result() {}
 
 type RedeemSSORequest struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
@@ -1741,7 +1877,7 @@ type RedeemSSORequest struct {
 
 func (x *RedeemSSORequest) Reset() {
 	*x = RedeemSSORequest{}
-	mi := &file_gochat_v1_auth_proto_msgTypes[32]
+	mi := &file_gochat_v1_auth_proto_msgTypes[34]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1753,7 +1889,7 @@ func (x *RedeemSSORequest) String() string {
 func (*RedeemSSORequest) ProtoMessage() {}
 
 func (x *RedeemSSORequest) ProtoReflect() protoreflect.Message {
-	mi := &file_gochat_v1_auth_proto_msgTypes[32]
+	mi := &file_gochat_v1_auth_proto_msgTypes[34]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1766,7 +1902,7 @@ func (x *RedeemSSORequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RedeemSSORequest.ProtoReflect.Descriptor instead.
 func (*RedeemSSORequest) Descriptor() ([]byte, []int) {
-	return file_gochat_v1_auth_proto_rawDescGZIP(), []int{32}
+	return file_gochat_v1_auth_proto_rawDescGZIP(), []int{34}
 }
 
 func (x *RedeemSSORequest) GetCode() string {
@@ -1796,7 +1932,7 @@ type RedeemSSOResponse struct {
 
 func (x *RedeemSSOResponse) Reset() {
 	*x = RedeemSSOResponse{}
-	mi := &file_gochat_v1_auth_proto_msgTypes[33]
+	mi := &file_gochat_v1_auth_proto_msgTypes[35]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1808,7 +1944,7 @@ func (x *RedeemSSOResponse) String() string {
 func (*RedeemSSOResponse) ProtoMessage() {}
 
 func (x *RedeemSSOResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_gochat_v1_auth_proto_msgTypes[33]
+	mi := &file_gochat_v1_auth_proto_msgTypes[35]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1821,7 +1957,7 @@ func (x *RedeemSSOResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RedeemSSOResponse.ProtoReflect.Descriptor instead.
 func (*RedeemSSOResponse) Descriptor() ([]byte, []int) {
-	return file_gochat_v1_auth_proto_rawDescGZIP(), []int{33}
+	return file_gochat_v1_auth_proto_rawDescGZIP(), []int{35}
 }
 
 func (x *RedeemSSOResponse) GetResult() isRedeemSSOResponse_Result {
@@ -1875,7 +2011,7 @@ type GetSSOLinkRequest struct {
 
 func (x *GetSSOLinkRequest) Reset() {
 	*x = GetSSOLinkRequest{}
-	mi := &file_gochat_v1_auth_proto_msgTypes[34]
+	mi := &file_gochat_v1_auth_proto_msgTypes[36]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1887,7 +2023,7 @@ func (x *GetSSOLinkRequest) String() string {
 func (*GetSSOLinkRequest) ProtoMessage() {}
 
 func (x *GetSSOLinkRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_gochat_v1_auth_proto_msgTypes[34]
+	mi := &file_gochat_v1_auth_proto_msgTypes[36]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1900,7 +2036,7 @@ func (x *GetSSOLinkRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetSSOLinkRequest.ProtoReflect.Descriptor instead.
 func (*GetSSOLinkRequest) Descriptor() ([]byte, []int) {
-	return file_gochat_v1_auth_proto_rawDescGZIP(), []int{34}
+	return file_gochat_v1_auth_proto_rawDescGZIP(), []int{36}
 }
 
 func (x *GetSSOLinkRequest) GetLinkToken() string {
@@ -1921,7 +2057,7 @@ type GetSSOLinkResponse struct {
 
 func (x *GetSSOLinkResponse) Reset() {
 	*x = GetSSOLinkResponse{}
-	mi := &file_gochat_v1_auth_proto_msgTypes[35]
+	mi := &file_gochat_v1_auth_proto_msgTypes[37]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1933,7 +2069,7 @@ func (x *GetSSOLinkResponse) String() string {
 func (*GetSSOLinkResponse) ProtoMessage() {}
 
 func (x *GetSSOLinkResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_gochat_v1_auth_proto_msgTypes[35]
+	mi := &file_gochat_v1_auth_proto_msgTypes[37]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1946,7 +2082,7 @@ func (x *GetSSOLinkResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetSSOLinkResponse.ProtoReflect.Descriptor instead.
 func (*GetSSOLinkResponse) Descriptor() ([]byte, []int) {
-	return file_gochat_v1_auth_proto_rawDescGZIP(), []int{35}
+	return file_gochat_v1_auth_proto_rawDescGZIP(), []int{37}
 }
 
 func (x *GetSSOLinkResponse) GetProviderName() string {
@@ -1972,7 +2108,7 @@ type LinkSSORequest struct {
 
 func (x *LinkSSORequest) Reset() {
 	*x = LinkSSORequest{}
-	mi := &file_gochat_v1_auth_proto_msgTypes[36]
+	mi := &file_gochat_v1_auth_proto_msgTypes[38]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1984,7 +2120,7 @@ func (x *LinkSSORequest) String() string {
 func (*LinkSSORequest) ProtoMessage() {}
 
 func (x *LinkSSORequest) ProtoReflect() protoreflect.Message {
-	mi := &file_gochat_v1_auth_proto_msgTypes[36]
+	mi := &file_gochat_v1_auth_proto_msgTypes[38]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1997,7 +2133,7 @@ func (x *LinkSSORequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use LinkSSORequest.ProtoReflect.Descriptor instead.
 func (*LinkSSORequest) Descriptor() ([]byte, []int) {
-	return file_gochat_v1_auth_proto_rawDescGZIP(), []int{36}
+	return file_gochat_v1_auth_proto_rawDescGZIP(), []int{38}
 }
 
 func (x *LinkSSORequest) GetLinkToken() string {
@@ -2017,7 +2153,7 @@ type LinkSSOResponse struct {
 
 func (x *LinkSSOResponse) Reset() {
 	*x = LinkSSOResponse{}
-	mi := &file_gochat_v1_auth_proto_msgTypes[37]
+	mi := &file_gochat_v1_auth_proto_msgTypes[39]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2029,7 +2165,7 @@ func (x *LinkSSOResponse) String() string {
 func (*LinkSSOResponse) ProtoMessage() {}
 
 func (x *LinkSSOResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_gochat_v1_auth_proto_msgTypes[37]
+	mi := &file_gochat_v1_auth_proto_msgTypes[39]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2042,7 +2178,7 @@ func (x *LinkSSOResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use LinkSSOResponse.ProtoReflect.Descriptor instead.
 func (*LinkSSOResponse) Descriptor() ([]byte, []int) {
-	return file_gochat_v1_auth_proto_rawDescGZIP(), []int{37}
+	return file_gochat_v1_auth_proto_rawDescGZIP(), []int{39}
 }
 
 func (x *LinkSSOResponse) GetProviderName() string {
@@ -2069,7 +2205,7 @@ type ListSSOIdentitiesRequest struct {
 
 func (x *ListSSOIdentitiesRequest) Reset() {
 	*x = ListSSOIdentitiesRequest{}
-	mi := &file_gochat_v1_auth_proto_msgTypes[38]
+	mi := &file_gochat_v1_auth_proto_msgTypes[40]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2081,7 +2217,7 @@ func (x *ListSSOIdentitiesRequest) String() string {
 func (*ListSSOIdentitiesRequest) ProtoMessage() {}
 
 func (x *ListSSOIdentitiesRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_gochat_v1_auth_proto_msgTypes[38]
+	mi := &file_gochat_v1_auth_proto_msgTypes[40]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2094,7 +2230,7 @@ func (x *ListSSOIdentitiesRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListSSOIdentitiesRequest.ProtoReflect.Descriptor instead.
 func (*ListSSOIdentitiesRequest) Descriptor() ([]byte, []int) {
-	return file_gochat_v1_auth_proto_rawDescGZIP(), []int{38}
+	return file_gochat_v1_auth_proto_rawDescGZIP(), []int{40}
 }
 
 func (x *ListSSOIdentitiesRequest) GetUserId() string {
@@ -2114,7 +2250,7 @@ type ListSSOIdentitiesResponse struct {
 
 func (x *ListSSOIdentitiesResponse) Reset() {
 	*x = ListSSOIdentitiesResponse{}
-	mi := &file_gochat_v1_auth_proto_msgTypes[39]
+	mi := &file_gochat_v1_auth_proto_msgTypes[41]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2126,7 +2262,7 @@ func (x *ListSSOIdentitiesResponse) String() string {
 func (*ListSSOIdentitiesResponse) ProtoMessage() {}
 
 func (x *ListSSOIdentitiesResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_gochat_v1_auth_proto_msgTypes[39]
+	mi := &file_gochat_v1_auth_proto_msgTypes[41]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2139,7 +2275,7 @@ func (x *ListSSOIdentitiesResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListSSOIdentitiesResponse.ProtoReflect.Descriptor instead.
 func (*ListSSOIdentitiesResponse) Descriptor() ([]byte, []int) {
-	return file_gochat_v1_auth_proto_rawDescGZIP(), []int{39}
+	return file_gochat_v1_auth_proto_rawDescGZIP(), []int{41}
 }
 
 func (x *ListSSOIdentitiesResponse) GetIdentities() []*SSOIdentity {
@@ -2161,7 +2297,7 @@ type UnlinkSSORequest struct {
 
 func (x *UnlinkSSORequest) Reset() {
 	*x = UnlinkSSORequest{}
-	mi := &file_gochat_v1_auth_proto_msgTypes[40]
+	mi := &file_gochat_v1_auth_proto_msgTypes[42]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2173,7 +2309,7 @@ func (x *UnlinkSSORequest) String() string {
 func (*UnlinkSSORequest) ProtoMessage() {}
 
 func (x *UnlinkSSORequest) ProtoReflect() protoreflect.Message {
-	mi := &file_gochat_v1_auth_proto_msgTypes[40]
+	mi := &file_gochat_v1_auth_proto_msgTypes[42]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2186,7 +2322,7 @@ func (x *UnlinkSSORequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use UnlinkSSORequest.ProtoReflect.Descriptor instead.
 func (*UnlinkSSORequest) Descriptor() ([]byte, []int) {
-	return file_gochat_v1_auth_proto_rawDescGZIP(), []int{40}
+	return file_gochat_v1_auth_proto_rawDescGZIP(), []int{42}
 }
 
 func (x *UnlinkSSORequest) GetUserId() string {
@@ -2218,7 +2354,7 @@ type UnlinkSSOResponse struct {
 
 func (x *UnlinkSSOResponse) Reset() {
 	*x = UnlinkSSOResponse{}
-	mi := &file_gochat_v1_auth_proto_msgTypes[41]
+	mi := &file_gochat_v1_auth_proto_msgTypes[43]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2230,7 +2366,7 @@ func (x *UnlinkSSOResponse) String() string {
 func (*UnlinkSSOResponse) ProtoMessage() {}
 
 func (x *UnlinkSSOResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_gochat_v1_auth_proto_msgTypes[41]
+	mi := &file_gochat_v1_auth_proto_msgTypes[43]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2243,7 +2379,7 @@ func (x *UnlinkSSOResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use UnlinkSSOResponse.ProtoReflect.Descriptor instead.
 func (*UnlinkSSOResponse) Descriptor() ([]byte, []int) {
-	return file_gochat_v1_auth_proto_rawDescGZIP(), []int{41}
+	return file_gochat_v1_auth_proto_rawDescGZIP(), []int{43}
 }
 
 var File_gochat_v1_auth_proto protoreflect.FileDescriptor
@@ -2309,7 +2445,13 @@ const file_gochat_v1_auth_proto_rawDesc = "" +
 	"\x12DisableTOTPRequest\x12\x1a\n" +
 	"\bpassword\x18\x01 \x01(\tR\bpassword\x12\x12\n" +
 	"\x04code\x18\x02 \x01(\tR\x04code\"\x15\n" +
-	"\x13DisableTOTPResponse\".\n" +
+	"\x13DisableTOTPResponse\"\x86\x01\n" +
+	"\x14DeleteAccountRequest\x12\x1a\n" +
+	"\bpassword\x18\x01 \x01(\tR\bpassword\x12\x12\n" +
+	"\x04code\x18\x02 \x01(\tR\x04code\x12\x1b\n" +
+	"\tsso_token\x18\x03 \x01(\tR\bssoToken\x12!\n" +
+	"\fsso_verifier\x18\x04 \x01(\tR\vssoVerifier\"\x17\n" +
+	"\x15DeleteAccountResponse\".\n" +
 	"\x13ListSessionsRequest\x12\x17\n" +
 	"\auser_id\x18\x01 \x01(\tR\x06userId\"J\n" +
 	"\x14ListSessionsResponse\x122\n" +
@@ -2324,19 +2466,20 @@ const file_gochat_v1_auth_proto_rawDesc = "" +
 	"\arevoked\x18\x01 \x01(\x05R\arevoked\"\x19\n" +
 	"\x17ListSSOProvidersRequest\"P\n" +
 	"\x18ListSSOProvidersResponse\x124\n" +
-	"\tproviders\x18\x01 \x03(\v2\x16.gochat.v1.SSOProviderR\tproviders\"z\n" +
+	"\tproviders\x18\x01 \x03(\v2\x16.gochat.v1.SSOProviderR\tproviders\"\x92\x01\n" +
 	"\x0fBeginSSORequest\x12\x1f\n" +
 	"\vprovider_id\x18\x01 \x01(\tR\n" +
 	"providerId\x12!\n" +
 	"\fredirect_uri\x18\x02 \x01(\tR\vredirectUri\x12#\n" +
-	"\rapp_challenge\x18\x03 \x01(\tR\fappChallenge\":\n" +
+	"\rapp_challenge\x18\x03 \x01(\tR\fappChallenge\x12\x16\n" +
+	"\x06reauth\x18\x04 \x01(\bR\x06reauth\":\n" +
 	"\x10BeginSSOResponse\x12\x10\n" +
 	"\x03url\x18\x01 \x01(\tR\x03url\x12\x14\n" +
 	"\x05state\x18\x02 \x01(\tR\x05state\"_\n" +
 	"\x10FinishSSORequest\x12\x14\n" +
 	"\x05state\x18\x01 \x01(\tR\x05state\x12\x12\n" +
 	"\x04code\x18\x02 \x01(\tR\x04code\x12!\n" +
-	"\finvite_token\x18\x03 \x01(\tR\vinviteToken\"\x8e\x02\n" +
+	"\finvite_token\x18\x03 \x01(\tR\vinviteToken\"\xb3\x02\n" +
 	"\x11FinishSSOResponse\x12.\n" +
 	"\asession\x18\x01 \x01(\v2\x12.gochat.v1.SessionH\x00R\asession\x12\x1d\n" +
 	"\tmfa_token\x18\x02 \x01(\tH\x00R\bmfaToken\x12\x1b\n" +
@@ -2344,6 +2487,7 @@ const file_gochat_v1_auth_proto_rawDesc = "" +
 	"\n" +
 	"link_token\x18\x04 \x01(\tH\x00R\tlinkToken\x12\x18\n" +
 	"\x06linked\x18\x05 \x01(\bH\x00R\x06linked\x12#\n" +
+	"\freauth_token\x18\b \x01(\tH\x00R\vreauthToken\x12#\n" +
 	"\rprovider_name\x18\x06 \x01(\tR\fproviderName\x12#\n" +
 	"\x04team\x18\a \x01(\v2\x0f.gochat.v1.TeamR\x04teamB\b\n" +
 	"\x06result\"B\n" +
@@ -2376,7 +2520,7 @@ const file_gochat_v1_auth_proto_rawDesc = "" +
 	"\auser_id\x18\x01 \x01(\tR\x06userId\x12\x16\n" +
 	"\x06issuer\x18\x02 \x01(\tR\x06issuer\x12\x18\n" +
 	"\asubject\x18\x03 \x01(\tR\asubject\"\x13\n" +
-	"\x11UnlinkSSOResponse2\xd2\f\n" +
+	"\x11UnlinkSSOResponse2\xa6\r\n" +
 	"\vAuthService\x12R\n" +
 	"\rGetSignupInfo\x12\x1f.gochat.v1.GetSignupInfoRequest\x1a .gochat.v1.GetSignupInfoResponse\x12=\n" +
 	"\x06SignUp\x12\x18.gochat.v1.SignUpRequest\x1a\x19.gochat.v1.SignUpResponse\x12:\n" +
@@ -2387,7 +2531,8 @@ const file_gochat_v1_auth_proto_rawDesc = "" +
 	"\x0eChangePassword\x12 .gochat.v1.ChangePasswordRequest\x1a!.gochat.v1.ChangePasswordResponse\x12U\n" +
 	"\x0eBeginTOTPSetup\x12 .gochat.v1.BeginTOTPSetupRequest\x1a!.gochat.v1.BeginTOTPSetupResponse\x12[\n" +
 	"\x10ConfirmTOTPSetup\x12\".gochat.v1.ConfirmTOTPSetupRequest\x1a#.gochat.v1.ConfirmTOTPSetupResponse\x12L\n" +
-	"\vDisableTOTP\x12\x1d.gochat.v1.DisableTOTPRequest\x1a\x1e.gochat.v1.DisableTOTPResponse\x12O\n" +
+	"\vDisableTOTP\x12\x1d.gochat.v1.DisableTOTPRequest\x1a\x1e.gochat.v1.DisableTOTPResponse\x12R\n" +
+	"\rDeleteAccount\x12\x1f.gochat.v1.DeleteAccountRequest\x1a .gochat.v1.DeleteAccountResponse\x12O\n" +
 	"\fListSessions\x12\x1e.gochat.v1.ListSessionsRequest\x1a\x1f.gochat.v1.ListSessionsResponse\x12R\n" +
 	"\rRevokeSession\x12\x1f.gochat.v1.RevokeSessionRequest\x1a .gochat.v1.RevokeSessionResponse\x12U\n" +
 	"\x0eRevokeSessions\x12 .gochat.v1.RevokeSessionsRequest\x1a!.gochat.v1.RevokeSessionsResponse\x12[\n" +
@@ -2415,7 +2560,7 @@ func file_gochat_v1_auth_proto_rawDescGZIP() []byte {
 	return file_gochat_v1_auth_proto_rawDescData
 }
 
-var file_gochat_v1_auth_proto_msgTypes = make([]protoimpl.MessageInfo, 42)
+var file_gochat_v1_auth_proto_msgTypes = make([]protoimpl.MessageInfo, 44)
 var file_gochat_v1_auth_proto_goTypes = []any{
 	(*GetSignupInfoRequest)(nil),      // 0: gochat.v1.GetSignupInfoRequest
 	(*GetSignupInfoResponse)(nil),     // 1: gochat.v1.GetSignupInfoResponse
@@ -2437,47 +2582,49 @@ var file_gochat_v1_auth_proto_goTypes = []any{
 	(*ConfirmTOTPSetupResponse)(nil),  // 17: gochat.v1.ConfirmTOTPSetupResponse
 	(*DisableTOTPRequest)(nil),        // 18: gochat.v1.DisableTOTPRequest
 	(*DisableTOTPResponse)(nil),       // 19: gochat.v1.DisableTOTPResponse
-	(*ListSessionsRequest)(nil),       // 20: gochat.v1.ListSessionsRequest
-	(*ListSessionsResponse)(nil),      // 21: gochat.v1.ListSessionsResponse
-	(*RevokeSessionRequest)(nil),      // 22: gochat.v1.RevokeSessionRequest
-	(*RevokeSessionResponse)(nil),     // 23: gochat.v1.RevokeSessionResponse
-	(*RevokeSessionsRequest)(nil),     // 24: gochat.v1.RevokeSessionsRequest
-	(*RevokeSessionsResponse)(nil),    // 25: gochat.v1.RevokeSessionsResponse
-	(*ListSSOProvidersRequest)(nil),   // 26: gochat.v1.ListSSOProvidersRequest
-	(*ListSSOProvidersResponse)(nil),  // 27: gochat.v1.ListSSOProvidersResponse
-	(*BeginSSORequest)(nil),           // 28: gochat.v1.BeginSSORequest
-	(*BeginSSOResponse)(nil),          // 29: gochat.v1.BeginSSOResponse
-	(*FinishSSORequest)(nil),          // 30: gochat.v1.FinishSSORequest
-	(*FinishSSOResponse)(nil),         // 31: gochat.v1.FinishSSOResponse
-	(*RedeemSSORequest)(nil),          // 32: gochat.v1.RedeemSSORequest
-	(*RedeemSSOResponse)(nil),         // 33: gochat.v1.RedeemSSOResponse
-	(*GetSSOLinkRequest)(nil),         // 34: gochat.v1.GetSSOLinkRequest
-	(*GetSSOLinkResponse)(nil),        // 35: gochat.v1.GetSSOLinkResponse
-	(*LinkSSORequest)(nil),            // 36: gochat.v1.LinkSSORequest
-	(*LinkSSOResponse)(nil),           // 37: gochat.v1.LinkSSOResponse
-	(*ListSSOIdentitiesRequest)(nil),  // 38: gochat.v1.ListSSOIdentitiesRequest
-	(*ListSSOIdentitiesResponse)(nil), // 39: gochat.v1.ListSSOIdentitiesResponse
-	(*UnlinkSSORequest)(nil),          // 40: gochat.v1.UnlinkSSORequest
-	(*UnlinkSSOResponse)(nil),         // 41: gochat.v1.UnlinkSSOResponse
-	(*Session)(nil),                   // 42: gochat.v1.Session
-	(*Team)(nil),                      // 43: gochat.v1.Team
-	(*User)(nil),                      // 44: gochat.v1.User
-	(*SessionInfo)(nil),               // 45: gochat.v1.SessionInfo
-	(*SSOProvider)(nil),               // 46: gochat.v1.SSOProvider
-	(*SSOIdentity)(nil),               // 47: gochat.v1.SSOIdentity
+	(*DeleteAccountRequest)(nil),      // 20: gochat.v1.DeleteAccountRequest
+	(*DeleteAccountResponse)(nil),     // 21: gochat.v1.DeleteAccountResponse
+	(*ListSessionsRequest)(nil),       // 22: gochat.v1.ListSessionsRequest
+	(*ListSessionsResponse)(nil),      // 23: gochat.v1.ListSessionsResponse
+	(*RevokeSessionRequest)(nil),      // 24: gochat.v1.RevokeSessionRequest
+	(*RevokeSessionResponse)(nil),     // 25: gochat.v1.RevokeSessionResponse
+	(*RevokeSessionsRequest)(nil),     // 26: gochat.v1.RevokeSessionsRequest
+	(*RevokeSessionsResponse)(nil),    // 27: gochat.v1.RevokeSessionsResponse
+	(*ListSSOProvidersRequest)(nil),   // 28: gochat.v1.ListSSOProvidersRequest
+	(*ListSSOProvidersResponse)(nil),  // 29: gochat.v1.ListSSOProvidersResponse
+	(*BeginSSORequest)(nil),           // 30: gochat.v1.BeginSSORequest
+	(*BeginSSOResponse)(nil),          // 31: gochat.v1.BeginSSOResponse
+	(*FinishSSORequest)(nil),          // 32: gochat.v1.FinishSSORequest
+	(*FinishSSOResponse)(nil),         // 33: gochat.v1.FinishSSOResponse
+	(*RedeemSSORequest)(nil),          // 34: gochat.v1.RedeemSSORequest
+	(*RedeemSSOResponse)(nil),         // 35: gochat.v1.RedeemSSOResponse
+	(*GetSSOLinkRequest)(nil),         // 36: gochat.v1.GetSSOLinkRequest
+	(*GetSSOLinkResponse)(nil),        // 37: gochat.v1.GetSSOLinkResponse
+	(*LinkSSORequest)(nil),            // 38: gochat.v1.LinkSSORequest
+	(*LinkSSOResponse)(nil),           // 39: gochat.v1.LinkSSOResponse
+	(*ListSSOIdentitiesRequest)(nil),  // 40: gochat.v1.ListSSOIdentitiesRequest
+	(*ListSSOIdentitiesResponse)(nil), // 41: gochat.v1.ListSSOIdentitiesResponse
+	(*UnlinkSSORequest)(nil),          // 42: gochat.v1.UnlinkSSORequest
+	(*UnlinkSSOResponse)(nil),         // 43: gochat.v1.UnlinkSSOResponse
+	(*Session)(nil),                   // 44: gochat.v1.Session
+	(*Team)(nil),                      // 45: gochat.v1.Team
+	(*User)(nil),                      // 46: gochat.v1.User
+	(*SessionInfo)(nil),               // 47: gochat.v1.SessionInfo
+	(*SSOProvider)(nil),               // 48: gochat.v1.SSOProvider
+	(*SSOIdentity)(nil),               // 49: gochat.v1.SSOIdentity
 }
 var file_gochat_v1_auth_proto_depIdxs = []int32{
-	42, // 0: gochat.v1.SignUpResponse.session:type_name -> gochat.v1.Session
-	43, // 1: gochat.v1.SignUpResponse.team:type_name -> gochat.v1.Team
-	42, // 2: gochat.v1.LoginResponse.session:type_name -> gochat.v1.Session
-	42, // 3: gochat.v1.VerifyMFAResponse.session:type_name -> gochat.v1.Session
-	44, // 4: gochat.v1.MeResponse.user:type_name -> gochat.v1.User
-	45, // 5: gochat.v1.ListSessionsResponse.sessions:type_name -> gochat.v1.SessionInfo
-	46, // 6: gochat.v1.ListSSOProvidersResponse.providers:type_name -> gochat.v1.SSOProvider
-	42, // 7: gochat.v1.FinishSSOResponse.session:type_name -> gochat.v1.Session
-	43, // 8: gochat.v1.FinishSSOResponse.team:type_name -> gochat.v1.Team
-	42, // 9: gochat.v1.RedeemSSOResponse.session:type_name -> gochat.v1.Session
-	47, // 10: gochat.v1.ListSSOIdentitiesResponse.identities:type_name -> gochat.v1.SSOIdentity
+	44, // 0: gochat.v1.SignUpResponse.session:type_name -> gochat.v1.Session
+	45, // 1: gochat.v1.SignUpResponse.team:type_name -> gochat.v1.Team
+	44, // 2: gochat.v1.LoginResponse.session:type_name -> gochat.v1.Session
+	44, // 3: gochat.v1.VerifyMFAResponse.session:type_name -> gochat.v1.Session
+	46, // 4: gochat.v1.MeResponse.user:type_name -> gochat.v1.User
+	47, // 5: gochat.v1.ListSessionsResponse.sessions:type_name -> gochat.v1.SessionInfo
+	48, // 6: gochat.v1.ListSSOProvidersResponse.providers:type_name -> gochat.v1.SSOProvider
+	44, // 7: gochat.v1.FinishSSOResponse.session:type_name -> gochat.v1.Session
+	45, // 8: gochat.v1.FinishSSOResponse.team:type_name -> gochat.v1.Team
+	44, // 9: gochat.v1.RedeemSSOResponse.session:type_name -> gochat.v1.Session
+	49, // 10: gochat.v1.ListSSOIdentitiesResponse.identities:type_name -> gochat.v1.SSOIdentity
 	0,  // 11: gochat.v1.AuthService.GetSignupInfo:input_type -> gochat.v1.GetSignupInfoRequest
 	2,  // 12: gochat.v1.AuthService.SignUp:input_type -> gochat.v1.SignUpRequest
 	4,  // 13: gochat.v1.AuthService.Login:input_type -> gochat.v1.LoginRequest
@@ -2488,40 +2635,42 @@ var file_gochat_v1_auth_proto_depIdxs = []int32{
 	14, // 18: gochat.v1.AuthService.BeginTOTPSetup:input_type -> gochat.v1.BeginTOTPSetupRequest
 	16, // 19: gochat.v1.AuthService.ConfirmTOTPSetup:input_type -> gochat.v1.ConfirmTOTPSetupRequest
 	18, // 20: gochat.v1.AuthService.DisableTOTP:input_type -> gochat.v1.DisableTOTPRequest
-	20, // 21: gochat.v1.AuthService.ListSessions:input_type -> gochat.v1.ListSessionsRequest
-	22, // 22: gochat.v1.AuthService.RevokeSession:input_type -> gochat.v1.RevokeSessionRequest
-	24, // 23: gochat.v1.AuthService.RevokeSessions:input_type -> gochat.v1.RevokeSessionsRequest
-	26, // 24: gochat.v1.AuthService.ListSSOProviders:input_type -> gochat.v1.ListSSOProvidersRequest
-	28, // 25: gochat.v1.AuthService.BeginSSO:input_type -> gochat.v1.BeginSSORequest
-	30, // 26: gochat.v1.AuthService.FinishSSO:input_type -> gochat.v1.FinishSSORequest
-	32, // 27: gochat.v1.AuthService.RedeemSSO:input_type -> gochat.v1.RedeemSSORequest
-	34, // 28: gochat.v1.AuthService.GetSSOLink:input_type -> gochat.v1.GetSSOLinkRequest
-	36, // 29: gochat.v1.AuthService.LinkSSO:input_type -> gochat.v1.LinkSSORequest
-	38, // 30: gochat.v1.AuthService.ListSSOIdentities:input_type -> gochat.v1.ListSSOIdentitiesRequest
-	40, // 31: gochat.v1.AuthService.UnlinkSSO:input_type -> gochat.v1.UnlinkSSORequest
-	1,  // 32: gochat.v1.AuthService.GetSignupInfo:output_type -> gochat.v1.GetSignupInfoResponse
-	3,  // 33: gochat.v1.AuthService.SignUp:output_type -> gochat.v1.SignUpResponse
-	5,  // 34: gochat.v1.AuthService.Login:output_type -> gochat.v1.LoginResponse
-	7,  // 35: gochat.v1.AuthService.VerifyMFA:output_type -> gochat.v1.VerifyMFAResponse
-	9,  // 36: gochat.v1.AuthService.Logout:output_type -> gochat.v1.LogoutResponse
-	11, // 37: gochat.v1.AuthService.Me:output_type -> gochat.v1.MeResponse
-	13, // 38: gochat.v1.AuthService.ChangePassword:output_type -> gochat.v1.ChangePasswordResponse
-	15, // 39: gochat.v1.AuthService.BeginTOTPSetup:output_type -> gochat.v1.BeginTOTPSetupResponse
-	17, // 40: gochat.v1.AuthService.ConfirmTOTPSetup:output_type -> gochat.v1.ConfirmTOTPSetupResponse
-	19, // 41: gochat.v1.AuthService.DisableTOTP:output_type -> gochat.v1.DisableTOTPResponse
-	21, // 42: gochat.v1.AuthService.ListSessions:output_type -> gochat.v1.ListSessionsResponse
-	23, // 43: gochat.v1.AuthService.RevokeSession:output_type -> gochat.v1.RevokeSessionResponse
-	25, // 44: gochat.v1.AuthService.RevokeSessions:output_type -> gochat.v1.RevokeSessionsResponse
-	27, // 45: gochat.v1.AuthService.ListSSOProviders:output_type -> gochat.v1.ListSSOProvidersResponse
-	29, // 46: gochat.v1.AuthService.BeginSSO:output_type -> gochat.v1.BeginSSOResponse
-	31, // 47: gochat.v1.AuthService.FinishSSO:output_type -> gochat.v1.FinishSSOResponse
-	33, // 48: gochat.v1.AuthService.RedeemSSO:output_type -> gochat.v1.RedeemSSOResponse
-	35, // 49: gochat.v1.AuthService.GetSSOLink:output_type -> gochat.v1.GetSSOLinkResponse
-	37, // 50: gochat.v1.AuthService.LinkSSO:output_type -> gochat.v1.LinkSSOResponse
-	39, // 51: gochat.v1.AuthService.ListSSOIdentities:output_type -> gochat.v1.ListSSOIdentitiesResponse
-	41, // 52: gochat.v1.AuthService.UnlinkSSO:output_type -> gochat.v1.UnlinkSSOResponse
-	32, // [32:53] is the sub-list for method output_type
-	11, // [11:32] is the sub-list for method input_type
+	20, // 21: gochat.v1.AuthService.DeleteAccount:input_type -> gochat.v1.DeleteAccountRequest
+	22, // 22: gochat.v1.AuthService.ListSessions:input_type -> gochat.v1.ListSessionsRequest
+	24, // 23: gochat.v1.AuthService.RevokeSession:input_type -> gochat.v1.RevokeSessionRequest
+	26, // 24: gochat.v1.AuthService.RevokeSessions:input_type -> gochat.v1.RevokeSessionsRequest
+	28, // 25: gochat.v1.AuthService.ListSSOProviders:input_type -> gochat.v1.ListSSOProvidersRequest
+	30, // 26: gochat.v1.AuthService.BeginSSO:input_type -> gochat.v1.BeginSSORequest
+	32, // 27: gochat.v1.AuthService.FinishSSO:input_type -> gochat.v1.FinishSSORequest
+	34, // 28: gochat.v1.AuthService.RedeemSSO:input_type -> gochat.v1.RedeemSSORequest
+	36, // 29: gochat.v1.AuthService.GetSSOLink:input_type -> gochat.v1.GetSSOLinkRequest
+	38, // 30: gochat.v1.AuthService.LinkSSO:input_type -> gochat.v1.LinkSSORequest
+	40, // 31: gochat.v1.AuthService.ListSSOIdentities:input_type -> gochat.v1.ListSSOIdentitiesRequest
+	42, // 32: gochat.v1.AuthService.UnlinkSSO:input_type -> gochat.v1.UnlinkSSORequest
+	1,  // 33: gochat.v1.AuthService.GetSignupInfo:output_type -> gochat.v1.GetSignupInfoResponse
+	3,  // 34: gochat.v1.AuthService.SignUp:output_type -> gochat.v1.SignUpResponse
+	5,  // 35: gochat.v1.AuthService.Login:output_type -> gochat.v1.LoginResponse
+	7,  // 36: gochat.v1.AuthService.VerifyMFA:output_type -> gochat.v1.VerifyMFAResponse
+	9,  // 37: gochat.v1.AuthService.Logout:output_type -> gochat.v1.LogoutResponse
+	11, // 38: gochat.v1.AuthService.Me:output_type -> gochat.v1.MeResponse
+	13, // 39: gochat.v1.AuthService.ChangePassword:output_type -> gochat.v1.ChangePasswordResponse
+	15, // 40: gochat.v1.AuthService.BeginTOTPSetup:output_type -> gochat.v1.BeginTOTPSetupResponse
+	17, // 41: gochat.v1.AuthService.ConfirmTOTPSetup:output_type -> gochat.v1.ConfirmTOTPSetupResponse
+	19, // 42: gochat.v1.AuthService.DisableTOTP:output_type -> gochat.v1.DisableTOTPResponse
+	21, // 43: gochat.v1.AuthService.DeleteAccount:output_type -> gochat.v1.DeleteAccountResponse
+	23, // 44: gochat.v1.AuthService.ListSessions:output_type -> gochat.v1.ListSessionsResponse
+	25, // 45: gochat.v1.AuthService.RevokeSession:output_type -> gochat.v1.RevokeSessionResponse
+	27, // 46: gochat.v1.AuthService.RevokeSessions:output_type -> gochat.v1.RevokeSessionsResponse
+	29, // 47: gochat.v1.AuthService.ListSSOProviders:output_type -> gochat.v1.ListSSOProvidersResponse
+	31, // 48: gochat.v1.AuthService.BeginSSO:output_type -> gochat.v1.BeginSSOResponse
+	33, // 49: gochat.v1.AuthService.FinishSSO:output_type -> gochat.v1.FinishSSOResponse
+	35, // 50: gochat.v1.AuthService.RedeemSSO:output_type -> gochat.v1.RedeemSSOResponse
+	37, // 51: gochat.v1.AuthService.GetSSOLink:output_type -> gochat.v1.GetSSOLinkResponse
+	39, // 52: gochat.v1.AuthService.LinkSSO:output_type -> gochat.v1.LinkSSOResponse
+	41, // 53: gochat.v1.AuthService.ListSSOIdentities:output_type -> gochat.v1.ListSSOIdentitiesResponse
+	43, // 54: gochat.v1.AuthService.UnlinkSSO:output_type -> gochat.v1.UnlinkSSOResponse
+	33, // [33:55] is the sub-list for method output_type
+	11, // [11:33] is the sub-list for method input_type
 	11, // [11:11] is the sub-list for extension type_name
 	11, // [11:11] is the sub-list for extension extendee
 	0,  // [0:11] is the sub-list for field type_name
@@ -2537,14 +2686,15 @@ func file_gochat_v1_auth_proto_init() {
 		(*LoginResponse_Session)(nil),
 		(*LoginResponse_MfaToken)(nil),
 	}
-	file_gochat_v1_auth_proto_msgTypes[31].OneofWrappers = []any{
+	file_gochat_v1_auth_proto_msgTypes[33].OneofWrappers = []any{
 		(*FinishSSOResponse_Session)(nil),
 		(*FinishSSOResponse_MfaToken)(nil),
 		(*FinishSSOResponse_AppCode)(nil),
 		(*FinishSSOResponse_LinkToken)(nil),
 		(*FinishSSOResponse_Linked)(nil),
+		(*FinishSSOResponse_ReauthToken)(nil),
 	}
-	file_gochat_v1_auth_proto_msgTypes[33].OneofWrappers = []any{
+	file_gochat_v1_auth_proto_msgTypes[35].OneofWrappers = []any{
 		(*RedeemSSOResponse_Session)(nil),
 		(*RedeemSSOResponse_MfaToken)(nil),
 	}
@@ -2554,7 +2704,7 @@ func file_gochat_v1_auth_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_gochat_v1_auth_proto_rawDesc), len(file_gochat_v1_auth_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   42,
+			NumMessages:   44,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

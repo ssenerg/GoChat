@@ -111,11 +111,13 @@ func rpcErr(code ierrors.Code, msg string) error {
 	return drpcerr.WithCode(errors.New(msg), uint64(code))
 }
 
-// browser keeps the cookies the gateway sets, as a browser would.
+// browser keeps the cookies the gateway sets, as a browser would; with hx
+// it asks as htmx does.
 type browser struct {
 	t       *testing.T
 	h       http.Handler
 	cookies map[string]*http.Cookie
+	hx      bool
 }
 
 const flowOrigin = "http://chat.example.test"
@@ -133,6 +135,9 @@ func (b *browser) do(method, target string, form url.Values) *httptest.ResponseR
 	if form != nil {
 		r.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 		r.Header.Set("Origin", flowOrigin)
+	}
+	if b.hx {
+		r.Header.Set("HX-Request", "true")
 	}
 	for _, c := range b.cookies {
 		r.AddCookie(c)
@@ -159,8 +164,14 @@ func (b *browser) expect(w *httptest.ResponseRecorder, status int, location stri
 func newFlow(t *testing.T) (*browser, *fakeAuth) {
 	t.Helper()
 	auth := &fakeAuth{}
+	return newGateway(t, func(mux *drpcmux.Mux) error { return pb.DRPCRegisterAuthService(mux, auth) }), auth
+}
+
+// newGateway serves the gateway in front of the services register adds.
+func newGateway(t *testing.T, register func(*drpcmux.Mux) error) *browser {
+	t.Helper()
 	mux := drpcmux.New()
-	if err := pb.DRPCRegisterAuthService(mux, auth); err != nil {
+	if err := register(mux); err != nil {
 		t.Fatal(err)
 	}
 	lis, err := net.Listen("tcp", "127.0.0.1:0")
@@ -190,7 +201,13 @@ func newFlow(t *testing.T) (*browser, *fakeAuth) {
 		t.Fatal(err)
 	}
 	h := NewHandler(zap.NewNop(), &Config{PublicURL: flowOrigin, RateLimit: &RateLimitConfig{AuthPerMinute: 6000, AuthBurst: 100, RequestsPerSecond: 100, RequestBurst: 100}}, client, r, nil, nil)
-	return &browser{t: t, h: h.Routes(), cookies: make(map[string]*http.Cookie)}, auth
+	return &browser{t: t, h: h.Routes(), cookies: make(map[string]*http.Cookie)}
+}
+
+// signIn holds token as its session, and a CSRF token.
+func (b *browser) signIn(token string) {
+	b.cookies["gochat_session"] = &http.Cookie{Name: "gochat_session", Value: token}
+	b.cookies["gochat_csrf"] = &http.Cookie{Name: "gochat_csrf", Value: secure.Token()}
 }
 
 // toProvider starts a sign-in at the provider and returns the state its

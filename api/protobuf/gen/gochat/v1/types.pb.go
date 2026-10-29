@@ -365,8 +365,10 @@ type User struct {
 	DndUntil     *timestamppb.Timestamp `protobuf:"bytes,10,opt,name=dnd_until,json=dndUntil,proto3" json:"dnd_until,omitempty"`
 	CustomStatus *CustomStatus          `protobuf:"bytes,11,opt,name=custom_status,json=customStatus,proto3" json:"custom_status,omitempty"`
 	// A bot, and the person who owns it.
-	Bot           bool   `protobuf:"varint,12,opt,name=bot,proto3" json:"bot,omitempty"`
-	BotOwnerId    string `protobuf:"bytes,13,opt,name=bot_owner_id,json=botOwnerId,proto3" json:"bot_owner_id,omitempty"`
+	Bot        bool   `protobuf:"varint,12,opt,name=bot,proto3" json:"bot,omitempty"`
+	BotOwnerId string `protobuf:"bytes,13,opt,name=bot_owner_id,json=botOwnerId,proto3" json:"bot_owner_id,omitempty"`
+	// The account was deleted; its messages stay.
+	Deleted       bool `protobuf:"varint,14,opt,name=deleted,proto3" json:"deleted,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -490,6 +492,13 @@ func (x *User) GetBotOwnerId() string {
 		return x.BotOwnerId
 	}
 	return ""
+}
+
+func (x *User) GetDeleted() bool {
+	if x != nil {
+		return x.Deleted
+	}
+	return false
 }
 
 type Session struct {
@@ -1949,7 +1958,7 @@ const file_gochat_v1_types_proto_rawDesc = "" +
 	"\x05emoji\x18\x01 \x01(\tR\x05emoji\x12\x12\n" +
 	"\x04text\x18\x02 \x01(\tR\x04text\x129\n" +
 	"\n" +
-	"expires_at\x18\x03 \x01(\v2\x1a.google.protobuf.TimestampR\texpiresAt\"\xec\x03\n" +
+	"expires_at\x18\x03 \x01(\v2\x1a.google.protobuf.TimestampR\texpiresAt\"\x86\x04\n" +
 	"\x04User\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x1a\n" +
 	"\busername\x18\x02 \x01(\tR\busername\x12!\n" +
@@ -1966,7 +1975,8 @@ const file_gochat_v1_types_proto_rawDesc = "" +
 	"\rcustom_status\x18\v \x01(\v2\x17.gochat.v1.CustomStatusR\fcustomStatus\x12\x10\n" +
 	"\x03bot\x18\f \x01(\bR\x03bot\x12 \n" +
 	"\fbot_owner_id\x18\r \x01(\tR\n" +
-	"botOwnerId\"j\n" +
+	"botOwnerId\x12\x18\n" +
+	"\adeleted\x18\x0e \x01(\bR\adeleted\"j\n" +
 	"\aSession\x12\x14\n" +
 	"\x05token\x18\x01 \x01(\tR\x05token\x12\x0e\n" +
 	"\x02id\x18\x02 \x01(\tR\x02id\x129\n" +

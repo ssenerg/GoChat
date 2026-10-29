@@ -101,6 +101,12 @@ iosApp/      the Xcode project: a SwiftUI shell that shows the shared screens
   and make members admins or remove them. As on the web, only the team's
   owner or a system admin demotes or removes another admin. Photos are
   JPEG, PNG, GIF or WebP pictures up to 10 MB, for people and teams alike.
+- Leave a team from its settings; its last admin once no one else is in it.
+- Delete the account in Settings, with the password and a two-factor code
+  when it is on. An account without a password signs in again in the
+  system browser, as a sign-in does, with `reauth=1`: its code proves the
+  sign-in to `DeleteAccount` with the PKCE verifier, and signs no one in.
+  The app then signs out.
 - Push notifications while the app is closed, from servers that push to
   this build (below): direct and group messages, replies in their threads
   and mentions. A tap opens the conversation or the thread, in its team.

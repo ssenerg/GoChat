@@ -71,6 +71,9 @@ type User struct {
 	// Bot marks a bot, which BotOwner owns.
 	Bot      bool       `db:"bot"`
 	BotOwner gocql.UUID `db:"bot_owner"`
+	// DeletedAt is when the account was deleted; its row stays for its
+	// messages.
+	DeletedAt time.Time `db:"deleted_at"`
 }
 
 type Session struct {
@@ -103,11 +106,15 @@ type SSOFlow struct {
 	// Verifier is the PKCE verifier, sealed.
 	Verifier    []byte `db:"verifier"`
 	RedirectURI string `db:"redirect_uri"`
-	// LinkUser is who links the identity, when someone signed in started it.
+	// LinkUser is who links the identity, when someone signed in started it,
+	// or who a reauth signs in.
 	LinkUser gocql.UUID `db:"link_user"`
 	// AppChallenge is the PKCE challenge of an app the sign-in hands off to.
 	AppChallenge string    `db:"app_challenge"`
 	ExpiresAt    time.Time `db:"expires_at"`
+	// Reauth proves who signs in, for deleting their account, and signs
+	// no one in.
+	Reauth bool `db:"reauth"`
 }
 
 // The kinds of SSO tickets.
@@ -116,6 +123,8 @@ const (
 	SSOTicketApp = "app"
 	// SSOTicketLink waits for an account's owner to link the identity.
 	SSOTicketLink = "link"
+	// SSOTicketReauth proves its user just signed in at the provider.
+	SSOTicketReauth = "reauth"
 )
 
 // SSOTicket is what a finished sign-in leaves for the step after it.
