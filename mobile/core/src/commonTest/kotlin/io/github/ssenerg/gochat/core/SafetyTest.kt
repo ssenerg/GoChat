@@ -8,6 +8,7 @@ import gochat.v1.BlockedUser
 import gochat.v1.BlocksChanged
 import gochat.v1.Channel
 import gochat.v1.ChannelType
+import gochat.v1.CountReportsResponse
 import gochat.v1.Event
 import gochat.v1.ListBlockedResponse
 import gochat.v1.ListReportsRequest
@@ -21,6 +22,9 @@ import gochat.v1.ReportResponse
 import gochat.v1.ReportsChanged
 import gochat.v1.ResolveReportRequest
 import gochat.v1.ResolveReportResponse
+import gochat.v1.Team
+import gochat.v1.TeamJoined
+import gochat.v1.TeamRole
 import gochat.v1.UnblockUserRequest
 import gochat.v1.UnblockUserResponse
 import gochat.v1.User
@@ -152,5 +156,15 @@ class SafetyTest {
         session.event(Event(reports_changed = ReportsChanged(count = 5)))
         assertEquals(mapOf("t1" to 3), session.state.value.reports)
         assertEquals(5, session.state.value.allReports)
+    }
+
+    @Test
+    fun becomingAnAdminReadsTheReportCounts() = runTest {
+        val r = Recorder()
+        r.answers["CountReports"] = CountReportsResponse(teams = mapOf("t1" to 2))
+        val session = ChatSession(api(r), me, MemoryStore(), backgroundScope, null) {}
+        session.event(Event(team_joined = TeamJoined(team = Team(id = "t1", role = TeamRole.TEAM_ROLE_ADMIN))))
+        runCurrent()
+        assertEquals(mapOf("t1" to 2), session.state.value.reports)
     }
 }

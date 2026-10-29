@@ -37,7 +37,17 @@ func (h *Handler) pinMessage(w http.ResponseWriter, r *http.Request) {
 		h.fail(w, r, err)
 		return
 	}
-	h.fragment(w, r, http.StatusOK, "message", h.render.Message(res.Message, u, r.PostFormValue("mod") == "1"))
+	h.refold(w, r, res.Message, u)
+}
+
+// refold answers with m as it now shows, folded when the reader blocked
+// its author.
+func (h *Handler) refold(w http.ResponseWriter, r *http.Request, m *pb.Message, u *pb.User) {
+	ctx, cancel := h.ctx(r)
+	defer cancel()
+	view := h.render.Message(m, u, r.PostFormValue("mod") == "1")
+	render.Fold([]*render.Message{view}, h.blockedOrNone(ctx))
+	h.fragment(w, r, http.StatusOK, "message", view)
 }
 
 // saveMessage saves a message for the caller, or with saved=0 drops it.
@@ -59,7 +69,7 @@ func (h *Handler) saveMessage(w http.ResponseWriter, r *http.Request) {
 		h.fail(w, r, err)
 		return
 	}
-	h.fragment(w, r, http.StatusOK, "message", h.render.Message(res.Message, u, r.PostFormValue("mod") == "1"))
+	h.refold(w, r, res.Message, u)
 }
 
 // pinsPanel shows a channel's pinned messages in the side pane, or with

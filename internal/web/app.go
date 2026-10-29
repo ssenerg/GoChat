@@ -1175,6 +1175,7 @@ func (h *Handler) threadPanel(w http.ResponseWriter, r *http.Request) {
 		Voice:     ch.VoiceEnabled,
 	}
 	render.Fold(view.Replies, blocked)
+	render.Fold([]*render.Message{view.Root}, blocked)
 	if len(thread.Replies) > 0 {
 		view.Oldest = thread.Replies[0].Id
 	}

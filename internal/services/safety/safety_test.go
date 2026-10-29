@@ -37,9 +37,10 @@ type fakeRepo struct {
 	blocks  map[gocql.UUID][]*models.Block
 	reports map[gocql.UUID]*models.Report
 	// listed holds the reports listed open; failIndex fails moving them.
-	listed    map[gocql.UUID]bool
-	failIndex bool
-	state     map[string]string
+	listed       map[gocql.UUID]bool
+	failIndex    bool
+	state        map[string]string
+	blockerReads int
 }
 
 func newFakeRepo() *fakeRepo {
@@ -112,6 +113,7 @@ func (f *fakeRepo) ListBlocks(_ context.Context, userID gocql.UUID, limit int) (
 func (f *fakeRepo) ListBlockers(_ context.Context, userID gocql.UUID, limit int) ([]gocql.UUID, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
+	f.blockerReads++
 	var out []gocql.UUID
 	for by, list := range f.blocks {
 		if slices.ContainsFunc(list, func(b *models.Block) bool { return b.BlockedID == userID }) && len(out) < limit {
@@ -861,5 +863,26 @@ func TestClaimingReports(t *testing.T) {
 	}
 	if _, err := f.w.listReports(ctx, ListReports{P: f.principal(boss), TeamID: team.String(), After: ids.New().String()}); !ierrors.Is(err, ierrors.CodeInvalidArgument) {
 		t.Fatalf("a random cursor: %v", err)
+	}
+}
+
+func TestCopyingBlocksOnce(t *testing.T) {
+	f := newFixture(t)
+	ctx := context.Background()
+	c := &copier{Deps: f.w.Deps}
+	run, cancel := context.WithCancel(ctx)
+	defer cancel()
+	c.run(run)
+	if got, _ := f.repo.GetState(ctx, copyKey); got != copyDone {
+		t.Fatalf("the copy's state reads %q", got)
+	}
+	// The cache now reads who blocked someone from blocked_by.
+	if _, err := f.w.Blocks.Among(ctx, ids.New(), []gocql.UUID{ids.New()}); err != nil {
+		t.Fatal(err)
+	}
+	f.repo.mu.Lock()
+	defer f.repo.mu.Unlock()
+	if f.repo.blockerReads != 1 {
+		t.Fatalf("read blockers %d times, want once", f.repo.blockerReads)
 	}
 }

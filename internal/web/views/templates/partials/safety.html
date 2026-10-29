@@ -69,10 +69,12 @@
   {{with $r.Details}}<p class="report-details">{{.}}</p>{{end}}
   {{if $r.Action}}
   <p class="muted">{{.Done}} by {{name $r.ResolvedBy}}, {{date $r.ResolvedAt.AsTime}}.</p>
+  {{else if .Mine}}
+  <p class="muted">You sent this report: another admin acts on it.</p>
   {{else}}
   <div class="row">
     <button class="btn sm" hx-post="/reports/{{$r.Id}}/resolve" hx-vals='{"action": "dismiss"{{if .System}}, "system": "1"{{end}}}' hx-target="#report-{{$r.Id}}" hx-swap="outerHTML">Dismiss</button>
-    {{if $r.MessageId}}<button class="btn sm danger" hx-post="/reports/{{$r.Id}}/resolve" hx-vals='{"action": "delete"{{if .System}}, "system": "1"{{end}}}' hx-target="#report-{{$r.Id}}" hx-swap="outerHTML" hx-confirm="Delete this message for everyone?">Delete message</button>{{end}}
+    {{if $r.MessageId}}<button class="btn sm danger" hx-post="/reports/{{$r.Id}}/resolve" hx-vals='{"action": "delete"{{if .System}}, "system": "1"{{end}}}' hx-target="#report-{{$r.Id}}" hx-swap="outerHTML" hx-confirm="Delete this message for everyone?{{if not $r.RootId}} If it starts a thread, its replies go too.{{end}}">Delete message</button>{{end}}
     {{if $r.TeamId}}<button class="btn sm danger" hx-post="/reports/{{$r.Id}}/resolve" hx-vals='{"action": "remove"{{if .System}}, "system": "1"{{end}}}' hx-target="#report-{{$r.Id}}" hx-swap="outerHTML" hx-confirm="Remove {{name $r.User}} from {{$r.TeamName}}?">Remove from team</button>{{end}}
     {{if .System}}<button class="btn sm danger" hx-post="/reports/{{$r.Id}}/resolve" hx-vals='{"action": "deactivate", "system": "1"}' hx-target="#report-{{$r.Id}}" hx-swap="outerHTML" hx-confirm="Deactivate {{name $r.User}}? They are signed out everywhere at once and cannot sign in.">Deactivate account</button>{{end}}
   </div>

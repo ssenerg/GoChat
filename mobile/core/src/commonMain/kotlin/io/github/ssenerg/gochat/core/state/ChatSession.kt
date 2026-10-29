@@ -264,6 +264,11 @@ class ChatSession internal constructor(
         runCatching { api.blocked() }.onSuccess { list ->
             _state.update { s -> s.copy(blocked = list.mapNotNull { it.user?.id }.toSet()) }
         }
+        refreshReports()
+    }
+
+    /** Reads how many reports wait for the person, which no event says while they are away. */
+    private suspend fun refreshReports() {
         runCatching { api.reportCounts() }.onSuccess { c -> _state.update { it.copy(reports = c.teams, allReports = c.all) } }
     }
 
@@ -302,6 +307,7 @@ class ChatSession internal constructor(
             val threadChannel = visibleChannel
             if (thread != null && threadChannel != null) runCatching { api.markThreadRead(threadChannel, thread) }
             loadAround(teamId, channels)
+            loadSafety()
         } catch (e: Exception) {
             fail(e)
         }
@@ -875,6 +881,8 @@ class ChatSession internal constructor(
             }
             // While the first load runs, it picks the team.
             if (st.teamId == null && synced) selectTeam(t.id)
+            // Made an admin, they now act on its reports.
+            scope.launch { refreshReports() }
         }
         ev.team_left?.let { leftTeam(it.team_id) }
         ev.team_members_changed?.let { ch ->

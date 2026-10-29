@@ -131,10 +131,19 @@
     <button class="icon-btn" type="button" data-close-thread aria-label="Close thread" title="Close">{{icon "close"}}</button>
   </header>
   <div class="thread-scroll" id="thread-scroll">
+    {{if .Root.Blocked}}
+    <article class="msg thread-root folded" id="root-{{.Root.Id}}">
+      <details>
+        <summary>{{icon "block"}}<span>Message from someone you blocked</span></summary>
+        <div class="folded-body">{{template "avatar" (dict "User" .Root.Author "Size" "")}}<div class="msg-main">{{template "msg-content" .Root}}</div></div>
+      </details>
+    </article>
+    {{else}}
     <article class="msg thread-root" id="root-{{.Root.Id}}">
       {{template "avatar" (dict "User" .Root.Author "Size" "")}}
       <div class="msg-main">{{template "msg-content" .Root}}</div>
     </article>
+    {{end}}
     <div class="replies" id="replies-{{.Root.Id}}">
       {{if .HasMore}}{{template "older-replies" .}}{{end}}
       {{range .Replies}}{{template "message" .}}{{end}}

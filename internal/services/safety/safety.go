@@ -163,9 +163,9 @@ func (w *worker) block(ctx context.Context, msg Block) (Done, error) {
 	defer unlock()
 	// Written even when it seems done already: the cache may be stale.
 	if msg.Blocked {
-		list, err := w.Repo.ListBlocks(ctx, msg.P.UserID, w.Cfg.MaxBlocks)
-		if err != nil {
-			return Done{}, err
+		list, lerr := w.Repo.ListBlocks(ctx, msg.P.UserID, w.Cfg.MaxBlocks)
+		if lerr != nil {
+			return Done{}, lerr
 		}
 		if len(list) >= w.Cfg.MaxBlocks && !slices.ContainsFunc(list, func(b *models.Block) bool { return b.BlockedID == target }) {
 			return Done{}, ierrors.ResourceExhausted(fmt.Sprintf("you can block up to %d people: unblock someone first", w.Cfg.MaxBlocks))
