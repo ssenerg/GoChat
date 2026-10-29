@@ -62,7 +62,7 @@ type (
 		teamID string
 		lists  *render.Lists
 	}
-	railReady  struct{ rail *render.Rail }
+	railReady    struct{ rail *render.Rail }
 	mutedReady   struct{ ids []string }
 	savedReady   struct{ ids []string }
 	blockedReady struct{ ids []string }

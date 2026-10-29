@@ -19,6 +19,7 @@ import (
 	"github.com/ssenerg/gochat/internal/core/models"
 	"github.com/ssenerg/gochat/internal/core/secure"
 	ierrors "github.com/ssenerg/gochat/internal/errors"
+	"github.com/ssenerg/gochat/internal/services/blocks"
 	"github.com/ssenerg/gochat/internal/services/hub"
 	"github.com/ssenerg/gochat/internal/services/users"
 )
@@ -696,5 +697,51 @@ func TestADeadTokenTakesNoNewOneWithIt(t *testing.T) {
 	d, err := f.repo.GetPushDevice(context.Background(), bob.UserID, bob.SessionHash)
 	if err != nil || d.Token != fcmToken("new") {
 		t.Fatalf("bob's phone: %+v, %v", d, err)
+	}
+}
+
+// blockList holds whom each person blocked.
+type blockList map[gocql.UUID][]gocql.UUID
+
+func (b blockList) ListBlocks(_ context.Context, userID gocql.UUID, _ int) ([]*models.Block, error) {
+	var out []*models.Block
+	for _, id := range b[userID] {
+		out = append(out, &models.Block{UserID: userID, BlockedID: id})
+	}
+	return out, nil
+}
+
+func TestBlockedPeoplePushNothing(t *testing.T) {
+	f := newFixture(t)
+	ann, bob, cat := f.person("ann"), f.person("bob"), f.person("cat")
+	f.register(bob, pb.PushPlatform_PUSH_PLATFORM_FCM, fcmToken("bob"))
+	f.register(cat, pb.PushPlatform_PUSH_PLATFORM_FCM, fcmToken("cat"))
+	f.deps.Blocks = blocks.NewCache(blockList{bob.UserID: {ann.UserID}}, 10, 10, time.Minute)
+	team, channel := ids.New(), ids.New()
+	all := members(ann, bob, cat)
+
+	// Bob blocked Ann: neither her @channel, her mention, her reply nor a
+	// group message of hers reaches him; Cat still hears all of them.
+	for _, m := range []Posted{
+		{Message: message(f.user(ann), channel, "@channel standup"), TeamID: team, ChannelName: "general", Members: all},
+		{Message: message(f.user(ann), channel, "@bob @cat look"), TeamID: team, ChannelName: "general", Members: all},
+		{Message: message(f.user(ann), ids.New(), "hi both"), TeamID: team, Conversation: true, Members: all},
+	} {
+		f.post(m)
+		if got := tokens(f.fcm.take()); !slices.Equal(got, []string{fcmToken("cat")}) {
+			t.Fatalf("%q pushed to %v", m.Message.Content, got)
+		}
+	}
+	reply := message(f.user(ann), channel, "agreed")
+	reply.RootId = ids.NewTime().String()
+	f.post(Posted{Message: reply, TeamID: team, ChannelName: "general", Members: all, Participants: []string{bob.UserID.String()}})
+	if got := tokens(f.fcm.take()); len(got) != 0 {
+		t.Fatalf("a reply of someone bob blocked pushed to %v", got)
+	}
+
+	// Bob is still pushed what others write.
+	f.post(Posted{Message: message(f.user(cat), channel, "@bob hey"), TeamID: team, ChannelName: "general", Members: all})
+	if got := tokens(f.fcm.take()); !slices.Equal(got, []string{fcmToken("bob")}) {
+		t.Fatalf("cat's mention pushed to %v", got)
 	}
 }

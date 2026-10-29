@@ -472,3 +472,27 @@ func TestHubStopsAsAGatewayGoes(t *testing.T) {
 		}
 	}
 }
+
+func TestToAdminsReachesConnectedSystemAdmins(t *testing.T) {
+	h := startHub(t, "gw1", "gw2")
+	admin := func(gw string, conn uint64, user string) {
+		h.engine.Send(h.pid, Attach{GatewayID: gw, ConnID: conn, User: &pb.User{Id: user, Role: pb.SystemRole_SYSTEM_ROLE_ADMIN}, SessionID: "s" + user, ExpiresAt: time.Now().Add(time.Hour)})
+	}
+	admin("gw1", 1, "root")
+	admin("gw2", 2, "root")
+	h.attach("gw1", 3, "member")
+	reports := &pb.Event{Payload: &pb.Event_ReportsChanged{ReportsChanged: &pb.ReportsChanged{Open: 2}}}
+	h.engine.Send(h.pid, ToAdmins{Event: reports})
+	if got := h.wires["gw1"].event(t).ConnIds; !slices.Equal(got, []uint64{1}) {
+		t.Fatalf("gw1 got %v", got)
+	}
+	if got := h.wires["gw2"].event(t).ConnIds; !slices.Equal(got, []uint64{2}) {
+		t.Fatalf("gw2 got %v", got)
+	}
+	// Once their last connection goes, they are no longer reached.
+	h.engine.Send(h.pid, Detach{GatewayID: "gw1", ConnID: 1})
+	h.engine.Send(h.pid, Detach{GatewayID: "gw2", ConnID: 2})
+	h.engine.Send(h.pid, ToAdmins{Event: reports})
+	h.wires["gw1"].none(t)
+	h.wires["gw2"].none(t)
+}
