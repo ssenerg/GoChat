@@ -94,6 +94,25 @@ func (fakeChannels) GetChannel(_ context.Context, req *pb.GetChannelRequest) (*p
 	return &pb.GetChannelResponse{Channel: &pb.Channel{Id: req.ChannelId, TeamId: testTeam, Type: pb.ChannelType_CHANNEL_TYPE_PUBLIC}}, nil
 }
 
+// fakeMessages has a thread rooted at the peer's message.
+type fakeMessages struct {
+	pb.DRPCMessageServiceUnimplementedServer
+}
+
+func peerMessage(id string) *pb.Message {
+	return &pb.Message{Id: id, ChannelId: testChannel, Author: &pb.User{Id: testPeer, Username: "bob"}, Content: "from bob", CreatedAt: timestamppb.Now()}
+}
+
+func (fakeMessages) ListThread(_ context.Context, req *pb.ListThreadRequest) (*pb.ListThreadResponse, error) {
+	return &pb.ListThreadResponse{Root: peerMessage(req.RootId)}, nil
+}
+
+func (fakeMessages) PinMessage(_ context.Context, req *pb.PinMessageRequest) (*pb.PinMessageResponse, error) {
+	m := peerMessage(req.MessageId)
+	m.Pinned = req.Pinned
+	return &pb.PinMessageResponse{Message: m}, nil
+}
+
 type fakeTeams struct {
 	pb.DRPCTeamServiceUnimplementedServer
 }
@@ -122,6 +141,7 @@ func newSafetyFlow(t *testing.T) (*browser, *fakeSafety) {
 		pb.DRPCRegisterChannelService(mux, &fakeChannels{}),
 		pb.DRPCRegisterTeamService(mux, &fakeTeams{}),
 		pb.DRPCRegisterUserService(mux, &fakeUsers{}),
+		pb.DRPCRegisterMessageService(mux, &fakeMessages{}),
 	} {
 		if err != nil {
 			t.Fatal(err)
@@ -207,6 +227,19 @@ func TestBlockingAndReportingAPersonOnTheWeb(t *testing.T) {
 	w = b.do(http.MethodPost, "/u/"+testPeer+"/report?team="+testTeam, url.Values{"reason": {"spam"}})
 	if w.Code != http.StatusOK || len(safety.reports) != 1 || safety.reports[0].GetUser().GetUserId() != testPeer || safety.reports[0].GetUser().GetTeamId() != testTeam {
 		t.Fatalf("reporting the person: %d %v", w.Code, safety.reports)
+	}
+}
+
+func TestABlockedPersonsThreadAndPinsShowFolded(t *testing.T) {
+	b, safety := newSafetyFlow(t)
+	safety.blocked[testPeer] = true
+	w := b.do(http.MethodGet, "/m/"+testChannel+"/"+testMessage+"/thread", nil)
+	if w.Code != http.StatusOK || !strings.Contains(w.Body.String(), `thread-root folded`) {
+		t.Fatalf("the thread: %d %s", w.Code, w.Body.String())
+	}
+	w = b.do(http.MethodPost, "/m/"+testChannel+"/"+testMessage+"/pin", url.Values{"pinned": {"1"}})
+	if w.Code != http.StatusOK || !strings.Contains(w.Body.String(), `msg folded`) {
+		t.Fatalf("the pinned message: %d %s", w.Code, w.Body.String())
 	}
 }
 

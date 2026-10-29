@@ -38,6 +38,35 @@ func TestBlocksLive(t *testing.T) {
 	if list, _ := r.ListBlocks(ctx, me, 10); len(list) != 1 || list[0].BlockedID != cat {
 		t.Fatalf("after unblocking bob: %+v", list)
 	}
+	if by, err := r.ListBlockers(ctx, cat, 10); err != nil || len(by) != 1 || by[0] != me {
+		t.Fatalf("who blocked cat: %v, %v", by, err)
+	}
+	if by, _ := r.ListBlockers(ctx, bob, 10); len(by) != 0 {
+		t.Fatalf("who blocked bob after the unblock: %v", by)
+	}
+}
+
+func TestCopyBlocksLive(t *testing.T) {
+	r := liveRepository(t)
+	ctx := context.Background()
+	old, gone, them := ids.New(), ids.New(), ids.New()
+	stamp := time.Now().UnixMicro()
+	// Blocks from before blocked_by; one was undone after the copy read
+	// it, so blocked_by holds its delete alone.
+	for _, id := range []gocql.UUID{old, gone} {
+		if err := r.query(ctx, "INSERT INTO blocks (user_id, blocked_id, created_at) VALUES (?, ?, ?) USING TIMESTAMP ?", id, them, time.Now(), stamp).ExecRelease(); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := r.query(ctx, "DELETE FROM blocked_by USING TIMESTAMP ? WHERE blocked_id = ? AND user_id = ?", stamp+1, them, gone).ExecRelease(); err != nil {
+		t.Fatal(err)
+	}
+	if n, err := r.CopyBlocks(ctx); err != nil || n < 2 {
+		t.Fatalf("copied %d, %v", n, err)
+	}
+	if by, err := r.ListBlockers(ctx, them, 10); err != nil || len(by) != 1 || by[0] != old {
+		t.Fatalf("who blocked them after the copy: %v, %v", by, err)
+	}
 }
 
 func TestReportsLive(t *testing.T) {
@@ -69,8 +98,8 @@ func TestReportsLive(t *testing.T) {
 	if page, _ := r.ListReports(ctx, team, true, b.ID, 10); len(page) != 1 || page[0].ID != a.ID {
 		t.Fatalf("the page after %s: %+v", b.ID, page)
 	}
-	if n, err := r.CountOpenReports(ctx, team, 100); err != nil || n != 2 {
-		t.Fatalf("the team counts %d, %v", n, err)
+	if n, about, err := r.CountOpenReports(ctx, team, 100); err != nil || n != 2 || about[a.UserID] != 1 || about[b.UserID] != 1 {
+		t.Fatalf("the team counts %d, %v, %v", n, about, err)
 	}
 	// Every team's listing holds the others' too, newest first.
 	all, err := r.ListReports(ctx, gocql.UUID{}, true, gocql.UUID{}, 3)
@@ -78,13 +107,50 @@ func TestReportsLive(t *testing.T) {
 		t.Fatalf("every team's %+v, %v", all, err)
 	}
 
+	// One admin claims a report; another, reading it open, cannot.
+	admin, other := ids.New(), ids.New()
 	at := time.Now().UTC().Truncate(time.Millisecond)
-	admin := ids.New()
-	if ok, err := r.ResolveReport(ctx, a, models.ReportDismissed, admin, at); err != nil || !ok {
-		t.Fatalf("resolving: %v, %v", ok, err)
+	fresh := *a
+	if ok, err := r.ClaimReport(ctx, &fresh, admin, at); err != nil || !ok {
+		t.Fatalf("claiming: %v, %v", ok, err)
 	}
-	if ok, err := r.ResolveReport(ctx, a, models.ReportDeleteMessage, ids.New(), at); err != nil || ok {
-		t.Fatalf("resolving again: %v, %v", ok, err)
+	if ok, err := r.ClaimReport(ctx, &fresh, other, at); err != nil || ok {
+		t.Fatalf("claiming again: %v, %v", ok, err)
+	}
+	claimed, _ := r.GetReport(ctx, a.ID)
+	if claimed.Action != models.ReportPending || claimed.ResolvedBy != admin || !claimed.ResolvedAt.Equal(at) {
+		t.Fatalf("claimed report %+v", claimed)
+	}
+	// A claim read stale is taken over; its first holder no longer
+	// finishes or releases it.
+	later := at.Add(time.Minute)
+	if ok, err := r.ClaimReport(ctx, claimed, other, later); err != nil || !ok {
+		t.Fatalf("taking over: %v, %v", ok, err)
+	}
+	if ok, err := r.FinishReport(ctx, claimed, models.ReportDeleteMessage); err != nil || ok {
+		t.Fatalf("finishing a claim taken over: %v, %v", ok, err)
+	}
+	if err := r.ReleaseReport(ctx, claimed); err != nil {
+		t.Fatal(err)
+	}
+	held, _ := r.GetReport(ctx, a.ID)
+	if held.Action != models.ReportPending || held.ResolvedBy != other {
+		t.Fatalf("after a stale holder let go: %+v", held)
+	}
+	// Its holder releases it, then claims and finishes it.
+	if err := r.ReleaseReport(ctx, held); err != nil {
+		t.Fatal(err)
+	}
+	if got, _ := r.GetReport(ctx, a.ID); got.Action != "" || !ids.IsZero(got.ResolvedBy) || !got.ResolvedAt.IsZero() {
+		t.Fatalf("released report %+v", got)
+	}
+	if ok, err := r.ClaimReport(ctx, a, admin, at); err != nil || !ok {
+		t.Fatalf("claiming after the release: %v, %v", ok, err)
+	}
+	mine := *a
+	mine.Action, mine.ResolvedBy, mine.ResolvedAt = models.ReportPending, admin, at
+	if ok, err := r.FinishReport(ctx, &mine, models.ReportDismissed); err != nil || !ok {
+		t.Fatalf("finishing: %v, %v", ok, err)
 	}
 	got, _ = r.GetReport(ctx, a.ID)
 	if got.Action != models.ReportDismissed || got.ResolvedBy != admin || !got.ResolvedAt.Equal(at) {
@@ -99,12 +165,24 @@ func TestReportsLive(t *testing.T) {
 	if done, _ := r.ListReports(ctx, gocql.UUID{}, false, gocql.UUID{}, 1); len(done) != 1 {
 		t.Fatalf("every team's resolved: %+v", done)
 	}
-	if n, _ := r.CountOpenReports(ctx, team, 100); n != 1 {
+	if n, _, _ := r.CountOpenReports(ctx, team, 100); n != 1 {
 		t.Fatalf("the team counts %d open", n)
 	}
-	// A report of no team is listed once, for all.
-	none := file(gocql.UUID{})
-	if ok, err := r.ResolveReport(ctx, none, models.ReportDeactivate, admin, at); err != nil || !ok {
-		t.Fatalf("resolving a report of no team: %v, %v", ok, err)
+	// Moving it again changes nothing.
+	if err := r.IndexResolved(ctx, got); err != nil {
+		t.Fatal(err)
+	}
+	if done, _ := r.ListReports(ctx, team, false, gocql.UUID{}, 10); len(done) != 1 {
+		t.Fatalf("resolved after moving again: %+v", done)
+	}
+
+	// An index row from before it named the person counts from the report.
+	legacy := ids.New()
+	old := file(legacy)
+	if err := r.query(ctx, "UPDATE report_index SET user_id = null WHERE scope = ? AND open = true AND id = ?", legacy, old.ID).ExecRelease(); err != nil {
+		t.Fatal(err)
+	}
+	if n, about, err := r.CountOpenReports(ctx, legacy, 100); err != nil || n != 1 || about[old.UserID] != 1 {
+		t.Fatalf("a legacy row counts %d, %v, %v", n, about, err)
 	}
 }

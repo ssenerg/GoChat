@@ -492,6 +492,16 @@ func (b blockList) ListBlocks(_ context.Context, userID gocql.UUID, _ int) ([]*m
 	return out, nil
 }
 
+func (b blockList) ListBlockers(_ context.Context, userID gocql.UUID, _ int) ([]gocql.UUID, error) {
+	var out []gocql.UUID
+	for by, list := range b {
+		if slices.Contains(list, userID) {
+			out = append(out, by)
+		}
+	}
+	return out, nil
+}
+
 func TestBlockedPeopleOpenNoConversation(t *testing.T) {
 	repo := newTeamsRepo()
 	me, bob, carol, dan := repo.person("me"), repo.person("bob"), repo.person("carol"), repo.person("dan")

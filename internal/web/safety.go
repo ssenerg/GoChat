@@ -263,8 +263,10 @@ func (h *Handler) report(w http.ResponseWriter, r *http.Request) {
 type reportRow struct {
 	Report *pb.Report
 	// System is set on the admin pages, where a system admin may also
-	// deactivate the person.
+	// deactivate the person. Mine is set on a report the reader sent,
+	// which another admin acts on.
 	System bool
+	Mine   bool
 	Error  string
 }
 
@@ -291,17 +293,17 @@ type reportList struct {
 	Empty   string
 }
 
-func rows(list []*pb.Report, system bool) []reportRow {
+func rows(list []*pb.Report, system bool, me *pb.User) []reportRow {
 	out := make([]reportRow, len(list))
 	for i, rep := range list {
-		out[i] = reportRow{Report: rep, System: system}
+		out[i] = reportRow{Report: rep, System: system, Mine: rep.GetReporter().GetId() == me.GetId()}
 	}
 	return out
 }
 
 // teamReports lists a team's open reports, for its admins' team settings.
 func (h *Handler) teamReports(w http.ResponseWriter, r *http.Request) {
-	_, team, ctx, cancel := h.teamFor(w, r)
+	u, team, ctx, cancel := h.teamFor(w, r)
 	if team == nil {
 		return
 	}
@@ -312,7 +314,7 @@ func (h *Handler) teamReports(w http.ResponseWriter, r *http.Request) {
 		h.fail(w, r, err)
 		return
 	}
-	d := reportList{Rows: rows(res.Reports, false), Empty: "No open reports."}
+	d := reportList{Rows: rows(res.Reports, false, u), Empty: "No open reports."}
 	if res.Next != "" {
 		d.MoreURL = "/t/" + team.Name + "/reports?after=" + res.Next
 	}
@@ -411,7 +413,7 @@ func (h *Handler) adminReports(w http.ResponseWriter, r *http.Request) {
 	d := adminReportsData{
 		Page:     Page{Title: "Reports", CSRF: h.csrfToken(w, r), User: me},
 		Resolved: resolved,
-		List:     reportList{Rows: rows(res.Reports, true), Empty: "No open reports."},
+		List:     reportList{Rows: rows(res.Reports, true, me), Empty: "No open reports."},
 	}
 	if resolved {
 		d.List.Empty = "No resolved reports."

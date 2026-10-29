@@ -669,8 +669,12 @@ func (a *channel) recordMentions(m *models.Message) {
 				userIDs = append(userIDs, id)
 			}
 		}
-		// Those who blocked the author are not called out.
+		// Those who blocked the author are not called out. The writes get
+		// a deadline of their own.
 		userIDs = a.unblocked(ctx, m.UserID, userIDs)
+		cancel()
+		ctx, cancel = a.ctx()
+		defer cancel()
 		if err := a.Repo.AddMentions(ctx, a.id, m.ID, userIDs); err != nil {
 			a.Logger.Warn("failed to record mentions", zap.String("channel", a.id.String()), zap.Error(err))
 		}
@@ -828,6 +832,9 @@ func (a *channel) edit(msg Edit) (*pb.Message, error) {
 	// Each edit reaches every member, as a post does: they share its pace.
 	if !a.poster(msg.P.UserID).Allow() {
 		return nil, ierrors.ResourceExhausted("you are editing too fast")
+	}
+	if err := a.refuseBlocked(msg.P.UserID); err != nil {
+		return nil, err
 	}
 	content, err := validate.Text("message", msg.Content, a.Cfg.MaxMessageLength)
 	if err != nil {
@@ -1029,6 +1036,12 @@ func (a *channel) react(msg React) ([]*pb.Reaction, error) {
 	}
 	if !a.poster(msg.P.UserID).Allow() {
 		return nil, ierrors.ResourceExhausted("you are reacting too fast")
+	}
+	// Taking a reaction back stays allowed.
+	if !msg.Remove {
+		if err := a.refuseBlocked(msg.P.UserID); err != nil {
+			return nil, err
+		}
 	}
 	ctx, cancel := a.ctx()
 	defer cancel()
@@ -1363,6 +1376,9 @@ func (a *channel) typingEvent(msg Typing) (Done, error) {
 		return Done{}, nil
 	}
 	a.typing[msg.P.UserID] = now
+	if a.refuseBlocked(msg.P.UserID) != nil {
+		return Done{}, nil
+	}
 	ctx, cancel := a.ctx()
 	defer cancel()
 	u, err := a.Users.Get(ctx, msg.P.UserID)

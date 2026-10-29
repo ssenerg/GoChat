@@ -98,7 +98,7 @@ fun MessageRow(
     onAuthor: (() -> Unit)? = null,
 ) {
     val colors = LocalChatColors.current
-    var unfolded by remember(m.id) { mutableStateOf(false) }
+    var unfolded by remember(m.id, folded) { mutableStateOf(false) }
     if (folded && !unfolded) {
         FoldedMessage(onShow = { unfolded = true })
         return

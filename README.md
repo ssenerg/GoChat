@@ -272,11 +272,13 @@ that carry what people post.
   ([safety.proto](api/protobuf/proto/gochat/v1/safety.proto)). A person
   blocks up to 1000 people (`services.safety.max_blocks`).
 - Someone blocked cannot open a direct conversation with the person who
-  blocked them, put them in a group conversation, or post in a direct
-  conversation they share; they hear only "you cannot send messages in this
-  conversation", and are told nothing else. The person who blocked them
-  still reads their conversation, which takes no message from either side
-  until they unblock.
+  blocked them, put them in a group conversation, or post, edit, react or
+  pin in a direct conversation they share, and their typing shows nowhere;
+  they hear only "you cannot send messages in this conversation", and are
+  told nothing else. That refusal still lets them guess they were blocked:
+  nothing else in a direct conversation says it. The person who blocked
+  them still reads their conversation, which takes nothing from either side
+  until they unblock; taking back a reaction or a pin stays allowed.
 - In channels and group conversations a blocked person's messages stay for
   everyone else; the person who blocked them sees each folded, "Message from
   someone you blocked", and opens it with a tap. Those messages call them
@@ -292,8 +294,11 @@ that carry what people post.
   admins every team's, open and resolved, at `/admin/reports`, and in the
   apps' Settings. An admin dismisses a report, deletes the message, removes
   the person from the team, or, for system admins, deactivates their account.
-  The report records what was done, by whom and when; two admins acting at
-  once record one.
+  An admin claims a report before acting on it, so two admins never both
+  act; a claim never settled lapses after a minute. The report records what
+  was done, by whom and when. No admin sees, counts or acts on a report about
+  themselves, which goes to the other admins and to system admins, nor acts
+  on one they sent.
 - Admins learn of reports as they come: a `ReportsChanged` event carries the
   open count, a team's to its admins and every team's to system admins,
   which the web and the apps show as a badge on the team menu.

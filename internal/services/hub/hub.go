@@ -4,7 +4,6 @@ package hub
 
 import (
 	"errors"
-	"maps"
 	"slices"
 	"sync/atomic"
 	"time"
@@ -157,8 +156,12 @@ type (
 // Disconnected replies with those of UserIDs who have no connection open.
 type Disconnected struct{ UserIDs []string }
 
-// ToAdmins sends Event to the connections of system admins.
-type ToAdmins struct{ Event *pb.Event }
+// ToAdmins sends Event to the connections of system admins, or to those
+// Instead names their own event.
+type ToAdmins struct {
+	Event   *pb.Event
+	Instead map[string]*pb.Event
+}
 
 // SetStatus records the availability a connected user chose.
 type SetStatus struct {
@@ -273,7 +276,15 @@ func (h *hub) Receive(c *actor.Context) {
 			}
 		}
 	case ToAdmins:
-		h.deliver(c, Deliver{UserIDs: slices.Collect(maps.Keys(h.admins)), Event: msg.Event})
+		var rest []string
+		for id := range h.admins {
+			if ev, ok := msg.Instead[id]; ok {
+				h.deliver(c, Deliver{UserIDs: []string{id}, Event: ev})
+			} else {
+				rest = append(rest, id)
+			}
+		}
+		h.deliver(c, Deliver{UserIDs: rest, Event: msg.Event})
 	case Broadcast:
 		resp := &pb.ConnectResponse{Frame: &pb.ConnectResponse_Event{Event: msg.Event}}
 		for _, gw := range h.gateways {

@@ -17,6 +17,7 @@ import (
 	"github.com/ssenerg/gochat/internal/actors"
 	"github.com/ssenerg/gochat/internal/authz"
 	"github.com/ssenerg/gochat/internal/core/ids"
+	"github.com/ssenerg/gochat/internal/core/keylock"
 	"github.com/ssenerg/gochat/internal/core/models"
 	"github.com/ssenerg/gochat/internal/core/window"
 	ierrors "github.com/ssenerg/gochat/internal/errors"
@@ -32,12 +33,18 @@ type Repo interface {
 	Block(ctx context.Context, b *models.Block) error
 	Unblock(ctx context.Context, userID, blockedID gocql.UUID) error
 	ListBlocks(ctx context.Context, userID gocql.UUID, limit int) ([]*models.Block, error)
+	CopyBlocks(ctx context.Context) (int, error)
+	GetState(ctx context.Context, key string) (string, error)
+	SetState(ctx context.Context, key, value string) error
 
 	CreateReport(ctx context.Context, rep *models.Report) error
 	GetReport(ctx context.Context, id gocql.UUID) (*models.Report, error)
 	ListReports(ctx context.Context, scope gocql.UUID, open bool, after gocql.UUID, limit int) ([]*models.Report, error)
-	CountOpenReports(ctx context.Context, scope gocql.UUID, limit int) (int, error)
-	ResolveReport(ctx context.Context, rep *models.Report, action string, by gocql.UUID, at time.Time) (bool, error)
+	CountOpenReports(ctx context.Context, scope gocql.UUID, limit int) (int, map[gocql.UUID]int, error)
+	ClaimReport(ctx context.Context, rep *models.Report, by gocql.UUID, at time.Time) (bool, error)
+	FinishReport(ctx context.Context, rep *models.Report, action string) (bool, error)
+	ReleaseReport(ctx context.Context, rep *models.Report) error
+	IndexResolved(ctx context.Context, rep *models.Report) error
 
 	GetTeamMember(ctx context.Context, teamID, userID gocql.UUID) (*models.TeamMember, error)
 	ListTeamMembers(ctx context.Context, teamID gocql.UUID) ([]*scylla.TeamMemberEntry, error)
@@ -62,10 +69,13 @@ type Deps struct {
 	Directory *actor.PID
 	Accounts  *actor.PID
 	reported  *window.Counter
+	// locks makes one person's blocks change one at a time.
+	locks *keylock.Locks
 }
 
 func Pool(d *Deps) actor.Producer {
 	d.reported = window.New(d.Cfg.MaxReports, d.Cfg.ReportWindow)
+	d.locks = keylock.New()
 	return actors.NewPool(d.Cfg.Workers, func() actor.Receiver { return &worker{Deps: d} },
 		actor.WithMiddleware(actors.Recover(d.Logger)))
 }
@@ -113,6 +123,15 @@ func parseID(s, what string) (gocql.UUID, error) {
 	return id, nil
 }
 
+// parseTimeID parses the timeuuid of a report.
+func parseTimeID(s, what string) (gocql.UUID, error) {
+	id, ok := ids.ParseTime(s)
+	if !ok {
+		return gocql.UUID{}, ierrors.InvalidArgument("invalid " + what + " id")
+	}
+	return id, nil
+}
+
 // deliver numbers ev in the updates of userID and sends it to them.
 func (w *worker) deliver(ev *pb.Event, userID gocql.UUID) {
 	if w.Updates == nil {
@@ -137,22 +156,25 @@ func (w *worker) block(ctx context.Context, msg Block) (Done, error) {
 	if err != nil {
 		return Done{}, err
 	}
-	set, err := w.Blocks.Of(ctx, msg.P.UserID)
+	unlock, err := w.locks.Lock(ctx, msg.P.UserID.String())
 	if err != nil {
-		return Done{}, err
+		return Done{}, ierrors.Unavailable("busy, try again")
 	}
-	if set[target] == msg.Blocked {
-		return Done{}, nil
-	}
+	defer unlock()
+	// Written even when it seems done already: the cache may be stale.
 	if msg.Blocked {
-		if len(set) >= w.Cfg.MaxBlocks {
+		list, lerr := w.Repo.ListBlocks(ctx, msg.P.UserID, w.Cfg.MaxBlocks)
+		if lerr != nil {
+			return Done{}, lerr
+		}
+		if len(list) >= w.Cfg.MaxBlocks && !slices.ContainsFunc(list, func(b *models.Block) bool { return b.BlockedID == target }) {
 			return Done{}, ierrors.ResourceExhausted(fmt.Sprintf("you can block up to %d people: unblock someone first", w.Cfg.MaxBlocks))
 		}
 		err = w.Repo.Block(ctx, &models.Block{UserID: msg.P.UserID, BlockedID: target, CreatedAt: time.Now().UTC()})
 	} else {
 		err = w.Repo.Unblock(ctx, msg.P.UserID, target)
 	}
-	w.Blocks.Invalidate(msg.P.UserID)
+	w.Blocks.Invalidate(msg.P.UserID, target)
 	if err != nil {
 		return Done{}, err
 	}
@@ -214,28 +236,45 @@ func (w *worker) teamAdmins(ctx context.Context, teamID gocql.UUID) ([]string, e
 const maxCounted = 1000
 
 // announce tells admins how many of their reports are open: a team's
-// admins the team's, system admins every team's.
+// admins the team's, system admins every team's, each leaving out those
+// about themselves.
 func (w *worker) announce(ctx context.Context, teamID gocql.UUID) {
+	event := func(teamID string, n int) *pb.Event {
+		return &pb.Event{Payload: &pb.Event_ReportsChanged{ReportsChanged: &pb.ReportsChanged{
+			TeamId: teamID, Count: int32(n), //nolint:gosec // at most maxCounted
+		}}}
+	}
 	if !ids.IsZero(teamID) {
-		n, err := w.Repo.CountOpenReports(ctx, teamID, maxCounted)
+		n, about, err := w.Repo.CountOpenReports(ctx, teamID, maxCounted)
 		var admins []string
 		if err == nil {
 			admins, err = w.teamAdmins(ctx, teamID)
 		}
 		if err != nil {
 			w.Logger.Warn("failed to tell a team's admins of its reports", zap.String("team", teamID.String()), zap.Error(err))
-		} else if len(admins) > 0 {
-			w.Engine.Send(w.Hub, hub.Deliver{UserIDs: admins, Event: &pb.Event{Payload: &pb.Event_ReportsChanged{ReportsChanged: &pb.ReportsChanged{
-				TeamId: teamID.String(), Count: int32(n), //nolint:gosec // at most maxCounted
-			}}}})
+		} else {
+			var rest []string
+			for _, id := range admins {
+				uid, _ := ids.Parse(id)
+				if mine := about[uid]; mine > 0 {
+					w.Engine.Send(w.Hub, hub.Deliver{UserIDs: []string{id}, Event: event(teamID.String(), n-mine)})
+				} else {
+					rest = append(rest, id)
+				}
+			}
+			if len(rest) > 0 {
+				w.Engine.Send(w.Hub, hub.Deliver{UserIDs: rest, Event: event(teamID.String(), n)})
+			}
 		}
 	}
-	n, err := w.Repo.CountOpenReports(ctx, gocql.UUID{}, maxCounted)
+	n, about, err := w.Repo.CountOpenReports(ctx, gocql.UUID{}, maxCounted)
 	if err != nil {
 		w.Logger.Warn("failed to tell system admins of the reports", zap.Error(err))
 		return
 	}
-	w.Engine.Send(w.Hub, hub.ToAdmins{Event: &pb.Event{Payload: &pb.Event_ReportsChanged{ReportsChanged: &pb.ReportsChanged{
-		Count: int32(n), //nolint:gosec // at most maxCounted
-	}}}})
+	instead := make(map[string]*pb.Event, len(about))
+	for id, mine := range about {
+		instead[id.String()] = event("", n-mine)
+	}
+	w.Engine.Send(w.Hub, hub.ToAdmins{Event: event("", n), Instead: instead})
 }

@@ -489,6 +489,13 @@ func TestToAdminsReachesConnectedSystemAdmins(t *testing.T) {
 	if got := h.wires["gw2"].event(t).ConnIds; !slices.Equal(got, []uint64{2}) {
 		t.Fatalf("gw2 got %v", got)
 	}
+	// An admin Instead names gets their own event.
+	own := &pb.Event{Payload: &pb.Event_ReportsChanged{ReportsChanged: &pb.ReportsChanged{Count: 1}}}
+	h.engine.Send(h.pid, ToAdmins{Event: reports, Instead: map[string]*pb.Event{"root": own}})
+	if got := h.wires["gw1"].event(t).GetReportsChanged().GetCount(); got != 1 {
+		t.Fatalf("root got a count of %d, want their own 1", got)
+	}
+	h.wires["gw2"].event(t)
 	// Once their last connection goes, they are no longer reached.
 	h.engine.Send(h.pid, Detach{GatewayID: "gw1", ConnID: 1})
 	h.engine.Send(h.pid, Detach{GatewayID: "gw2", ConnID: 2})

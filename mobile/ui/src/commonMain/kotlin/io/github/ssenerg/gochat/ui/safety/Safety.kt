@@ -348,7 +348,7 @@ fun ReportsScreen(session: ChatSession, teamId: String) {
                 list.isEmpty() -> EmptyState(if (resolved) "No resolved reports." else "No open reports.", Modifier.weight(1f))
                 else -> LazyColumn(Modifier.weight(1f)) {
                     items(list, key = { it.id }) { r ->
-                        ReportRow(r, system) { action -> resolve(r, action) }
+                        ReportRow(r, system, mine = r.reporter?.id == session.me.id) { action -> resolve(r, action) }
                         HorizontalDivider()
                     }
                     if (next.isNotEmpty()) {
@@ -364,7 +364,7 @@ fun ReportsScreen(session: ChatSession, teamId: String) {
 }
 
 @Composable
-private fun ReportRow(r: Report, system: Boolean, onAct: (ReportAction) -> Unit) {
+private fun ReportRow(r: Report, system: Boolean, mine: Boolean, onAct: (ReportAction) -> Unit) {
     val muted = LocalChatColors.current.muted
     var confirm by remember { mutableStateOf<Pair<ReportAction, String>?>(null) }
     Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
@@ -382,11 +382,13 @@ private fun ReportRow(r: Report, system: Boolean, onAct: (ReportAction) -> Unit)
         if (r.details.isNotEmpty()) Text("“${r.details}”", fontSize = 13.sp)
         if (r.action != ReportAction.REPORT_ACTION_UNSPECIFIED) {
             Text("${doneLabel(r.action)} by ${r.resolved_by.displayName()}", color = muted, fontSize = 13.sp)
+        } else if (mine) {
+            Text("You sent this report: another admin acts on it.", color = muted, fontSize = 13.sp)
         } else {
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.padding(top = 4.dp)) {
                 OutlinedButton(onClick = { onAct(ReportAction.REPORT_ACTION_DISMISS) }) { Text("Dismiss") }
                 if (r.message_id.isNotEmpty()) {
-                    OutlinedButton(onClick = { confirm = ReportAction.REPORT_ACTION_DELETE_MESSAGE to "Delete this message for everyone?" }) { Text("Delete") }
+                    OutlinedButton(onClick = { confirm = ReportAction.REPORT_ACTION_DELETE_MESSAGE to deleteQuestion(r) }) { Text("Delete") }
                 }
             }
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -427,3 +429,7 @@ private fun doneLabel(a: ReportAction) = when (a) {
     ReportAction.REPORT_ACTION_DEACTIVATE -> "Account deactivated"
     else -> "Resolved"
 }
+
+/** A root's replies go with it. */
+private fun deleteQuestion(r: Report): String =
+    "Delete this message for everyone?" + if (r.root_id.isEmpty()) " If it starts a thread, its replies go too." else ""
