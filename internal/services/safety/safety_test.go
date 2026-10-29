@@ -433,11 +433,11 @@ func TestReporting(t *testing.T) {
 	// The team's admins, and system admins, hear how many wait.
 	settle()
 	toTeam, toAdmins := f.world.take()
-	if len(toTeam) != 2 || !slices.Equal(toTeam[1].UserIDs, []string{boss.String()}) || toTeam[1].Event.GetReportsChanged().GetOpen() != 2 ||
+	if len(toTeam) != 2 || !slices.Equal(toTeam[1].UserIDs, []string{boss.String()}) || toTeam[1].Event.GetReportsChanged().GetCount() != 2 ||
 		toTeam[1].Event.GetReportsChanged().GetTeamId() != team.String() {
 		t.Fatalf("the team's admins heard %v", toTeam)
 	}
-	if len(toAdmins) != 2 || toAdmins[1].Event.GetReportsChanged().GetOpen() != 2 || toAdmins[1].Event.GetReportsChanged().GetTeamId() != "" {
+	if len(toAdmins) != 2 || toAdmins[1].Event.GetReportsChanged().GetCount() != 2 || toAdmins[1].Event.GetReportsChanged().GetTeamId() != "" {
 		t.Fatalf("system admins heard %v", toAdmins)
 	}
 

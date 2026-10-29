@@ -1038,9 +1038,9 @@ func (s *session) event(c *actor.Context, ev *pb.Event) {
 		d := p.ReportsChanged
 		switch d.TeamId {
 		case "":
-			s.fragment("reports-badge", map[string]any{"ID": "admin", "Count": d.Open, "OOB": true})
+			s.fragment("reports-badge", map[string]any{"ID": "admin", "Count": d.Count, "OOB": true})
 		case s.teamID:
-			s.fragment("reports-badge", map[string]any{"ID": "team", "Count": d.Open, "OOB": true})
+			s.fragment("reports-badge", map[string]any{"ID": "team", "Count": d.Count, "OOB": true})
 		}
 	case *pb.Event_ProfileChanged:
 		u := p.ProfileChanged.User

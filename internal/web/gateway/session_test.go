@@ -172,7 +172,7 @@ func TestReportsChangedUpdatesTheBadges(t *testing.T) {
 	s := quietSession(t)
 	s.teamID = "acme"
 	reports := func(team string, open int32) *pb.Event {
-		return &pb.Event{Payload: &pb.Event_ReportsChanged{ReportsChanged: &pb.ReportsChanged{TeamId: team, Open: open}}}
+		return &pb.Event{Payload: &pb.Event_ReportsChanged{ReportsChanged: &pb.ReportsChanged{TeamId: team, Count: open}}}
 	}
 	s.event(nil, reports("acme", 3))
 	s.event(nil, reports("", 5))

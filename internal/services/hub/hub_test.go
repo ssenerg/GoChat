@@ -481,7 +481,7 @@ func TestToAdminsReachesConnectedSystemAdmins(t *testing.T) {
 	admin("gw1", 1, "root")
 	admin("gw2", 2, "root")
 	h.attach("gw1", 3, "member")
-	reports := &pb.Event{Payload: &pb.Event_ReportsChanged{ReportsChanged: &pb.ReportsChanged{Open: 2}}}
+	reports := &pb.Event{Payload: &pb.Event_ReportsChanged{ReportsChanged: &pb.ReportsChanged{Count: 2}}}
 	h.engine.Send(h.pid, ToAdmins{Event: reports})
 	if got := h.wires["gw1"].event(t).ConnIds; !slices.Equal(got, []uint64{1}) {
 		t.Fatalf("gw1 got %v", got)

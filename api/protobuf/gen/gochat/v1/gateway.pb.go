@@ -1402,9 +1402,10 @@ func (x *BlocksChanged) GetBlocked() bool {
 // ReportsChanged tells admins how many reports wait for them: a team's
 // admins the team's, system admins every team's, with team_id empty.
 type ReportsChanged struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	TeamId        string                 `protobuf:"bytes,1,opt,name=team_id,json=teamId,proto3" json:"team_id,omitempty"`
-	Open          int32                  `protobuf:"varint,2,opt,name=open,proto3" json:"open,omitempty"`
+	state  protoimpl.MessageState `protogen:"open.v1"`
+	TeamId string                 `protobuf:"bytes,1,opt,name=team_id,json=teamId,proto3" json:"team_id,omitempty"`
+	// How many are open.
+	Count         int32 `protobuf:"varint,2,opt,name=count,proto3" json:"count,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -1446,9 +1447,9 @@ func (x *ReportsChanged) GetTeamId() string {
 	return ""
 }
 
-func (x *ReportsChanged) GetOpen() int32 {
+func (x *ReportsChanged) GetCount() int32 {
 	if x != nil {
-		return x.Open
+		return x.Count
 	}
 	return 0
 }
@@ -2369,10 +2370,10 @@ const file_gochat_v1_gateway_proto_rawDesc = "" +
 	"\achannel\x18\x02 \x01(\v2\x1c.gochat.v1.VoiceChannelStateR\achannel\"N\n" +
 	"\rBlocksChanged\x12#\n" +
 	"\x04user\x18\x01 \x01(\v2\x0f.gochat.v1.UserR\x04user\x12\x18\n" +
-	"\ablocked\x18\x02 \x01(\bR\ablocked\"=\n" +
+	"\ablocked\x18\x02 \x01(\bR\ablocked\"?\n" +
 	"\x0eReportsChanged\x12\x17\n" +
-	"\ateam_id\x18\x01 \x01(\tR\x06teamId\x12\x12\n" +
-	"\x04open\x18\x02 \x01(\x05R\x04open\"{\n" +
+	"\ateam_id\x18\x01 \x01(\tR\x06teamId\x12\x14\n" +
+	"\x05count\x18\x02 \x01(\x05R\x05count\"{\n" +
 	"\fSavedChanged\x12\x1d\n" +
 	"\n" +
 	"channel_id\x18\x01 \x01(\tR\tchannelId\x12\x1d\n" +

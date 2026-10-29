@@ -226,7 +226,7 @@ func (w *worker) announce(ctx context.Context, teamID gocql.UUID) {
 			w.Logger.Warn("failed to tell a team's admins of its reports", zap.String("team", teamID.String()), zap.Error(err))
 		} else if len(admins) > 0 {
 			w.Engine.Send(w.Hub, hub.Deliver{UserIDs: admins, Event: &pb.Event{Payload: &pb.Event_ReportsChanged{ReportsChanged: &pb.ReportsChanged{
-				TeamId: teamID.String(), Open: int32(n), //nolint:gosec // at most maxCounted
+				TeamId: teamID.String(), Count: int32(n), //nolint:gosec // at most maxCounted
 			}}}})
 		}
 	}
@@ -236,6 +236,6 @@ func (w *worker) announce(ctx context.Context, teamID gocql.UUID) {
 		return
 	}
 	w.Engine.Send(w.Hub, hub.ToAdmins{Event: &pb.Event{Payload: &pb.Event_ReportsChanged{ReportsChanged: &pb.ReportsChanged{
-		Open: int32(n), //nolint:gosec // at most maxCounted
+		Count: int32(n), //nolint:gosec // at most maxCounted
 	}}}})
 }
