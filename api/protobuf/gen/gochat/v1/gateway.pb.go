@@ -1104,11 +1104,11 @@ type Event_CallbackAnswer struct {
 }
 
 type Event_BlocksChanged struct {
-	BlocksChanged *BlocksChanged `protobuf:"bytes,25,opt,name=blocks_changed,json=blocksChanged,proto3,oneof"`
+	BlocksChanged *BlocksChanged `protobuf:"bytes,26,opt,name=blocks_changed,json=blocksChanged,proto3,oneof"`
 }
 
 type Event_ReportsChanged struct {
-	ReportsChanged *ReportsChanged `protobuf:"bytes,26,opt,name=reports_changed,json=reportsChanged,proto3,oneof"`
+	ReportsChanged *ReportsChanged `protobuf:"bytes,27,opt,name=reports_changed,json=reportsChanged,proto3,oneof"`
 }
 
 func (*Event_MessagePosted) isEvent_Payload() {}
@@ -2349,8 +2349,8 @@ const file_gochat_v1_gateway_proto_rawDesc = "" +
 	"\x14voice_channel_update\x18\x12 \x01(\v2\x1d.gochat.v1.VoiceChannelUpdateH\x00R\x12voiceChannelUpdate\x12A\n" +
 	"\x0ecallback_query\x18\x17 \x01(\v2\x18.gochat.v1.CallbackQueryH\x00R\rcallbackQuery\x12D\n" +
 	"\x0fcallback_answer\x18\x18 \x01(\v2\x19.gochat.v1.CallbackAnswerH\x00R\x0ecallbackAnswer\x12A\n" +
-	"\x0eblocks_changed\x18\x19 \x01(\v2\x18.gochat.v1.BlocksChangedH\x00R\rblocksChanged\x12D\n" +
-	"\x0freports_changed\x18\x1a \x01(\v2\x19.gochat.v1.ReportsChangedH\x00R\x0ereportsChanged\x12\x10\n" +
+	"\x0eblocks_changed\x18\x1a \x01(\v2\x18.gochat.v1.BlocksChangedH\x00R\rblocksChanged\x12D\n" +
+	"\x0freports_changed\x18\x1b \x01(\v2\x19.gochat.v1.ReportsChangedH\x00R\x0ereportsChanged\x12\x10\n" +
 	"\x03pts\x18\x14 \x01(\x03R\x03pts\x12\x1b\n" +
 	"\tpts_count\x18\x15 \x01(\x05R\bptsCount\x12$\n" +
 	"\x0epts_channel_id\x18\x16 \x01(\tR\fptsChannelIdB\t\n" +
