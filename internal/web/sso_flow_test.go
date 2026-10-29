@@ -200,7 +200,10 @@ func newGateway(t *testing.T, register func(*drpcmux.Mux) error) *browser {
 	if err != nil {
 		t.Fatal(err)
 	}
-	h := NewHandler(zap.NewNop(), &Config{PublicURL: flowOrigin, RateLimit: &RateLimitConfig{AuthPerMinute: 6000, AuthBurst: 100, RequestsPerSecond: 100, RequestBurst: 100}}, client, r, nil, nil)
+	h := NewHandler(zap.NewNop(), &Config{
+		PublicURL: flowOrigin, RateLimit: &RateLimitConfig{AuthPerMinute: 6000, AuthBurst: 100, RequestsPerSecond: 100, RequestBurst: 100},
+		HTTP: &HTTPConfig{WriteTimeout: 10 * time.Second},
+	}, client, r, nil, nil)
 	return &browser{t: t, h: h.Routes(), cookies: make(map[string]*http.Cookie)}
 }
 

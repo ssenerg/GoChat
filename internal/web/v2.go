@@ -118,7 +118,7 @@ func (s socketCalls) Invoke(ctx context.Context, call drpc.Call, method string, 
 		return nil, ierrors.InvalidArgument("the request is not a valid " + string(m.in.Descriptor().Name()))
 	}
 	out := m.out.New().Interface()
-	ctx, cancel := s.h.client.Context(ctx, call)
+	ctx, cancel := s.h.callContext(ctx, method, call)
 	defer cancel()
 	if err := s.h.client.Invoke(ctx, "/"+method, in, out); err != nil {
 		return nil, err

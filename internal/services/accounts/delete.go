@@ -51,10 +51,17 @@ func (w *worker) deleteAccount(ctx context.Context, msg DeleteAccount) (Done, er
 	return Done{}, w.suspend(ctx, user)
 }
 
-// suspend deactivates the account and ends its sessions while it is taken
-// apart, so nothing they do races it. Under the admins' lock, the last
-// active admin's check and the suspension go together: of two admins
-// deleting at once, the second finds the first gone.
+// suspendedTTL outlasts any deletion; suspendedSize, any number at once.
+const (
+	suspendedTTL  = 10 * time.Minute
+	suspendedSize = 1024
+)
+
+// suspend deactivates the account while it is taken apart, so nothing its
+// sessions do races it: they stay, for a deletion that fails, but are read
+// again and refused, all but the call deleting it. Under the admins' lock,
+// the last active admin's check and the suspension go together: of two
+// admins deleting at once, the second finds the first gone.
 func (w *worker) suspend(ctx context.Context, user *models.User) error {
 	if user.Role == models.SystemRoleAdmin {
 		unlock, err := w.admins.Lock(ctx, "system")
@@ -66,15 +73,19 @@ func (w *worker) suspend(ctx context.Context, user *models.User) error {
 			return err
 		}
 	}
+	w.suspended.Set(user.ID, struct{}{})
 	if err := w.Repo.SetDeactivated(ctx, user.ID, true, time.Now().UTC()); err != nil {
+		w.suspended.Delete(user.ID)
 		return err
 	}
 	w.Users.Invalidate(user.ID)
-	hashes, err := w.Repo.DeleteUserSessions(ctx, user.ID, nil)
-	w.revoked(user.ID, hashes, true)
+	sessions, err := w.Repo.ListUserSessions(ctx, user.ID)
 	if err != nil {
 		_, _ = w.resumeAccount(ctx, ResumeAccount{P: &models.Principal{UserID: user.ID}})
 		return err
+	}
+	for _, s := range sessions {
+		w.sessions.Delete(string(s.TokenHash))
 	}
 	return nil
 }
@@ -94,6 +105,7 @@ func (w *worker) resumeAccount(ctx context.Context, msg ResumeAccount) (Done, er
 		return Done{}, err
 	}
 	w.Users.Invalidate(user.ID)
+	w.suspended.Delete(user.ID)
 	return Done{}, nil
 }
 

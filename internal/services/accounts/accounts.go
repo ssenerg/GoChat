@@ -114,7 +114,10 @@ type Deps struct {
 	// revokedSessions keeps a revoked session's hash for a while, so a lookup
 	// that raced the revocation does not cache it again.
 	revokedSessions *cache.Cache[string, struct{}]
-	failures        *window.Counter
+	// suspended are accounts being deleted, so a lookup that raced the
+	// suspension caches none of their sessions.
+	suspended *cache.Cache[gocql.UUID, struct{}]
+	failures  *window.Counter
 	// accountFailures counts failed sign-ins per account from every address.
 	accountFailures *window.Counter
 	// totp serializes each user's two-factor changes, so the recovery codes
@@ -150,6 +153,7 @@ func NewDeps(logger *zap.Logger, cfg *Config, repo Repo, userCache *users.Cache,
 		recoveryKey:     secure.DeriveKey(key, "recovery-codes"),
 		sessions:        cache.New[string, *models.Principal](cfg.SessionCacheSize, cfg.SessionCacheTTL),
 		revokedSessions: cache.New[string, struct{}](cfg.SessionCacheSize, cfg.SessionCacheTTL+cfg.OpTimeout),
+		suspended:       cache.New[gocql.UUID, struct{}](suspendedSize, suspendedTTL),
 		failures:        window.New(cfg.LoginFailures, cfg.LoginWindow),
 		accountFailures: window.New(cfg.LoginFailures*accountFailureFactor, cfg.LoginWindow),
 		totp:            keylock.New(),
@@ -662,7 +666,9 @@ func (w *worker) authenticate(ctx context.Context, msg Authenticate) (*models.Pr
 		ExpiresAt:   s.ExpiresAt,
 	}
 	w.sessions.SetUntil(string(hash), p, s.ExpiresAt)
-	if _, ok := w.revokedSessions.Get(string(hash)); ok {
+	_, revoked := w.revokedSessions.Get(string(hash))
+	_, suspended := w.suspended.Get(user.ID)
+	if revoked || suspended {
 		w.sessions.Delete(string(hash))
 		return nil, ierrors.Unauthenticated()
 	}

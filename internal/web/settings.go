@@ -341,7 +341,9 @@ func (h *Handler) deleteAccount(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	token, _ := h.reauth(r)
-	ctx, cancel := h.ctx(r)
+	const method = "gochat.v1.AuthService/DeleteAccount"
+	h.waitFor(w, method)
+	ctx, cancel := h.callContext(r.Context(), method, h.call(r))
 	_, err := h.client.Auth.DeleteAccount(ctx, &pb.DeleteAccountRequest{
 		Password: r.PostFormValue("password"), Code: r.PostFormValue("code"), SsoToken: token,
 	})

@@ -354,14 +354,17 @@ that carry what people post.
   again at its provider, which lasts five minutes; and with their second
   factor when it is on. It is refused to the last admin of a team others
   are in, and to the server's last system admin, before any code is spent.
-  Once the person proved who they are, the account is deactivated and every
-  session signed out, so nothing they do elsewhere races the deletion. It
-  then leaves every team, channel and conversation, deletes their bots,
-  forgets their devices' push tokens, unlinks their single sign-on accounts
-  and erases their name, photo and statuses. A deletion that fails partway
-  reactivates the account, to sign in to and try again. Their username and
-  email are free for anyone to take, and their account cannot be
-  reactivated.
+  Once the person proved who they are, the account is deactivated: its
+  sessions are refused but for the call deleting it, so nothing they do
+  elsewhere races the deletion. It then leaves every team, channel and
+  conversation, deletes their bots, signs out every session, forgets their
+  devices' push tokens, unlinks their single sign-on accounts and erases
+  their name, photo and statuses. A deletion that fails partway reactivates
+  the account, sessions and all, to try again; one cut short by the server
+  stopping leaves it deactivated, for an admin to reactivate. Deleting may
+  take up to two minutes, which the web and the apps wait for. Their
+  username and email are free for anyone to take, and their account cannot
+  be reactivated.
   - The sign-in again asks the provider for `max_age=0` and takes it only
     with an `auth_time` from after it began, as OpenID Connect requires of
     a provider asked for `max_age`: a session already open at the provider

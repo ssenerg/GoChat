@@ -163,24 +163,33 @@ func TestADeletionSuspendsTheAccountUntilItEnds(t *testing.T) {
 	ctx := context.Background()
 	bob := f.user("bob", models.SystemRoleUser)
 	bp, token := f.login(bob, "10.0.0.2")
+	// Its session cached, as one in use is.
+	if _, err := ask[*models.Principal](f, Authenticate{Token: token}); err != nil {
+		t.Fatal(err)
+	}
 	if _, err := ask[Done](f, DeleteAccount{P: bp, Password: "bob-password"}); err != nil {
 		t.Fatal(err)
 	}
-	// While it is taken apart, nothing they do races it.
-	if got := f.revocation(); got.UserID != bob.ID.String() || !got.All {
-		t.Fatalf("revocation: %+v", got)
-	}
+	// While it is taken apart, nothing they do races it, though the
+	// sessions stay and the call deleting it gets its answer.
 	if _, err := ask[*models.Principal](f, Authenticate{Token: token}); !ierrors.Is(err, ierrors.CodeUnauthenticated) {
 		t.Fatalf("a session of an account being deleted: %v", err)
 	}
 	if _, err := ask[*LoginResult](f, Login{Login: "bob", Password: "bob-password"}); !ierrors.Is(err, ierrors.CodePermissionDenied) {
 		t.Fatalf("signed in to an account being deleted: %v", err)
 	}
-	// One that stops short gives the account back, to sign in to again.
+	select {
+	case got := <-f.hub:
+		t.Fatalf("suspending revoked %+v", got)
+	case <-time.After(100 * time.Millisecond):
+	}
+	// One that stops short gives the account back, sessions and all.
 	if _, err := ask[Done](f, ResumeAccount{P: bp}); err != nil {
 		t.Fatal(err)
 	}
-	bp, _ = f.login(bob, "10.0.0.2")
+	if _, err := ask[*models.Principal](f, Authenticate{Token: token}); err != nil {
+		t.Fatalf("the session once resumed: %v", err)
+	}
 	// Erased, there is no way back.
 	if err := f.deleted(DeleteAccount{P: bp, Password: "bob-password"}); err != nil {
 		t.Fatal(err)
