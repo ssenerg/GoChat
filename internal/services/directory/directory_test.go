@@ -16,6 +16,7 @@ import (
 	"github.com/gocql/gocql"
 	"go.uber.org/zap"
 
+	pb "github.com/ssenerg/gochat/api/protobuf/gen/gochat/v1"
 	"github.com/ssenerg/gochat/internal/actors"
 	"github.com/ssenerg/gochat/internal/authz"
 	"github.com/ssenerg/gochat/internal/core/ids"
@@ -25,6 +26,7 @@ import (
 	ierrors "github.com/ssenerg/gochat/internal/errors"
 	"github.com/ssenerg/gochat/internal/repos/scylla"
 	"github.com/ssenerg/gochat/internal/services/channels"
+	"github.com/ssenerg/gochat/internal/services/hub"
 	"github.com/ssenerg/gochat/internal/services/users"
 )
 
@@ -406,5 +408,44 @@ func TestRemoveLeavesTheTeamFirst(t *testing.T) {
 	}
 	if _, err := w.removeTeamMember(context.Background(), RemoveTeamMember{P: principal(admin), TeamID: repo.team.String(), UserID: bob.String()}); !ierrors.Is(err, ierrors.CodeNotFound) {
 		t.Fatalf("removing a former member: %v", err)
+	}
+}
+
+func TestARoleChangeReachesThePerson(t *testing.T) {
+	repo := newFakeRepo()
+	owner := repo.addMember("a", models.TeamRoleAdmin)
+	bob := repo.addMember("b", models.TeamRoleMember)
+	repo.owner = owner
+	w := newWorker(t, repo)
+	got := make(chan hub.Deliver, 4)
+	w.Hub = w.Engine.SpawnFunc(func(c *actor.Context) {
+		if d, ok := c.Message().(hub.Deliver); ok {
+			got <- d
+		}
+	}, "deliveries")
+	promote := func() {
+		t.Helper()
+		if _, err := w.updateTeamMemberRole(context.Background(), UpdateTeamMemberRole{
+			P: principal(owner), TeamID: repo.team.String(), UserID: bob.String(), Role: models.TeamRoleAdmin,
+		}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	promote()
+	select {
+	case d := <-got:
+		team := d.Event.GetTeamJoined().GetTeam()
+		if !slices.Equal(d.UserIDs, []string{bob.String()}) || team.GetId() != repo.team.String() || team.GetRole() != pb.TeamRole_TEAM_ROLE_ADMIN {
+			t.Fatalf("told %v of %v", d.UserIDs, team)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("bob was not told")
+	}
+	// The same role again changes nothing, and tells no one.
+	promote()
+	select {
+	case d := <-got:
+		t.Fatalf("told %v again", d.UserIDs)
+	case <-time.After(100 * time.Millisecond):
 	}
 }

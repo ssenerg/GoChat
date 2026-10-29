@@ -2047,6 +2047,8 @@ func (x *Presence) GetStatus() Status {
 	return Status_STATUS_UNSPECIFIED
 }
 
+// TeamJoined tells a person they joined a team, or that their role in it
+// changed: the team as they now see it.
 type TeamJoined struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Team          *Team                  `protobuf:"bytes,1,opt,name=team,proto3" json:"team,omitempty"`
