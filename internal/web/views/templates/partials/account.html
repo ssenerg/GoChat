@@ -92,3 +92,20 @@
   </form>
 </section>
 {{end}}
+
+{{define "delete-account"}}
+<h2>Delete account</h2>
+<p class="muted">Deletes your account for good: you are signed out everywhere, leave every team, and your bots are deleted. Your messages and the files in them stay, by “Deleted user”. Your username and email are freed.</p>
+{{with .Error}}<p class="alert" role="alert">{{.}}</p>{{end}}
+{{if or .HasPassword .Reauthed}}
+<form hx-post="/settings/delete" hx-target="#delete-account" hx-confirm="Delete your account for good? This cannot be undone." class="stack">
+  {{if .HasPassword}}<label>Password<input name="password" type="password" autocomplete="current-password" required maxlength="256"></label>
+  {{else}}<p>You signed in again with {{.Reauthed}}.</p>{{end}}
+  {{if .TOTP}}<label>Two-factor code<input name="code" autocomplete="one-time-code" autocapitalize="none" spellcheck="false" required maxlength="32"><small>From your authenticator app, or a recovery code.</small></label>{{end}}
+  <div class="row"><button class="btn danger" type="submit">Delete my account</button></div>
+</form>
+{{else}}
+<p>Your account has no password: sign in again to delete it.</p>
+<div class="row">{{range .Providers}}<button class="btn danger" hx-post="/settings/delete/sso/{{.Id}}" hx-target="#delete-account">Continue with {{.Name}}</button>{{end}}</div>
+{{end}}
+{{end}}

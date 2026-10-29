@@ -24,7 +24,7 @@
 {{define "msg-content"}}
 <header>
   <strong class="author">{{name .Author}}</strong>
-  {{with .Author}}{{if .Bot}}<span class="badge bot">Bot</span>{{end}}<span class="handle">@{{.Username}}</span>{{end}}
+  {{with .Author}}{{if .Bot}}<span class="badge bot">Bot</span>{{end}}{{with .Username}}<span class="handle">@{{.}}</span>{{end}}{{end}}
   <time datetime="{{iso .Time}}" title="{{date .Time}}">{{clock .Time}}</time>
   {{if .Edited}}<span class="edited">(edited)</span>{{end}}
   {{if .Pinned}}<span class="flag">{{icon "pin"}}Pinned</span>{{end}}

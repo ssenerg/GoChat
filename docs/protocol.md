@@ -125,8 +125,9 @@ in two kinds.
 sequence and carries its number:
 
 - **The account's sequence.** Things that happen to the caller: joining or
-  leaving a channel or a team, muting a channel, saving a message, the
-  voice channels of the caller's teams. A bot's account sequence also holds
+  leaving a channel or a team, someone leaving one of the caller's teams,
+  muting a channel, saving a message, the voice channels of the caller's
+  teams. A bot's account sequence also holds
   everything it receives from its channels, and the button presses on its
   messages. These carry `pts` and `pts_count` and no `pts_channel_id`.
 - **A channel's sequence.** Things that happen in a channel a person

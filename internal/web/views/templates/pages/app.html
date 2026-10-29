@@ -9,8 +9,8 @@
         <details class="menu">
           <summary class="icon-btn" aria-label="Team menu">{{icon "more"}}</summary>
           <div class="menu-items">
-            {{if isAdmin .Team}}<button hx-get="/t/{{.Team.Name}}/invite" hx-target="#modal">Invite people</button>
-            <button hx-get="/t/{{.Team.Name}}/settings" hx-target="#modal">Team settings</button>{{end}}
+            {{if isAdmin .Team}}<button hx-get="/t/{{.Team.Name}}/invite" hx-target="#modal">Invite people</button>{{end}}
+            <button hx-get="/t/{{.Team.Name}}/settings" hx-target="#modal">Team settings</button>
             <button hx-get="/t/{{.Team.Name}}/members" hx-target="#modal">Team members</button>
             <button hx-get="/t/{{.Team.Name}}/channels/new" hx-target="#modal">Create a channel</button>
             <button hx-get="/t/{{.Team.Name}}/channels/browse" hx-target="#modal">Browse channels</button>

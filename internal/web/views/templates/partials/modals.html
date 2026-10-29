@@ -207,6 +207,7 @@
 
 {{define "team-members"}}
 {{template "modal-start" "Team members"}}
+<div id="team-members-stale" hidden></div>
 <ul class="list">
   {{template "team-member-rows" .}}
 </ul>
@@ -276,8 +277,18 @@
 {{define "team-settings"}}
 {{template "modal-start" "Team settings"}}
 <p class="muted">{{.Team.DisplayName}} · /t/{{.Team.Name}}</p>
-{{template "photo-field" .}}
+{{with .Photo}}{{template "photo-field" .}}{{end}}
+{{template "leave-team" .}}
 {{template "modal-end"}}
+{{end}}
+
+{{define "leave-team"}}
+<div class="stack" id="leave-team">
+  <h3 class="subhead">Leave the team</h3>
+  <p class="muted">You leave its channels and conversations too, and need a new invite to come back.</p>
+  {{with .Error}}<p class="alert" role="alert">{{.}}</p>{{end}}
+  <div class="row"><button class="btn danger" hx-post="/t/{{.Team.Name}}/leave" hx-target="#leave-team" hx-swap="outerHTML" hx-confirm="Leave {{.Team.DisplayName}}? You leave its channels and conversations too.">Leave team</button></div>
+</div>
 {{end}}
 
 {{define "photo-field"}}
@@ -308,6 +319,8 @@
 {{define "status"}}<span class="status {{.Kind}}">{{.Text}}</span>{{end}}
 
 {{define "ws-control"}}<div id="ws-control" hidden hx-swap-oob="outerHTML" data-redirect="{{.}}"></div>{{end}}
+
+{{define "team-members-stale"}}<div id="team-members-stale" hidden hx-swap-oob="outerHTML" hx-get="/t/{{.}}/members" hx-trigger="load" hx-target="#modal"></div>{{end}}
 
 {{define "resync"}}<div id="resync" hx-swap-oob="outerHTML" hx-get="{{.}}" hx-trigger="load" hx-target="#main" hidden></div>{{end}}
 

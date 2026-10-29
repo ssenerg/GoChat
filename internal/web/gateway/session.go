@@ -986,6 +986,13 @@ func (s *session) event(c *actor.Context, ev *pb.Event) {
 		if s.teamID != "" {
 			s.loadRail(c)
 		}
+	case *pb.Event_TeamMembersChanged:
+		// Someone left: their conversations went with them, and an open
+		// list of the members reloads.
+		if p.TeamMembersChanged.TeamId == s.teamID {
+			s.loadSidebar(c, true)
+			s.fragment("team-members-stale", s.teamName)
+		}
 	case *pb.Event_Presence:
 		d := render.Presence{ID: p.Presence.UserId, Status: p.Presence.Status}
 		if d.ID == me {

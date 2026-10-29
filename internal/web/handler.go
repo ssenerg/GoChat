@@ -185,6 +185,7 @@ func (h *Handler) Routes() http.Handler {
 	mux.Handle("POST /t/{team}/photo", h.csrfMultipart(http.HandlerFunc(h.setTeamPhoto)))
 	mux.Handle("POST /t/{team}/photo/remove", h.csrf(http.HandlerFunc(h.setTeamPhoto)))
 	mux.Handle("POST /t/{team}/members/{user}/remove", h.csrf(http.HandlerFunc(h.removeTeamMember)))
+	mux.Handle("POST /t/{team}/leave", h.csrf(http.HandlerFunc(h.leaveTeam)))
 	mux.Handle("POST /t/{team}/members/{user}/role", h.csrf(http.HandlerFunc(h.teamMemberRole)))
 
 	mux.HandleFunc("GET /m/{channel}/{message}", h.messageFragment)
@@ -231,6 +232,8 @@ func (h *Handler) Routes() http.Handler {
 	mux.Handle("POST /settings/sessions/revoke", h.csrf(http.HandlerFunc(h.revokeOtherSessions)))
 	mux.Handle("POST /settings/sso/{provider}/link", h.csrf(http.HandlerFunc(h.ssoLink)))
 	mux.Handle("POST /settings/sso/unlink", h.csrf(http.HandlerFunc(h.ssoUnlink)))
+	mux.Handle("POST /settings/delete", h.limited(h.csrf(http.HandlerFunc(h.deleteAccount))))
+	mux.Handle("POST /settings/delete/sso/{provider}", h.csrf(http.HandlerFunc(h.deleteAccountSSO)))
 	mux.Handle("POST /settings/bots", h.csrf(http.HandlerFunc(h.createBot)))
 	mux.Handle("POST /settings/bots/{bot}", h.csrf(http.HandlerFunc(h.updateBot)))
 	mux.Handle("POST /settings/bots/{bot}/token", h.csrf(http.HandlerFunc(h.resetBotToken)))

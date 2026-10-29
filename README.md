@@ -303,6 +303,27 @@ Graph or Twitter card tags, or else its `<title>` and meta description.
   `/admin/sso/<provider>` lists every account linked through a provider.
 - Bootstrap: the first account, which becomes the system admin, needs the
   setup token unless `services.accounts.allow_open_bootstrap` is set.
+- Leaving a team: anyone leaves a team from its settings, with its channels
+  and conversations, and their bots go with them. Its last admin leaves only
+  once no one else is in it; an owner who leaves hands the team to the admin
+  who joined first.
+- Deleting an account: people delete their own in Settings, on the web or in
+  the apps, with their password, or for an account without one, a sign-in
+  again at its provider, which lasts five minutes; and with their second
+  factor when it is on. It is refused to the last admin of a team others
+  are in, and to the server's last system admin. It signs out every session
+  at once, forgets their devices' push tokens, leaves every team, channel
+  and conversation, unlinks their single sign-on accounts and erases their
+  name, photo and statuses. Their username and email are free for anyone to
+  take, and their account cannot be reactivated.
+  - Messages stay, by "Deleted user", with their reactions, pins and
+    threads, as Slack and Discord keep them. Attachments stay with their
+    messages, so deleting an account frees none of their space: it stays
+    counted on the deleted account, whose quota no one can use, until the
+    messages are deleted. Uploads never posted go as always.
+  - Bots are deleted, not handed to a team admin: their tokens and
+    webhooks were their owner's, and their code is not the admin's to vouch
+    for.
 - TOTP: optional per user, secrets sealed with AES-256-GCM bound to the user
   id, codes single-use, ten hashed single-use recovery codes.
 - Single sign-on (off until a provider is configured): OpenID Connect's

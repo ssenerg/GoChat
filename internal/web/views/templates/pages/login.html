@@ -5,6 +5,7 @@
     <h1>Sign in</h1>
     {{with .Link}}<p class="notice">Your {{.ProviderName}} account{{with .Email}} {{.}}{{end}} is not linked yet. Sign in with your password, and it will be.</p>{{end}}
     {{with .Error}}<p class="alert" role="alert">{{.}}</p>{{end}}
+    {{if .Deleted}}<p class="notice" role="status">Your account was deleted.</p>{{end}}
     <form method="post" action="/login" class="stack">
       <input type="hidden" name="_csrf" value="{{.CSRF}}">
       <input type="hidden" name="next" value="{{.Next}}">

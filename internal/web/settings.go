@@ -6,13 +6,17 @@ import (
 	"html/template"
 	"image/png"
 	"net/http"
+	"net/url"
 	"regexp"
+	"slices"
 	"strings"
 
 	"github.com/pquerna/otp"
 
 	pb "github.com/ssenerg/gochat/api/protobuf/gen/gochat/v1"
 	"github.com/ssenerg/gochat/internal/client/drpc"
+	"github.com/ssenerg/gochat/internal/core/secure"
+	ierrors "github.com/ssenerg/gochat/internal/errors"
 )
 
 type settingsData struct {
@@ -25,6 +29,7 @@ type settingsData struct {
 	Storage     *pb.GetStorageUsageResponse
 	Bots        botsData
 	SSO         ssoData
+	Delete      deleteData
 }
 
 type sessionsData struct {
@@ -79,6 +84,7 @@ func (h *Handler) settingsPage(w http.ResponseWriter, r *http.Request) {
 		h.fail(w, r, err)
 		return
 	}
+	_, reauthed := h.reauth(r)
 	h.page(w, r, http.StatusOK, "settings", settingsData{
 		Page:        Page{Title: "Settings", CSRF: h.csrfToken(w, r), User: me.User},
 		Email:       me.Email,
@@ -87,6 +93,7 @@ func (h *Handler) settingsPage(w http.ResponseWriter, r *http.Request) {
 		Storage:     storage,
 		Bots:        bots,
 		SSO:         sso,
+		Delete:      deletion(me, sso.Identities, reauthed),
 	})
 }
 
@@ -261,4 +268,118 @@ func (h *Handler) disableTOTP(w http.ResponseWriter, r *http.Request) {
 		msg = drpc.Err(err).Message
 	}
 	h.totpFragment(w, r, msg)
+}
+
+// reauthCookie holds the proof of a sign-in again at a provider, for
+// deleting an account that has no password.
+const reauthCookie = "sso_reauth"
+
+type deleteData struct {
+	HasPassword, TOTP bool
+	// Providers are those the account signs in with, to sign in again at.
+	Providers []*pb.SSOProvider
+	// Reauthed names the provider the caller just signed in again at.
+	Reauthed string
+	Error    string
+}
+
+// deletion is how the account deletes itself: with its password, or
+// having signed in again at one of the linked providers, reauthed naming it.
+func deletion(me *pb.MeResponse, linked []*pb.SSOIdentity, reauthed string) deleteData {
+	d := deleteData{HasPassword: me.HasPassword, TOTP: me.GetUser().GetTotpEnabled()}
+	if !d.HasPassword {
+		d.Reauthed = reauthed
+	}
+	for _, id := range linked {
+		if !slices.ContainsFunc(d.Providers, func(p *pb.SSOProvider) bool { return p.Id == id.ProviderId }) {
+			d.Providers = append(d.Providers, &pb.SSOProvider{Id: id.ProviderId, Name: id.ProviderName})
+		}
+	}
+	return d
+}
+
+// reauth reads the proof of a sign-in again and its provider's name.
+func (h *Handler) reauth(r *http.Request) (token, provider string) {
+	c, err := r.Cookie(h.cookieName(reauthCookie))
+	if err != nil {
+		return "", ""
+	}
+	v, err := url.ParseQuery(c.Value)
+	if err != nil || !secure.ValidToken(v.Get("token")) {
+		return "", ""
+	}
+	return v.Get("token"), v.Get("provider")
+}
+
+// deleteFragment shows the account's deletion again, with why it failed. A
+// sign-in again is spent by then.
+func (h *Handler) deleteFragment(w http.ResponseWriter, r *http.Request, err error) {
+	ctx, cancel := h.ctx(r)
+	defer cancel()
+	me, merr := h.client.Auth.Me(ctx, &pb.MeRequest{})
+	if merr != nil {
+		h.fail(w, r, merr)
+		return
+	}
+	var linked []*pb.SSOIdentity
+	if !me.HasPassword {
+		res, lerr := h.client.Auth.ListSSOIdentities(ctx, &pb.ListSSOIdentitiesRequest{})
+		if lerr != nil {
+			h.fail(w, r, lerr)
+			return
+		}
+		linked = res.Identities
+	}
+	d := deletion(me, linked, "")
+	d.Error = drpc.Err(err).Message
+	h.fragment(w, r, http.StatusOK, "delete-account", d)
+}
+
+// deleteAccount deletes the caller's account, then signs this browser out.
+func (h *Handler) deleteAccount(w http.ResponseWriter, r *http.Request) {
+	if h.signedIn(w, r) == nil {
+		return
+	}
+	token, _ := h.reauth(r)
+	ctx, cancel := h.ctx(r)
+	_, err := h.client.Auth.DeleteAccount(ctx, &pb.DeleteAccountRequest{
+		Password: r.PostFormValue("password"), Code: r.PostFormValue("code"), SsoToken: token,
+	})
+	cancel()
+	if token != "" {
+		h.clearCookie(w, reauthCookie)
+	}
+	if err != nil {
+		if _, ok := formError(err); !ok && drpc.Err(err).Code != ierrors.CodeUnauthenticated {
+			h.fail(w, r, err)
+			return
+		}
+		h.deleteFragment(w, r, err)
+		return
+	}
+	h.me.Delete(h.sessionToken(r))
+	h.clearCookie(w, "session")
+	h.reload(w, r, "/login?deleted=1")
+}
+
+// deleteAccountSSO sends the browser to sign in again at a provider, the
+// proof an account without a password deletes itself with.
+func (h *Handler) deleteAccountSSO(w http.ResponseWriter, r *http.Request) {
+	if h.signedIn(w, r) == nil {
+		return
+	}
+	id := r.PathValue("provider")
+	if !providerIDRe.MatchString(id) {
+		h.notFound(w, r)
+		return
+	}
+	ctx, cancel := h.ctx(r)
+	defer cancel()
+	res, err := h.client.Auth.BeginSSO(ctx, &pb.BeginSSORequest{ProviderId: id, RedirectUri: h.cfg.PublicURL + ssoCallback, Reauth: true})
+	if err != nil {
+		h.deleteFragment(w, r, err)
+		return
+	}
+	h.setSSOFlow(w, ssoFlow{State: res.State, Next: "/settings#delete-account"})
+	h.reload(w, r, res.Url)
 }

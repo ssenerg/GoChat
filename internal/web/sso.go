@@ -19,6 +19,8 @@ import (
 
 const (
 	ssoCookieTTL = 15 * time.Minute
+	// reauthTTL is how long the server takes a sign-in again.
+	reauthTTL = 5 * time.Minute
 	// appRedirect is where an app's sign-in comes back: a scheme the apps
 	// claim, which then redeem the code with their PKCE verifier.
 	appRedirect = "io.github.ssenerg.gochat:/sso"
@@ -207,6 +209,10 @@ func (h *Handler) ssoCallbackPage(w http.ResponseWriter, r *http.Request) {
 		}
 		http.Redirect(w, r, "/login?next="+url.QueryEscape(next), http.StatusSeeOther)
 	case *pb.FinishSSOResponse_Linked:
+		http.Redirect(w, r, next, http.StatusSeeOther)
+	case *pb.FinishSSOResponse_ReauthToken:
+		v := url.Values{"token": {out.ReauthToken}, "provider": {res.ProviderName}}
+		h.setCookie(w, reauthCookie, v.Encode(), reauthTTL, http.SameSiteLaxMode)
 		http.Redirect(w, r, next, http.StatusSeeOther)
 	default:
 		h.ssoFailed(w, r, f, http.StatusBadGateway, "The server answered in a way this page does not understand.")

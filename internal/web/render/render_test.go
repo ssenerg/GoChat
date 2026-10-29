@@ -259,3 +259,36 @@ func TestLinkPreview(t *testing.T) {
 		t.Errorf("a square picture or a bad link: %s", out)
 	}
 }
+
+func TestADeletedAuthorHasNoHandle(t *testing.T) {
+	r, err := New(16)
+	if err != nil {
+		t.Fatal(err)
+	}
+	m := r.Message(&pb.Message{Id: "id1", ChannelId: "c1", Content: "hi", Author: &pb.User{Id: "u", DisplayName: "Deleted user", Deleted: true}}, &pb.User{Id: "me", Username: "me"}, false)
+	var buf bytes.Buffer
+	if err := r.Fragment(&buf, "message-new", m); err != nil {
+		t.Fatal(err)
+	}
+	if out := buf.String(); !strings.Contains(out, "Deleted user") || strings.Contains(out, `class="handle"`) {
+		t.Errorf("a deleted author: %s", out)
+	}
+}
+
+func TestTheMemberListReloadsInPlace(t *testing.T) {
+	r, err := New(16)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var list, stale bytes.Buffer
+	if err := r.Fragment(&list, "team-members", map[string]any{"Team": &pb.Team{Name: "acme"}}); err != nil {
+		t.Fatal(err)
+	}
+	if err := r.Fragment(&stale, "team-members-stale", "acme"); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(list.String(), `id="team-members-stale"`) ||
+		!strings.Contains(stale.String(), `id="team-members-stale" hidden hx-swap-oob="outerHTML" hx-get="/t/acme/members"`) {
+		t.Errorf("list %s, reload %s", list.String(), stale.String())
+	}
+}
