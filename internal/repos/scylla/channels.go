@@ -262,6 +262,14 @@ func (r *Repository) ListUserChannels(ctx context.Context, userID, teamID gocql.
 	return out, wrap(err)
 }
 
+// ListAllUserChannels lists the user's channels and conversations of every
+// team, and of none.
+func (r *Repository) ListAllUserChannels(ctx context.Context, userID gocql.UUID) ([]*models.ChannelMember, error) {
+	var out []*models.ChannelMember
+	err := r.query(ctx, "SELECT channel_id, user_id, team_id, role, joined_at FROM user_channels WHERE user_id = ?", userID).SelectRelease(&out)
+	return out, wrap(err)
+}
+
 // The last message and last read are written at their message's time, so the
 // newest one wins whatever order the writes arrive in.
 

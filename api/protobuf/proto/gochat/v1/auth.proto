@@ -4,8 +4,8 @@ package gochat.v1;
 
 import "gochat/v1/types.proto";
 
-// AuthService authenticates people. Every RPC but Me, Logout and the TOTP
-// management ones runs without a session.
+// AuthService authenticates people. Every RPC but Me, Logout, DeleteAccount
+// and the TOTP management ones runs without a session.
 service AuthService {
   rpc GetSignupInfo(GetSignupInfoRequest) returns (GetSignupInfoResponse);
   rpc SignUp(SignUpRequest) returns (SignUpResponse);
@@ -17,6 +17,10 @@ service AuthService {
   rpc BeginTOTPSetup(BeginTOTPSetupRequest) returns (BeginTOTPSetupResponse);
   rpc ConfirmTOTPSetup(ConfirmTOTPSetupRequest) returns (ConfirmTOTPSetupResponse);
   rpc DisableTOTP(DisableTOTPRequest) returns (DisableTOTPResponse);
+  // DeleteAccount deletes the caller's account for good. It signs out
+  // every session, leaves every team and deletes the caller's bots; the
+  // caller's messages stay, by "Deleted user".
+  rpc DeleteAccount(DeleteAccountRequest) returns (DeleteAccountResponse);
   // ListSessions lists the caller's sessions, or a user's for a system admin.
   rpc ListSessions(ListSessionsRequest) returns (ListSessionsResponse);
   // RevokeSession signs one of the caller's sessions out.
@@ -149,6 +153,20 @@ message DisableTOTPRequest {
 
 message DisableTOTPResponse {}
 
+message DeleteAccountRequest {
+  // The account's password. An account without one signs in again at its
+  // provider instead: BeginSSO with reauth.
+  string password = 1;
+  // A TOTP or recovery code, when two-factor is on.
+  string code = 2;
+  // What that sign-in gave: FinishSSO's reauth_token, or an app's app_code.
+  string sso_token = 3;
+  // For an app_code, the PKCE verifier of the app_challenge it began with.
+  string sso_verifier = 4;
+}
+
+message DeleteAccountResponse {}
+
 message ListSessionsRequest {
   // Empty for the caller.
   string user_id = 1;
@@ -188,6 +206,9 @@ message BeginSSORequest {
   // For an app: the S256 PKCE challenge of a verifier it keeps, which
   // RedeemSSO takes.
   string app_challenge = 3;
+  // reauth proves who signs in, for DeleteAccount, without signing in: the
+  // caller with a session, an app's account with app_challenge.
+  bool reauth = 4;
 }
 
 message BeginSSOResponse {
@@ -216,6 +237,8 @@ message FinishSSOResponse {
     string link_token = 4;
     // The account at the provider is now linked to the caller's.
     bool linked = 5;
+    // For a reauth: what DeleteAccount takes, for a few minutes.
+    string reauth_token = 8;
   }
   string provider_name = 6;
   // The team an invite joined, for a new account.

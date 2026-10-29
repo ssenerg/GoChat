@@ -96,7 +96,9 @@ func (f *fakeRepo) GetTeam(_ context.Context, id gocql.UUID) (*models.Team, erro
 	if id != f.team {
 		return nil, ierrors.NotFound("not found")
 	}
-	return &models.Team{ID: id, CreatedBy: f.owner}, nil
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return &models.Team{ID: id, DisplayName: "Acme", CreatedBy: f.owner}, nil
 }
 
 func (f *fakeRepo) GetTeamMember(_ context.Context, teamID, userID gocql.UUID) (*models.TeamMember, error) {

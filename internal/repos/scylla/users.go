@@ -13,7 +13,7 @@ import (
 
 const (
 	userWritten = "id, username, email, display_name, password_hash, system_role, totp_enabled, totp_secret, totp_pending, totp_last_step, deactivated, created_at, updated_at"
-	userColumns = userWritten + ", photo, status, dnd_until, status_emoji, status_text, status_until, bot, bot_owner"
+	userColumns = userWritten + ", photo, status, dnd_until, status_emoji, status_text, status_until, bot, bot_owner, deleted_at"
 )
 
 // CreateUser claims the username and the email, then writes the user. A claim
@@ -134,6 +134,51 @@ func nullable(s string) *string {
 func (r *Repository) SetDeactivated(ctx context.Context, id gocql.UUID, deactivated bool, now time.Time) error {
 	_, err := r.query(ctx, "UPDATE users SET deactivated = ?, updated_at = ? WHERE id = ? IF EXISTS", deactivated, now, id).ExecCASRelease()
 	return wrap(err)
+}
+
+// EraseUser deletes an account, keeping its row for its messages: it frees
+// the username and the email, then forgets the profile and the ways to sign
+// in. The row's write is last, so a deletion that fails before it can be
+// tried again.
+func (r *Repository) EraseUser(ctx context.Context, u *models.User, name string, now time.Time) error {
+	if u.Username != "" {
+		if _, err := r.query(ctx, "DELETE FROM usernames WHERE username = ? IF user_id = ?", u.Username, u.ID).ExecCASRelease(); err != nil {
+			return wrap(err)
+		}
+	}
+	if u.Email != "" {
+		if _, err := r.query(ctx, "DELETE FROM emails WHERE email = ? IF user_id = ?", u.Email, u.ID).ExecCASRelease(); err != nil {
+			return wrap(err)
+		}
+	}
+	// Conditional, as the TOTP columns are written.
+	_, err := r.query(ctx, "UPDATE users SET username = null, email = null, display_name = ?, password_hash = null, "+
+		"totp_enabled = false, totp_secret = null, totp_pending = null, photo = null, status = null, dnd_until = null, "+
+		"status_emoji = null, status_text = null, status_until = null, deactivated = true, deleted_at = ?, updated_at = ? "+
+		"WHERE id = ? IF EXISTS", name, now, now, u.ID).ExecCASRelease()
+	if err != nil {
+		return wrap(err)
+	}
+	return wrap(r.query(ctx, "DELETE FROM recovery_codes WHERE user_id = ?", u.ID).ExecRelease())
+}
+
+// ListSystemAdmins lists the active system admins. It reads every user, so
+// it serves only what is rare, such as an admin deleting their account.
+func (r *Repository) ListSystemAdmins(ctx context.Context) ([]gocql.UUID, error) {
+	var (
+		id          gocql.UUID
+		role        string
+		deactivated bool
+		out         []gocql.UUID
+	)
+	iter := r.query(ctx, "SELECT id, system_role, deactivated FROM users").Iter()
+	for iter.Scan(&id, &role, &deactivated) {
+		if models.SystemRole(role) == models.SystemRoleAdmin && !deactivated {
+			out = append(out, id)
+		}
+		role, deactivated = "", false
+	}
+	return out, wrap(iter.Close())
 }
 
 func (r *Repository) UpdatePassword(ctx context.Context, id gocql.UUID, hash string, now time.Time) error {

@@ -79,6 +79,18 @@ type DisableTOTP struct {
 
 type Done struct{}
 
+// DeleteAccount checks P may delete their account: their password, or for
+// an account without one a sign-in at its provider that just finished, and
+// their second factor. It refuses the last system admin.
+type DeleteAccount struct {
+	P                                     *models.Principal
+	Password, Code, SSOToken, SSOVerifier string
+}
+
+// EraseAccount deletes the account of P, which DeleteAccount let through,
+// once it left its teams.
+type EraseAccount struct{ P *models.Principal }
+
 // ListSessions replies with the []*pb.SessionInfo of the caller, or of
 // UserID for someone who may manage any.
 type ListSessions struct {
@@ -123,9 +135,11 @@ type SSOProviderInfo struct{ ID, Name string }
 
 // BeginSSO starts a sign-in at a provider, which comes back to RedirectURI.
 // P, when set, links the identity to P's account instead; AppChallenge
-// hands the sign-in to the app holding its PKCE verifier.
+// hands the sign-in to the app holding its PKCE verifier. Reauth only
+// proves who signs in, for DeleteAccount.
 type BeginSSO struct {
 	Provider, RedirectURI, AppChallenge string
+	Reauth                              bool
 	P                                   *models.Principal
 }
 
@@ -149,6 +163,9 @@ type SSOResult struct {
 	// account: its owner signs in with their password, then links it.
 	LinkToken string
 	Linked    bool
+	// ReauthToken proves who signed in, for a reauth begun with a session;
+	// an app's comes as its AppCode.
+	ReauthToken string
 	// Provider is the provider's name.
 	Provider string
 	// User, InviteTeamID and InviteHash are of a new account and its invite.

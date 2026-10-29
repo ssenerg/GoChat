@@ -69,6 +69,8 @@ message User {
   // A bot, and the person who owns it.
   bool bot = 12;
   string bot_owner_id = 13;
+  // The account was deleted; its messages stay.
+  bool deleted = 14;
 }
 
 message Session {
