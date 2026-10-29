@@ -16,6 +16,8 @@ import gochat.v1.ListInvitesRequest
 import gochat.v1.ListInvitesResponse
 import gochat.v1.ListTeamMembersRequest
 import gochat.v1.ListTeamMembersResponse
+import gochat.v1.MeResponse
+import gochat.v1.Presence
 import gochat.v1.ProfileChanged
 import gochat.v1.RemoveTeamMemberRequest
 import gochat.v1.RemoveTeamMemberResponse
@@ -48,6 +50,7 @@ import io.ktor.http.HttpMethod
 import io.ktor.http.HttpStatusCode
 import io.ktor.http.content.OutgoingContent
 import io.ktor.http.headersOf
+import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import kotlin.test.Test
 import kotlin.test.assertContentEquals
@@ -210,6 +213,26 @@ class SettingsTest {
         assertNotNull(photoProblem(ByteArray(0)))
         assertNull(photoProblem(bytes(0xFF, 0xD8, size = MAX_PHOTO_BYTES)))
         assertTrue(photoProblem(bytes(0xFF, 0xD8, size = MAX_PHOTO_BYTES + 1))!!.contains("10 MB"))
+    }
+
+    @Test
+    fun aStatusSetElsewhereBringsWhenItEnds() = runTest {
+        val r = Recorder()
+        val until = ofEpochSecond(2_000_000_000, 0)
+        val me = User(id = "u-ann", username = "ann", status = Status.STATUS_ONLINE)
+        r.answers["Me"] = MeResponse(user = me.copy(status = Status.STATUS_DND, dnd_until = until))
+        val session = ChatSession(api(r), me, MemoryStore(), backgroundScope, null) {}
+        // Ann turned on do not disturb on the web, until a time the event leaves out.
+        session.event(Event(presence = Presence(user_id = "u-ann", online = true, status = Status.STATUS_DND)))
+        runCurrent()
+        assertEquals(Status.STATUS_DND, session.state.value.me.status)
+        assertEquals(until, session.state.value.me.dnd_until)
+        // Someone else's status, and hers again unchanged, ask for nothing.
+        val calls = r.made.size
+        session.event(Event(presence = Presence(user_id = "u-bob", online = true, status = Status.STATUS_DND)))
+        session.event(Event(presence = Presence(user_id = "u-ann", online = true, status = Status.STATUS_DND)))
+        runCurrent()
+        assertEquals(calls, r.made.size)
     }
 
     @Test

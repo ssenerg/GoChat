@@ -50,6 +50,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -132,6 +133,10 @@ fun VoiceRoomScreen(session: ChatSession, channelId: String) {
     // Which camera or screen shows full screen, by stream id, while it comes; it alone comes sharp.
     var expanded by remember { mutableStateOf<String?>(null) }
     val big = videos.firstOrNull { it.streamId == expanded }
+    // One that went away closes, and comes back in its tile.
+    LaunchedEffect(expanded, big == null) {
+        if (expanded != null && big == null) expanded = null
+    }
     big?.let { FullScreen(it) { expanded = null } }
     val focus = big?.takeUnless { it.local }?.streamId
     DisposableEffect(focus) {

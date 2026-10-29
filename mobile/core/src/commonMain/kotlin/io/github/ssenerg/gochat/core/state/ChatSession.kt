@@ -736,6 +736,9 @@ class ChatSession internal constructor(
         }
         ev.pins_changed?.let { p -> updateChannel(p.channel_id) { it.copy(pinned_count = p.count) } }
         ev.presence?.let { p ->
+            // A status set elsewhere, which may end at a time the event
+            // leaves out: the account says.
+            if (p.user_id == st.me.id && p.online && p.status != st.me.status) scope.launch { refreshMe() }
             _state.update { s ->
                 val status = statusFor(p.online, p.status)
                 val me = if (p.user_id == s.me.id) s.me.copy(status = if (p.online) p.status else s.me.status) else s.me

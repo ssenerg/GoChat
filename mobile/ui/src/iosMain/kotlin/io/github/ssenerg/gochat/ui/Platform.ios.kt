@@ -1,6 +1,7 @@
 package io.github.ssenerg.gochat.ui
 
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -47,13 +48,16 @@ import platform.CoreAudioTypes.kAudioFormatMPEG4AAC
 import platform.Foundation.CFBridgingRetain
 import platform.Foundation.NSBundle
 import platform.Foundation.NSData
+import platform.Foundation.NSDate
 import platform.Foundation.NSFileManager
+import platform.Foundation.NSFileSize
 import platform.Foundation.NSOperationQueue
 import platform.Foundation.NSNotificationCenter
 import platform.Foundation.NSNumber
 import platform.Foundation.NSTemporaryDirectory
 import platform.Foundation.NSURL
 import platform.Foundation.create
+import platform.Foundation.dateWithTimeIntervalSinceNow
 import platform.Foundation.dataWithContentsOfFile
 import platform.Foundation.dataWithContentsOfURL
 import platform.Foundation.writeToFile
@@ -64,17 +68,24 @@ import platform.UIKit.UIActivityViewController
 import platform.UIKit.UIApplicationState
 import platform.UIKit.UIApplicationDidEnterBackgroundNotification
 import platform.UIKit.UIApplicationDidBecomeActiveNotification
+import platform.UIKit.UIApplicationWillResignActiveNotification
 import platform.UIKit.UIApplication
 import platform.UIKit.UIDevice
 import platform.UIKit.UIDocumentPickerDelegateProtocol
 import platform.UIKit.UIDocumentPickerViewController
+import platform.UIKit.UIColor
 import platform.UIKit.UIPasteboard
+import platform.UIKit.UIPasteboardOptionExpirationDate
+import platform.UIKit.UIPasteboardOptionLocalOnly
+import platform.UIKit.UIView
+import platform.UIKit.systemBackgroundColor
 import platform.UIKit.UIViewController
 import platform.UIKit.popoverPresentationController
 import platform.UniformTypeIdentifiers.UTTypeGIF
 import platform.UniformTypeIdentifiers.UTTypeItem
 import platform.UniformTypeIdentifiers.UTTypeJPEG
 import platform.UniformTypeIdentifiers.UTTypePNG
+import platform.UniformTypeIdentifiers.UTTypeUTF8PlainText
 import platform.UniformTypeIdentifiers.UTTypeWebP
 import platform.darwin.NSObject
 import platform.darwin.dispatch_async
@@ -112,8 +123,19 @@ class IosPlatform(private val scope: CoroutineScope, override val rtc: RtcEngine
 
     override fun share(text: String) = present(listOf(text))
 
-    override fun copy(text: String) {
-        UIPasteboard.generalPasteboard.string = text
+    override fun copy(text: String, sensitive: Boolean) {
+        if (!sensitive) {
+            UIPasteboard.generalPasteboard.string = text
+            return
+        }
+        // Not to the person's other devices, and gone in two minutes.
+        UIPasteboard.generalPasteboard.setItems(
+            listOf(mapOf(UTTypeUTF8PlainText.identifier to text)),
+            options = mapOf<Any?, Any?>(
+                UIPasteboardOptionLocalOnly to true,
+                UIPasteboardOptionExpirationDate to NSDate.dateWithTimeIntervalSinceNow(120.0),
+            ),
+        )
     }
 
     // Held while the sheet is up, which would go with them.
@@ -395,10 +417,17 @@ actual fun rememberFilePicker(onPicked: (PickedFile) -> Unit, onError: (String) 
     val delegate = remember {
         PickerDelegate { url ->
             scope.launch {
+                val (limit, tooLarge) = pickLimit(photos)
+                // The picker's copy is a local file: its size comes before reading it.
+                val size = url.path?.let { NSFileManager.defaultManager.attributesOfItemAtPath(it, null)?.get(NSFileSize) as? NSNumber }
+                if (size != null && size.longLongValue > limit) {
+                    failed(tooLarge)
+                    return@launch
+                }
                 val data = withContext(Dispatchers.IO) { NSData.dataWithContentsOfURL(url) }
                 when {
                     data == null -> failed("Could not read the file.")
-                    data.length.toLong() > MAX_PICKED_BYTES -> failed("The file is too large to send.")
+                    data.length.toLong() > limit -> failed(tooLarge)
                     else -> picked(PickedFile(url.lastPathComponent ?: "file", "application/octet-stream", withContext(Dispatchers.IO) { data.toByteArray() }))
                 }
             }
@@ -415,4 +444,31 @@ actual fun rememberFilePicker(onPicked: (PickedFile) -> Unit, onError: (String) 
 @Composable
 actual fun PlatformBackHandler(enabled: Boolean, onBack: () -> Unit) {
     // iOS has no system back button: every screen shows its own.
+}
+
+@Composable
+actual fun SensitiveScreen() {
+    // iOS takes no screenshot out, but covers the app before it snapshots it
+    // for the app switcher; the cover goes on at once, on the main thread.
+    DisposableEffect(Unit) {
+        val center = NSNotificationCenter.defaultCenter
+        var cover: UIView? = null
+        val leaving = center.addObserverForName(UIApplicationWillResignActiveNotification, null, null) { _ ->
+            val window = UIApplication.sharedApplication.keyWindow ?: return@addObserverForName
+            cover?.removeFromSuperview()
+            cover = UIView(frame = window.bounds).also {
+                it.backgroundColor = UIColor.systemBackgroundColor
+                window.addSubview(it)
+            }
+        }
+        val back = center.addObserverForName(UIApplicationDidBecomeActiveNotification, null, null) { _ ->
+            cover?.removeFromSuperview()
+            cover = null
+        }
+        onDispose {
+            center.removeObserver(leaving)
+            center.removeObserver(back)
+            cover?.removeFromSuperview()
+        }
+    }
 }

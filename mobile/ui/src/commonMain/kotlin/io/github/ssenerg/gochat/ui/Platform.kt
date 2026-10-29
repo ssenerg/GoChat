@@ -4,6 +4,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Modifier
 import io.github.ssenerg.gochat.core.api.AppInfo
+import io.github.ssenerg.gochat.core.model.MAX_PHOTO_BYTES
 import io.github.ssenerg.gochat.core.state.KeyValueStore
 import io.github.ssenerg.gochat.core.voice.CallVideo
 import io.github.ssenerg.gochat.core.voice.RtcEngine
@@ -32,7 +33,8 @@ interface Platform {
     /** Offers text to share, such as an invite link. */
     fun share(text: String)
 
-    fun copy(text: String)
+    /** Copies [text]; a [sensitive] one, such as a secret, stays out of the clipboard's history and other devices. */
+    fun copy(text: String, sensitive: Boolean = false)
 
     /**
      * Opens a provider's sign-in page in the system browser, which shares
@@ -90,6 +92,14 @@ interface AudioPlayer {
 
 /** The largest file the apps read into memory to attach. */
 const val MAX_PICKED_BYTES = 100L * 1024 * 1024
+
+/** The most the picker reads of a file, and what it says of one larger. */
+internal fun pickLimit(photos: Boolean): Pair<Long, String> =
+    if (photos) MAX_PHOTO_BYTES.toLong() to "The picture is too large, use one under 10 MB." else MAX_PICKED_BYTES to "The file is too large to send."
+
+/** Keeps the screen out of screenshots and the app switcher while it shows, where the system lets it. */
+@Composable
+expect fun SensitiveScreen()
 
 /** The microphone, asking for it when first used. */
 @Composable
