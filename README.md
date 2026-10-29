@@ -205,6 +205,14 @@ pushed, and the apps run as before.
   provider saying the token is dead. A token moves to the session that
   registers it last, so a phone signed in again never hears of the earlier
   account.
+- An app signed out without a connection ends its session once the server
+  answers: at each launch, then backing off to five minutes, and at once
+  when a push comes, which says the phone is online. Until then no push
+  shows the account's messages. FCM's carry data alone, the title and body
+  among it, and the Android app builds each notice itself, none once
+  signed out, then asks FCM again to drop the token. APNs' are
+  `mutable-content`: the iOS app's notification service extension shows
+  "Signed out" in place of the message.
 - The server pushes what the apps and the web show a notice for: messages
   in direct and group conversations, replies in threads the person takes
   part in, and mentions of them, by name or `@channel`. `@here` calls for
@@ -353,7 +361,7 @@ Graph or Twitter card tags, or else its `<title>` and meta description.
 - Pushes: device tokens are tied to one session and forgotten with it; a
   push carries at most a one-line excerpt, as the notices show, or none
   with `services.push.excerpts` off, and goes only to sessions still in
-  use.
+  use. A phone signed out offline shows none of the account's.
 - Voice: join tokens are single-use, short-lived, stored hashed and bound to
   one voice server; its websocket takes the web gateway's pages and no other
   site's (the apps, which are not pages, send no origin). Only

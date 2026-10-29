@@ -18,6 +18,8 @@
 		E42D3C0466DD2473EC8C4532 /* Broadcast.swift in Sources */ = {isa = PBXBuildFile; fileRef = A5EE3E92B81A504E598F01E9 /* Broadcast.swift */; };
 		10D0BEBE0972A3C69D516E6E /* SampleHandler.swift in Sources */ = {isa = PBXBuildFile; fileRef = 973F9A91B2F97AA45FFFB745 /* SampleHandler.swift */; };
 		13C0218CE4FE59A39D89F72F /* GoChatBroadcast.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 80892250ADB9FDA35EB44AD7 /* GoChatBroadcast.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+		7E3794E86E04DB334566376F /* NotificationService.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5560C31390E103DE0BEAD72 /* NotificationService.swift */; };
+		E2D5EAA161ABCE9AD3936E34 /* GoChatNotices.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 9AD613D33F10BB529A313B35 /* GoChatNotices.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -27,6 +29,13 @@
 			proxyType = 1;
 			remoteGlobalIDString = 3F7993FCFD18F62F71E6B18E;
 			remoteInfo = GoChatBroadcast;
+		};
+		EA07BF9194716B0564BD6674 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 4397AB553FDBD346481578AC /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = C4457738228075EC73774DA6;
+			remoteInfo = GoChatNotices;
 		};
 /* End PBXContainerItemProxy section */
 
@@ -38,6 +47,7 @@
 			dstSubfolderSpec = 13;
 			files = (
 				13C0218CE4FE59A39D89F72F /* GoChatBroadcast.appex in Embed Foundation Extensions */,
+				E2D5EAA161ABCE9AD3936E34 /* GoChatNotices.appex in Embed Foundation Extensions */,
 			);
 			name = "Embed Foundation Extensions";
 			runOnlyForDeploymentPostprocessing = 0;
@@ -59,6 +69,10 @@
 		414A37C30669CC2231EC2C84 /* Info.plist */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		2E0E09AE56144287D390AD89 /* GoChatBroadcast.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = GoChatBroadcast.entitlements; sourceTree = "<group>"; };
 		80892250ADB9FDA35EB44AD7 /* GoChatBroadcast.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = GoChatBroadcast.appex; sourceTree = BUILT_PRODUCTS_DIR; };
+		E5560C31390E103DE0BEAD72 /* NotificationService.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = NotificationService.swift; sourceTree = "<group>"; };
+		53136CEB31BDDF0539B644F2 /* Info.plist */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
+		A0EB5A9DE31622A702805521 /* GoChatNotices.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = GoChatNotices.entitlements; sourceTree = "<group>"; };
+		9AD613D33F10BB529A313B35 /* GoChatNotices.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = GoChatNotices.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -72,6 +86,13 @@
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 		F6D562ED636B41178C94D265 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		170E79C1DF99F8E866A01CDA /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -112,7 +133,18 @@
 				ACEFC440518200B1667101FA /* Frameworks */,
 				11AC39D9D02758E446D56601 /* iosApp */,
 				2F143CFCA1CF12319F172DC4 /* GoChatBroadcast */,
+				7A79BD0C59AAC8CD4CFB8E8B /* GoChatNotices */,
 			);
+			sourceTree = "<group>";
+		};
+		7A79BD0C59AAC8CD4CFB8E8B /* GoChatNotices */ = {
+			isa = PBXGroup;
+			children = (
+				E5560C31390E103DE0BEAD72 /* NotificationService.swift */,
+				53136CEB31BDDF0539B644F2 /* Info.plist */,
+				A0EB5A9DE31622A702805521 /* GoChatNotices.entitlements */,
+			);
+			path = GoChatNotices;
 			sourceTree = "<group>";
 		};
 		2F143CFCA1CF12319F172DC4 /* GoChatBroadcast */ = {
@@ -138,6 +170,7 @@
 			children = (
 				1AF4B9342599A52A407A3245 /* iosApp.app */,
 				80892250ADB9FDA35EB44AD7 /* GoChatBroadcast.appex */,
+				9AD613D33F10BB529A313B35 /* GoChatNotices.appex */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -159,6 +192,7 @@
 			);
 			dependencies = (
 				80E69FBE9AC9D1AE17837C8A /* PBXTargetDependency */,
+				364C9B45C1AA03C0B096908C /* PBXTargetDependency */,
 			);
 			name = iosApp;
 			packageProductDependencies = (
@@ -183,6 +217,23 @@
 			name = GoChatBroadcast;
 			productName = GoChatBroadcast;
 			productReference = 80892250ADB9FDA35EB44AD7 /* GoChatBroadcast.appex */;
+			productType = "com.apple.product-type.app-extension";
+		};
+		C4457738228075EC73774DA6 /* GoChatNotices */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 3AF150830E72457ADD09DF9C /* Build configuration list for PBXNativeTarget "GoChatNotices" */;
+			buildPhases = (
+				87B2C670BEA8E7BBCDE0834F /* Sources */,
+				170E79C1DF99F8E866A01CDA /* Frameworks */,
+				5C91E903057C83C9A371AC54 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = GoChatNotices;
+			productName = GoChatNotices;
+			productReference = 9AD613D33F10BB529A313B35 /* GoChatNotices.appex */;
 			productType = "com.apple.product-type.app-extension";
 		};
 /* End PBXNativeTarget section */
@@ -214,6 +265,7 @@
 			targets = (
 				FE81157000DA4995D75E79B5 /* iosApp */,
 				3F7993FCFD18F62F71E6B18E /* GoChatBroadcast */,
+				C4457738228075EC73774DA6 /* GoChatNotices */,
 			);
 		};
 /* End PBXProject section */
@@ -228,6 +280,13 @@
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 		84849B0E61BB6C41449EFCC7 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		5C91E903057C83C9A371AC54 /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -280,6 +339,14 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		87B2C670BEA8E7BBCDE0834F /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				7E3794E86E04DB334566376F /* NotificationService.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXSourcesBuildPhase section */
 
 /* Begin PBXTargetDependency section */
@@ -287,6 +354,11 @@
 			isa = PBXTargetDependency;
 			target = 3F7993FCFD18F62F71E6B18E /* GoChatBroadcast */;
 			targetProxy = 88BB4582739F17A36041CC0B /* PBXContainerItemProxy */;
+		};
+		364C9B45C1AA03C0B096908C /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = C4457738228075EC73774DA6 /* GoChatNotices */;
+			targetProxy = EA07BF9194716B0564BD6674 /* PBXContainerItemProxy */;
 		};
 /* End PBXTargetDependency section */
 
@@ -520,6 +592,49 @@
 			};
 			name = Release;
 		};
+		187FAD15F2D9169C88018032 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				APPLICATION_EXTENSION_API_ONLY = YES;
+				CODE_SIGN_ENTITLEMENTS = GoChatNotices/GoChatNotices.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				DEVELOPMENT_TEAM = "";
+				"EXCLUDED_ARCHS[sdk=iphonesimulator*]" = x86_64;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = GoChatNotices/Info.plist;
+				IPHONEOS_DEPLOYMENT_TARGET = 16.0;
+				LD_RUNPATH_SEARCH_PATHS = "$(inherited) @executable_path/Frameworks @executable_path/../../Frameworks";
+				PRODUCT_BUNDLE_IDENTIFIER = "$(GOCHAT_BUNDLE_ID).notices";
+				PRODUCT_NAME = GoChatNotices;
+				SDKROOT = iphoneos;
+				SKIP_INSTALL = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Debug;
+		};
+		8CB8C8FBA27E3E61B048A837 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				APPLICATION_EXTENSION_API_ONLY = YES;
+				CODE_SIGN_ENTITLEMENTS = GoChatNotices/GoChatNotices.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				DEVELOPMENT_TEAM = "";
+				"EXCLUDED_ARCHS[sdk=iphonesimulator*]" = x86_64;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = GoChatNotices/Info.plist;
+				IPHONEOS_DEPLOYMENT_TARGET = 16.0;
+				LD_RUNPATH_SEARCH_PATHS = "$(inherited) @executable_path/Frameworks @executable_path/../../Frameworks";
+				PRODUCT_BUNDLE_IDENTIFIER = "$(GOCHAT_BUNDLE_ID).notices";
+				PRODUCT_NAME = GoChatNotices;
+				SDKROOT = iphoneos;
+				SKIP_INSTALL = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				VALIDATE_PRODUCT = YES;
+			};
+			name = Release;
+		};
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
@@ -546,6 +661,15 @@
 			buildConfigurations = (
 				B06D4696ECED04DB6B15E02F /* Release */,
 				B83762971BA640E7EF0022A6 /* Debug */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		3AF150830E72457ADD09DF9C /* Build configuration list for PBXNativeTarget "GoChatNotices" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				8CB8C8FBA27E3E61B048A837 /* Release */,
+				187FAD15F2D9169C88018032 /* Debug */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;

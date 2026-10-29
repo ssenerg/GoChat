@@ -4,6 +4,7 @@ import io.github.ssenerg.gochat.core.api.ApiException
 import io.github.ssenerg.gochat.core.api.ConnectionLost
 import io.github.ssenerg.gochat.core.state.MemoryStore
 import io.github.ssenerg.gochat.core.state.SignOuts
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.runCurrent
@@ -56,6 +57,48 @@ class SignOutsTest {
         SignOuts(store, backgroundScope) { _, token -> tried += token }.retry()
         runCurrent()
         assertEquals(listOf("tok"), tried)
+        assertNull(store.get("signing_out"))
+    }
+
+    @Test
+    fun aPushCutsTheWaitShort() = runTest {
+        val store = MemoryStore()
+        var tried = 0
+        val signOuts = SignOuts(store, backgroundScope) { _, _ ->
+            if (++tried < 3) throw ConnectionLost("Not connected.")
+        }
+        signOuts.add("https://chat.test", "tok")
+        runCurrent()
+        advanceTimeBy(2.seconds)
+        assertEquals(1, tried)
+        signOuts.retry()
+        runCurrent()
+        assertEquals(2, tried)
+        // The wait starts over.
+        advanceTimeBy(4.seconds)
+        assertEquals(2, tried)
+        advanceTimeBy(2.seconds)
+        assertEquals(3, tried)
+        assertNull(store.get("signing_out"))
+    }
+
+    @Test
+    fun oneTryAtATime() = runTest {
+        val store = MemoryStore()
+        val answer = CompletableDeferred<Unit>()
+        var tried = 0
+        val signOuts = SignOuts(store, backgroundScope) { _, _ ->
+            tried++
+            answer.await()
+        }
+        signOuts.add("https://chat.test", "tok")
+        runCurrent()
+        signOuts.retry()
+        runCurrent()
+        assertEquals(1, tried)
+        answer.complete(Unit)
+        runCurrent()
+        assertEquals(1, tried)
         assertNull(store.get("signing_out"))
     }
 

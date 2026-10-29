@@ -89,6 +89,18 @@ class GoChatApp(
         _opening.compareAndSet(target, null)
     }
 
+    /**
+     * Whether a push that came is to show: not once signed out. Such a
+     * push is for a session signed out of offline, which the server still
+     * pushes to; the device is online now, so it ends now. It reads the
+     * store, as the push may have started the app.
+     */
+    fun pushReceived(): Boolean {
+        if (store.get(KEY_TOKEN) != null) return true
+        signOuts.retry()
+        return false
+    }
+
     private var session: ChatSession? = null
 
     private val signOuts = SignOuts(store, scope) { server, token ->
@@ -366,6 +378,7 @@ class GoChatApp(
 
     companion object {
         private const val KEY_SERVER = "server"
+        // The iOS app's notification service extension reads it too.
         private const val KEY_TOKEN = "token"
         private const val KEY_ME = "me"
         private const val KEY_PTS = ChatSession.KEY_PTS

@@ -48,6 +48,9 @@ iosApp/      the Xcode project: a SwiftUI shell that shows the shared screens
   frame as a JPEG to a Unix socket the app listens on in the container of
   the app group they share (`Broadcast.swift`, in both), where
   `ScreenBroadcast.swift` hands it to WebRTC.
+- **iosApp/GoChatNotices** is the notification service extension: it sees
+  each push before it shows, and hides what it says once the app is signed
+  out (see [Push notifications](#push-notifications)).
 
 ## What the apps do
 
@@ -114,8 +117,8 @@ cd mobile
 ```
 
 **iOS**: a Mac with Xcode 16 or later. Open `iosApp/iosApp.xcodeproj`, choose
-your team under Signing & Capabilities for both targets, `iosApp` and
-`GoChatBroadcast`, and run. The project's first build phase builds the
+your team under Signing & Capabilities for the three targets, `iosApp`,
+`GoChatBroadcast` and `GoChatNotices`, and run. The project's first build phase builds the
 Kotlin framework with Gradle; Xcode fetches the WebRTC package itself. Voice
 channels need a device or a simulator with a microphone, and the server's
 voice settings as for Android below.
@@ -124,7 +127,9 @@ The app, its broadcast extension and the app group they share take their
 identifiers from one build setting, `GOCHAT_BUNDLE_ID` at the project's
 level (`io.github.ssenerg.gochat`): under another team, set it to an
 identifier of yours, and both targets keep the App Groups capability with
-`group.` and it. Sharing the screen needs an iPhone or iPad: simulators
+`group.` and it. The app and its notification service extension share
+the Keychain group named after it too (Keychain Sharing, with the team's
+prefix), where the app keeps its session as it always has. Sharing the screen needs an iPhone or iPad: simulators
 have no broadcasts, and no camera.
 
 **Tests**: the core's tests run anywhere:
@@ -185,9 +190,12 @@ gochat.fcm.senderId=123456789012                           # GOCHAT_FCM_SENDER_I
 ```
 
 They are the values `google-services.json` holds, which the app does not
-need. Without them the app builds and runs as before, without pushes. A
-push that comes while the app runs shows as the system shows the others,
-in the Messages channel of the app's notification settings.
+need. Without them the app builds and runs as before, without pushes. The
+server sends data alone, as high-priority messages: FCM hands each to the
+app, running or not, which shows it in the Messages channel of its
+notification settings. A tap opens the channel only from a notice the app
+made: each carries a random secret of the install, kept in its private
+preferences. Any app may start GoChat's activity, but not with it.
 
 **iOS.** The app has the Push Notifications capability: under your team,
 Xcode adds it to the App ID with the bundle id. The server's APNs `topic`
@@ -195,6 +203,26 @@ is that bundle id (`GOCHAT_BUNDLE_ID`). Builds Xcode runs, and the
 simulator's, get tokens of Apple's sandbox and say so when they register;
 App Store and TestFlight builds get production ones. The simulator gets
 pushes on a Mac with Apple silicon.
+
+**Signing out offline.** Signing out without a connection leaves the
+session, and its device, on the server until the app can tell it; until
+then the server still pushes the account's messages. The app ends the
+session once the server answers: at each launch, then backing off, and at
+once when a push comes. Meanwhile:
+
+- Android shows none of those pushes. It reads whether anyone is signed
+  in from the store, as a push may start the app's process, and asks FCM
+  again to drop the token, which also fails offline. FCM may lower the
+  priority of an app whose high-priority messages show nothing, but a
+  phone signed out gets few: the first one online ends the session.
+- iOS shows "Signed out — Open GoChat to finish signing out" in place of
+  each, with no sender, channel or excerpt, and nothing to open. The
+  extension finds no session token in the Keychain group it shares with
+  the app; when the Keychain cannot say, as before the phone's first
+  unlock, it shows "New message". Hiding a push altogether takes Apple's
+  `com.apple.developer.usernotifications.filtering` entitlement, which
+  Apple grants on request: with it, the extension could hand iOS empty
+  content instead.
 
 ## Trying it on a phone
 

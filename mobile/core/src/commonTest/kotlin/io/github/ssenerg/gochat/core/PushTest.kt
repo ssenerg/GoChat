@@ -24,6 +24,7 @@ import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
 import kotlin.time.Duration.Companion.seconds
@@ -111,6 +112,16 @@ class PushTest {
     }
 
     @Test
+    fun onlyANoticeTheAppMadeOpensWhatItNames() {
+        val keys = mapOf("channel_id" to "c1", "team_id" to "t1")
+        assertEquals(PushTarget("c1", teamId = "t1"), PushTarget.tapped("s3cret") { (keys + (PushTarget.TAP to "s3cret"))[it] })
+        // Another app's intent, or the launcher's.
+        assertNull(PushTarget.tapped("s3cret") { keys[it] })
+        assertNull(PushTarget.tapped("s3cret") { (keys + (PushTarget.TAP to "guess"))[it] })
+        assertNull(PushTarget.tapped("") { (keys + (PushTarget.TAP to ""))[it] })
+    }
+
+    @Test
     fun aTappedPushWaitsForTheScreens() = runTest {
         val app = GoChatApp(MemoryStore(), backgroundScope)
         val target = PushTarget("c1", teamId = "t1")
@@ -120,6 +131,16 @@ class PushTest {
         assertEquals(target, app.opening.value)
         app.pushOpened(target)
         assertNull(app.opening.value)
+    }
+
+    @Test
+    fun aPushShowsOnlyWhileSignedIn() = runTest {
+        val store = MemoryStore()
+        val app = GoChatApp(store, backgroundScope)
+        assertFalse(app.pushReceived())
+        // As a process a push started finds it, before the session is back.
+        store.put("token", "tok")
+        assertTrue(app.pushReceived())
     }
 
     @Test

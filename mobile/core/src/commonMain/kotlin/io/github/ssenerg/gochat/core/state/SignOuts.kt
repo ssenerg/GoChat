@@ -20,20 +20,32 @@ internal class SignOuts(
 ) {
     private var retrying: Job? = null
 
+    // Whether a try is under way, rather than the wait for the next.
+    private var trying = false
+
     /** Ends the session of [token] at [server] once the server answers. */
     fun add(server: String, token: String) {
         save((pending() - (server to token) + (server to token)).takeLast(MAX))
         retry()
     }
 
-    /** Tries those waiting now, and again later until each is settled. */
+    /**
+     * Tries those waiting now, and again later until each is settled. It
+     * cuts a wait short: a push that came says the device is online.
+     */
     fun retry() {
-        if (retrying?.isActive == true || pending().isEmpty()) return
+        if (trying || pending().isEmpty()) return
+        retrying?.cancel()
         retrying = scope.launch {
             var wait = FIRST_WAIT_MS
             while (true) {
-                for (p in pending()) {
-                    if (settled { logout(p.first, p.second) }) save(pending() - p)
+                trying = true
+                try {
+                    for (p in pending()) {
+                        if (settled { logout(p.first, p.second) }) save(pending() - p)
+                    }
+                } finally {
+                    trying = false
                 }
                 if (pending().isEmpty()) return@launch
                 delay(wait)
