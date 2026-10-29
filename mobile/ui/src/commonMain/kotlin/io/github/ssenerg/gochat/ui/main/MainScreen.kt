@@ -206,20 +206,22 @@ fun MainScreen(app: GoChatApp, session: ChatSession) {
 
     CompositionLocalProvider(LocalNavigator provides nav, LocalToasts provides toasts) {
         BoxWithConstraints(Modifier.fillMaxSize()) {
-            if (maxWidth >= 720.dp) {
-                Row(Modifier.fillMaxSize()) {
-                    Sidebar(session, app, Modifier.width(320.dp).fillMaxHeight())
-                    VerticalDivider()
+            // Wide, the sidebar stays beside the screen. Both layouts show
+            // the screen from here, so turning the phone keeps its state,
+            // as a draft or the recovery codes shown once.
+            val wide = maxWidth >= 720.dp
+            Row(Modifier.fillMaxSize()) {
+                if (wide || top == Route.Home) {
+                    Sidebar(session, app, if (wide) Modifier.width(320.dp).fillMaxHeight() else Modifier.fillMaxSize())
+                }
+                if (wide) VerticalDivider()
+                if (wide || top != Route.Home) {
                     Box(Modifier.weight(1f).fillMaxHeight().background(MaterialTheme.colorScheme.background)) {
+                        // Each screen keeps its own state: a draft never
+                        // moves to another conversation.
                         if (top == Route.Home) EmptyState("Pick a channel or a conversation.") else key(top) { Screen(top, session, app) }
                     }
                 }
-            } else if (top == Route.Home) {
-                Sidebar(session, app, Modifier.fillMaxSize())
-            } else {
-                // Each screen keeps its own state: a draft never moves to
-                // another conversation.
-                key(top) { Screen(top, session, app) }
             }
             SnackbarHost(snackbar, Modifier.align(Alignment.BottomCenter).navigationBarsPadding().padding(bottom = 72.dp))
         }
