@@ -9,6 +9,7 @@ import (
 	"encoding/pem"
 	"errors"
 	"fmt"
+	"maps"
 	"net/http"
 	"net/url"
 	"strings"
@@ -22,9 +23,6 @@ const (
 	fcmEndpoint = "https://fcm.googleapis.com"
 	fcmScope    = "https://www.googleapis.com/auth/firebase.messaging"
 	googleToken = "https://oauth2.googleapis.com/token" //nolint:gosec // an address, not a credential
-	// fcmChannel is the Android notification channel the app makes for
-	// messages.
-	fcmChannel = "messages"
 )
 
 // FCM sends pushes through Firebase Cloud Messaging's HTTP v1 API, signed
@@ -131,15 +129,21 @@ func (f *FCM) forget(access string) {
 	f.mu.Unlock()
 }
 
+// Send sends data alone, the title and body among it, so the app shows the
+// notice itself, or none once signed out: the system would show a
+// notification message while the app is closed, whoever is signed in.
 func (f *FCM) Send(ctx context.Context, d *models.PushDevice, n *Notice) error {
+	data := make(map[string]string, len(n.Data)+2)
+	maps.Copy(data, n.Data)
+	data["title"], data["body"] = n.Title, n.Body
 	msg := map[string]any{
-		"token":        d.Token,
-		"notification": map[string]string{"title": n.Title, "body": n.Body},
-		"data":         n.Data,
+		"token": d.Token,
+		"data":  data,
+		// High, as the person is to see it: FCM may lower an app whose
+		// high ones show nothing.
 		"android": map[string]any{
-			"priority":     "HIGH",
-			"ttl":          fmt.Sprintf("%ds", int(expiry.Seconds())),
-			"notification": map[string]string{"channel_id": fcmChannel},
+			"priority": "HIGH",
+			"ttl":      fmt.Sprintf("%ds", int(expiry.Seconds())),
 		},
 	}
 	body, err := json.Marshal(map[string]any{"message": msg})

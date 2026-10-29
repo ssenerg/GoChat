@@ -21,7 +21,7 @@ final class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCent
     /// after signing out, before APNs forgot the token, not at all.
     func userNotificationCenter(_ center: UNUserNotificationCenter, willPresent notification: UNNotification,
                                 withCompletionHandler completionHandler: @escaping (UNNotificationPresentationOptions) -> Void) {
-        completionHandler(IosPush.shared.wanted ? [.banner, .list, .sound] : [])
+        completionHandler(IosPush.shared.received() ? [.banner, .list, .sound] : [])
     }
 
     func userNotificationCenter(_ center: UNUserNotificationCenter, didReceive response: UNNotificationResponse,

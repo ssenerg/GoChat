@@ -102,6 +102,9 @@ func (a *APNs) Send(ctx context.Context, d *models.PushDevice, n *Notice) error 
 			"alert":     map[string]string{"title": n.Title, "body": n.Body},
 			"sound":     "default",
 			"thread-id": n.Thread,
+			// The app's notification service extension sees it first, and
+			// hides what it says once the app is signed out.
+			"mutable-content": 1,
 		},
 	}
 	for k, v := range n.Data {

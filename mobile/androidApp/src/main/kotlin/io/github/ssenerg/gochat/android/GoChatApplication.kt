@@ -18,7 +18,9 @@ class GoChatApplication : Application() {
     override fun onCreate() {
         super.onCreate()
         platform = AndroidPlatform(this, scope)
-        app = GoChatApp(platform.store, scope, rtc = platform.rtc, app = platform.app, push = AndroidPush(this))
+        val push = AndroidPush(this)
+        app = GoChatApp(platform.store, scope, rtc = platform.rtc, app = platform.app, push = push)
+        push.app = app
         app.start()
         VoiceCallService.follow(this, app, scope)
     }

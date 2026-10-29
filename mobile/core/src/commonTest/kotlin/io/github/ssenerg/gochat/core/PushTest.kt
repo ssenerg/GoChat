@@ -24,6 +24,7 @@ import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
 import kotlin.time.Duration.Companion.seconds
@@ -120,6 +121,16 @@ class PushTest {
         assertEquals(target, app.opening.value)
         app.pushOpened(target)
         assertNull(app.opening.value)
+    }
+
+    @Test
+    fun aPushShowsOnlyWhileSignedIn() = runTest {
+        val store = MemoryStore()
+        val app = GoChatApp(store, backgroundScope)
+        assertFalse(app.pushReceived())
+        // As a process a push started finds it, before the session is back.
+        store.put("token", "tok")
+        assertTrue(app.pushReceived())
     }
 
     @Test

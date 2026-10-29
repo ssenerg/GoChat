@@ -14,6 +14,7 @@ import (
 	"encoding/pem"
 	"errors"
 	"io"
+	"maps"
 	"math/big"
 	"net/http"
 	"net/http/httptest"
@@ -99,19 +100,22 @@ func TestFCM(t *testing.T) {
 		var body struct {
 			Message struct {
 				Token        string            `json:"token"`
-				Notification map[string]string `json:"notification"`
+				Notification json.RawMessage   `json:"notification"`
 				Data         map[string]string `json:"data"`
 				Android      struct {
-					Priority     string            `json:"priority"`
-					TTL          string            `json:"ttl"`
-					Notification map[string]string `json:"notification"`
+					Priority     string          `json:"priority"`
+					TTL          string          `json:"ttl"`
+					Notification json.RawMessage `json:"notification"`
 				} `json:"android"`
 			} `json:"message"`
 		}
 		_ = json.NewDecoder(r.Body).Decode(&body)
 		m := body.Message
-		if !strings.HasPrefix(r.Header.Get("Authorization"), "Bearer at-") || m.Notification["title"] != "Ann" ||
-			m.Data["channel_id"] != "ch" || m.Android.Priority != "HIGH" || m.Android.TTL != "86400s" || m.Android.Notification["channel_id"] != fcmChannel {
+		// Data alone, which the app shows itself: no notification the
+		// system would show.
+		want := map[string]string{"title": "Ann", "body": "hi", "channel_id": "ch", "team_id": "tm"}
+		if !strings.HasPrefix(r.Header.Get("Authorization"), "Bearer at-") || m.Notification != nil || m.Android.Notification != nil ||
+			!maps.Equal(m.Data, want) || m.Android.Priority != "HIGH" || m.Android.TTL != "86400s" {
 			t.Errorf("sent %s %+v", r.Header.Get("Authorization"), m)
 		}
 		if m.Token == "gone" {
@@ -158,6 +162,10 @@ func TestFCM(t *testing.T) {
 		t.Fatalf("after the access token expired: %v, signed in %d times", err, signIns.Load())
 	}
 
+	if _, ok := notice.Data["title"]; ok {
+		t.Fatal("the notice's data changed")
+	}
+
 	if _, err := NewFCM([]byte(`{"project_id":"p"}`), nil); err == nil {
 		t.Fatal("took credentials without a key")
 	}
@@ -191,7 +199,8 @@ func TestAPNs(t *testing.T) {
 			_ = json.NewDecoder(r.Body).Decode(&body)
 			aps, _ := body["aps"].(map[string]any)
 			alert, _ := aps["alert"].(map[string]any)
-			if alert["title"] != "Ann" || aps["thread-id"] != "ch" || body["channel_id"] != "ch" || body["team_id"] != "tm" {
+			// mutable-content lets the app's extension hide it once signed out.
+			if alert["title"] != "Ann" || aps["thread-id"] != "ch" || aps["mutable-content"] != 1.0 || body["channel_id"] != "ch" || body["team_id"] != "tm" {
 				t.Errorf("payload %v", body)
 			}
 			if expire.CompareAndSwap(true, false) {
