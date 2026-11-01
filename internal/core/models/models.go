@@ -125,6 +125,10 @@ const (
 	SSOTicketLink = "link"
 	// SSOTicketReauth proves its user just signed in at the provider.
 	SSOTicketReauth = "reauth"
+	// SSOTicketLinkStart lets an app begin linking an identity to its user.
+	SSOTicketLinkStart = "link_start"
+	// SSOTicketAppLink waits for that app to link the identity it found.
+	SSOTicketAppLink = "app_link"
 )
 
 // SSOTicket is what a finished sign-in leaves for the step after it.

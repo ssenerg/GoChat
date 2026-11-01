@@ -39,10 +39,15 @@ service AuthService {
   rpc FinishSSO(FinishSSORequest) returns (FinishSSOResponse);
   // RedeemSSO hands an app the sign-in that finished in a browser.
   rpc RedeemSSO(RedeemSSORequest) returns (RedeemSSOResponse);
+  // BeginSSOLink starts linking an account at a provider to the caller's,
+  // for an app: it opens the gateway's /login/sso/<provider> in a browser
+  // with the ticket this answers, then links what comes back with LinkSSO.
+  rpc BeginSSOLink(BeginSSOLinkRequest) returns (BeginSSOLinkResponse);
   // GetSSOLink tells what a link token links.
   rpc GetSSOLink(GetSSOLinkRequest) returns (GetSSOLinkResponse);
   // LinkSSO links the account at a provider a link token holds to the
-  // caller's.
+  // caller's: one whose email has an account, or one an app's BeginSSOLink
+  // led to.
   rpc LinkSSO(LinkSSORequest) returns (LinkSSOResponse);
   // ListSSOIdentities lists the accounts at providers linked to the
   // caller's, or to a user's for a system admin.
@@ -209,6 +214,9 @@ message BeginSSORequest {
   // reauth proves who signs in, for DeleteAccount, without signing in: the
   // caller with a session, an app's account with app_challenge.
   bool reauth = 4;
+  // For an app linking an account to its own: BeginSSOLink's ticket, with
+  // the app_challenge it was given for.
+  string link_ticket = 5;
 }
 
 message BeginSSOResponse {
@@ -230,7 +238,8 @@ message FinishSSOResponse {
     Session session = 1;
     // A short-lived challenge to answer with VerifyMFA.
     string mfa_token = 2;
-    // For an app's sign-in: what it redeems with RedeemSSO.
+    // For an app's sign-in: what it redeems with RedeemSSO; for its link,
+    // with LinkSSO.
     string app_code = 3;
     // The account at the provider is new and its email has a GoChat
     // account, which links it with LinkSSO once its owner signs in.
@@ -259,6 +268,19 @@ message RedeemSSOResponse {
   }
 }
 
+message BeginSSOLinkRequest {
+  string provider_id = 1;
+  // The S256 PKCE challenge of a verifier the app keeps, which LinkSSO
+  // takes.
+  string app_challenge = 2;
+}
+
+message BeginSSOLinkResponse {
+  // What the app opens /login/sso/<provider> with, as link=, beside
+  // app=<app_challenge>; it works once, for two minutes.
+  string ticket = 1;
+}
+
 message GetSSOLinkRequest {
   string link_token = 1;
 }
@@ -270,7 +292,10 @@ message GetSSOLinkResponse {
 }
 
 message LinkSSORequest {
+  // A link token, or an app's app_code from a BeginSSOLink.
   string link_token = 1;
+  // For an app_code, the PKCE verifier of the app_challenge it began with.
+  string verifier = 2;
 }
 
 message LinkSSOResponse {

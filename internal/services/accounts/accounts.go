@@ -125,7 +125,10 @@ type Deps struct {
 	totp *keylock.Locks
 	// admins serializes the deletions of system admins, so one stays.
 	admins *keylock.Locks
-	sso    *ssoProviders
+	// unlinks serializes each user's unlinks, so an account without a
+	// password keeps a way to sign in.
+	unlinks *keylock.Locks
+	sso     *ssoProviders
 }
 
 func NewDeps(logger *zap.Logger, cfg *Config, repo Repo, userCache *users.Cache, az *authz.Authorizer, engine *actor.Engine, hubPID *actor.PID) (*Deps, error) {
@@ -158,6 +161,7 @@ func NewDeps(logger *zap.Logger, cfg *Config, repo Repo, userCache *users.Cache,
 		accountFailures: window.New(cfg.LoginFailures*accountFailureFactor, cfg.LoginWindow),
 		totp:            keylock.New(),
 		admins:          keylock.New(),
+		unlinks:         keylock.New(),
 		sso:             sso,
 	}, nil
 }
@@ -234,6 +238,8 @@ func (w *worker) Receive(c *actor.Context) {
 		out, err = w.finishSSO(ctx, msg)
 	case RedeemSSO:
 		out, err = w.redeemSSO(ctx, msg)
+	case BeginSSOLink:
+		out, err = w.beginSSOLink(ctx, msg)
 	case GetSSOLink:
 		out, err = w.getSSOLink(ctx, msg)
 	case LinkSSO:

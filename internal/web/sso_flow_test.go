@@ -291,4 +291,11 @@ func TestSSOHandsTheCodeToTheApp(t *testing.T) {
 	if b.cookies["gochat_session"] != nil {
 		t.Fatal("an app's sign-in left a session in the browser")
 	}
+	// An app's link carries BeginSSOLink's ticket, and comes back the same way.
+	ticket := strings.Repeat("T", 43)
+	state = b.toProvider("/login/sso/corp?app=" + challenge + "&link=" + ticket)
+	if got := auth.begun[len(auth.begun)-1]; got.AppChallenge != challenge || got.LinkTicket != ticket || got.Reauth {
+		t.Fatalf("begin: %+v", got)
+	}
+	b.expect(b.do(http.MethodGet, ssoCallback+"?code=app&state="+state, nil), http.StatusSeeOther, appRedirect+"?code=app-code")
 }

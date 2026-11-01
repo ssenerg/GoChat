@@ -31,6 +31,8 @@ type ssoRows struct {
 	flows      map[string]*models.SSOFlow
 	tickets    map[string]*models.SSOTicket
 	identities map[[2]string]*models.SSOIdentity
+	// listed, when set, runs after each read of a user's identities.
+	listed func()
 }
 
 func newSSORows() *ssoRows {
@@ -130,7 +132,11 @@ func (r *ssoRows) list(match func(*models.SSOIdentity) bool) []*models.SSOIdenti
 }
 
 func (r *ssoRows) ListUserSSOIdentities(_ context.Context, userID gocql.UUID) ([]*models.SSOIdentity, error) {
-	return r.list(func(id *models.SSOIdentity) bool { return id.UserID == userID }), nil
+	list := r.list(func(id *models.SSOIdentity) bool { return id.UserID == userID })
+	if r.listed != nil {
+		r.listed()
+	}
+	return list, nil
 }
 
 func (r *ssoRows) ListIssuerSSOIdentities(_ context.Context, issuer string, after gocql.UUID, limit int) ([]*models.SSOIdentity, error) {
@@ -473,9 +479,171 @@ func TestSSOLinksForTheSignedIn(t *testing.T) {
 	if _, err := f.sso(idp, who, BeginSSO{P: dp}, FinishSSO{P: dp}); !ierrors.Is(err, ierrors.CodeFailedPrecondition) {
 		t.Fatalf("dave took carol's identity: %v", err)
 	}
-	// An app cannot link.
+	// An app links only through BeginSSOLink.
 	if _, err := ask[*SSOStart](f, BeginSSO{Provider: "idp", RedirectURI: testRedirect, P: cp, AppChallenge: s256(strings.Repeat("v", 43))}); !ierrors.Is(err, ierrors.CodeInvalidArgument) {
 		t.Fatalf("an app began a link: %v", err)
+	}
+}
+
+func TestSSOLinksForAnApp(t *testing.T) {
+	f, idp := newSSOFixture(t, nil)
+	carol := f.user("carol", models.SystemRoleUser)
+	dave := f.user("dave", models.SystemRoleUser)
+	cp, _ := f.login(carol, "10.0.0.3")
+	dp, _ := f.login(dave, "10.0.0.4")
+	verifier := secure.Token() + secure.Token()
+	challenge := s256(verifier)
+	who := person{claims: map[string]any{"sub": "carol-at-idp", "email": "carol@corp.test"}}
+	start := func(p *models.Principal) string {
+		t.Helper()
+		ticket, err := ask[string](f, BeginSSOLink{P: p, Provider: "idp", AppChallenge: challenge})
+		if err != nil {
+			t.Fatal(err)
+		}
+		return ticket
+	}
+	begin := func(b BeginSSO) error {
+		b.Provider, b.RedirectURI = "idp", testRedirect
+		_, err := ask[*SSOStart](f, b)
+		return err
+	}
+	// link signs who in, in a browser without a session, for p's app.
+	link := func(p *models.Principal, who person) string {
+		t.Helper()
+		res, err := f.sso(idp, who, BeginSSO{AppChallenge: challenge, LinkTicket: start(p)}, FinishSSO{})
+		if err != nil || res.AppCode == "" || res.Linked || res.Login != nil {
+			t.Fatalf("app link: %v %+v", err, res)
+		}
+		return res.AppCode
+	}
+
+	if _, err := ask[string](f, BeginSSOLink{P: cp, Provider: "idp", AppChallenge: "short"}); !ierrors.Is(err, ierrors.CodeInvalidArgument) {
+		t.Fatalf("a bad challenge began a link: %v", err)
+	}
+	if _, err := ask[string](f, BeginSSOLink{P: cp, Provider: "nope", AppChallenge: challenge}); !ierrors.Is(err, ierrors.CodeNotFound) {
+		t.Fatalf("a link began at no provider: %v", err)
+	}
+	// The ticket goes with the app's challenge, once, and not for long.
+	ticket := start(cp)
+	if err := begin(BeginSSO{LinkTicket: ticket}); !ierrors.Is(err, ierrors.CodeInvalidArgument) {
+		t.Fatalf("a link began without a challenge: %v", err)
+	}
+	if err := begin(BeginSSO{LinkTicket: ticket, AppChallenge: challenge, Reauth: true}); !ierrors.Is(err, ierrors.CodeInvalidArgument) {
+		t.Fatalf("a link began as a reauth: %v", err)
+	}
+	if err := begin(BeginSSO{LinkTicket: ticket, AppChallenge: s256(secure.Token() + secure.Token())}); !ierrors.Is(err, ierrors.CodeFailedPrecondition) {
+		t.Fatalf("a ticket began with another challenge: %v", err)
+	}
+	if err := begin(BeginSSO{LinkTicket: ticket, AppChallenge: challenge}); !ierrors.Is(err, ierrors.CodeFailedPrecondition) {
+		t.Fatalf("a ticket survived another challenge: %v", err)
+	}
+	ticket = start(cp)
+	f.repo.mu.Lock()
+	f.repo.tickets[string(secure.Hash(ticket))].ExpiresAt = time.Now().Add(-time.Second)
+	f.repo.mu.Unlock()
+	if err := begin(BeginSSO{LinkTicket: ticket, AppChallenge: challenge}); !ierrors.Is(err, ierrors.CodeFailedPrecondition) {
+		t.Fatalf("an expired ticket began: %v", err)
+	}
+
+	// The code links only from the session of who began, with the verifier.
+	code := link(cp, who)
+	if _, err := f.repo.GetSSOIdentity(context.Background(), idp.URL, "carol-at-idp"); err == nil {
+		t.Fatal("the identity was linked before the app linked it")
+	}
+	if _, err := ask[*SSOLinkInfo](f, LinkSSO{P: cp, Token: code}); !ierrors.Is(err, ierrors.CodeFailedPrecondition) {
+		t.Fatalf("an app's code linked without its verifier: %v", err)
+	}
+	if _, err := ask[*SSOLinkInfo](f, LinkSSO{P: dp, Token: code, Verifier: verifier}); !ierrors.Is(err, ierrors.CodePermissionDenied) {
+		t.Fatalf("dave linked what carol began: %v", err)
+	}
+	if _, err := ask[*SSOLinkInfo](f, LinkSSO{P: cp, Token: code, Verifier: verifier}); !ierrors.Is(err, ierrors.CodeFailedPrecondition) {
+		t.Fatalf("a code survived dave's try: %v", err)
+	}
+	code = link(cp, who)
+	if _, err := ask[*SSOLinkInfo](f, LinkSSO{P: cp, Token: code, Verifier: secure.Token() + secure.Token()}); !ierrors.Is(err, ierrors.CodeFailedPrecondition) {
+		t.Fatalf("another verifier linked: %v", err)
+	}
+	if _, err := ask[*SSOLinkInfo](f, LinkSSO{P: cp, Token: code, Verifier: verifier}); !ierrors.Is(err, ierrors.CodeFailedPrecondition) {
+		t.Fatalf("a code survived a wrong verifier: %v", err)
+	}
+	info, err := ask[*SSOLinkInfo](f, LinkSSO{P: cp, Token: link(cp, who), Verifier: verifier})
+	if err != nil || info.Provider != "Test ID" || info.Email != "carol@corp.test" {
+		t.Fatalf("link: %v %+v", err, info)
+	}
+	if p := f.signedIn(f.sso(idp, who, BeginSSO{}, FinishSSO{})); p.UserID != carol.ID {
+		t.Fatal("the link signed in someone else")
+	}
+
+	// An identity linked to someone else is refused in the browser.
+	if _, err := f.sso(idp, who, BeginSSO{AppChallenge: challenge, LinkTicket: start(dp)}, FinishSSO{}); !ierrors.Is(err, ierrors.CodeFailedPrecondition) {
+		t.Fatalf("dave's app took carol's identity: %v", err)
+	}
+	// The browser's own session has no say in an app's link.
+	res, err := f.sso(idp, person{claims: map[string]any{"sub": "carol-2"}}, BeginSSO{AppChallenge: challenge, LinkTicket: start(cp)}, FinishSSO{P: dp})
+	if err != nil || res.AppCode == "" || res.Linked {
+		t.Fatalf("a browser signed in as dave changed carol's link: %v %+v", err, res)
+	}
+	if _, err := ask[*SSOLinkInfo](f, LinkSSO{P: dp, Token: res.AppCode, Verifier: verifier}); !ierrors.Is(err, ierrors.CodePermissionDenied) {
+		t.Fatalf("dave linked what carol began: %v", err)
+	}
+	// An email's link token is no app's code.
+	f.user("erin", models.SystemRoleUser)
+	res, err = f.sso(idp, person{claims: map[string]any{"sub": "erin", "email": "erin@example.test"}}, BeginSSO{}, FinishSSO{})
+	if err != nil || res.LinkToken == "" {
+		t.Fatalf("email link: %v %+v", err, res)
+	}
+	if _, err := ask[*SSOLinkInfo](f, LinkSSO{P: cp, Token: res.LinkToken, Verifier: verifier}); !ierrors.Is(err, ierrors.CodeFailedPrecondition) {
+		t.Fatalf("a link token linked as an app's code: %v", err)
+	}
+}
+
+func TestSSOUnlinkKeepsTheLastWayIn(t *testing.T) {
+	f, idp := newSSOFixture(t, nil)
+	ann := f.signedIn(f.sso(idp, person{}, BeginSSO{}, FinishSSO{}))
+	verifier := secure.Token() + secure.Token()
+	ticket, err := ask[string](f, BeginSSOLink{P: ann, Provider: "idp", AppChallenge: s256(verifier)})
+	if err != nil {
+		t.Fatal(err)
+	}
+	res, err := f.sso(idp, person{claims: map[string]any{"sub": "subject-2"}}, BeginSSO{AppChallenge: s256(verifier), LinkTicket: ticket}, FinishSSO{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := ask[*SSOLinkInfo](f, LinkSSO{P: ann, Token: res.AppCode, Verifier: verifier}); err != nil {
+		t.Fatal(err)
+	}
+
+	// Two unlinks at once, each reading both identities unless they wait
+	// for each other.
+	var read sync.WaitGroup
+	read.Add(2)
+	f.repo.listed = func() {
+		read.Done()
+		both := make(chan struct{})
+		go func() { read.Wait(); close(both) }()
+		select {
+		case <-both:
+		case <-time.After(200 * time.Millisecond):
+		}
+	}
+	errs := make(chan error, 2)
+	for _, sub := range []string{"subject-1", "subject-2"} {
+		go func() {
+			_, err := ask[Done](f, UnlinkSSO{P: ann, Issuer: idp.URL, Subject: sub})
+			errs <- err
+		}()
+	}
+	failed := 0
+	for range 2 {
+		if err := <-errs; ierrors.Is(err, ierrors.CodeFailedPrecondition) {
+			failed++
+		} else if err != nil {
+			t.Fatal(err)
+		}
+	}
+	f.repo.listed = nil
+	if list, _ := f.repo.ListUserSSOIdentities(context.Background(), ann.UserID); failed != 1 || len(list) != 1 {
+		t.Fatalf("%d unlinks refused, %d identities left", failed, len(list))
 	}
 }
 

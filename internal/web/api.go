@@ -45,13 +45,14 @@ const (
 // apiCalls are the calls of the chat API apps may make: the unary calls of
 // the services people use. Photos go through /api/v1/photo and
 // /api/v2/teams/{team}/photo, which turn any picture into the square one the
-// server stores; the streams belong to gateways and to the file endpoints.
+// server stores; the streams belong to gateways and to the file endpoints,
+// which serve files and pictures, so FileService opens only its usage.
 var apiCalls = map[string][]string{
 	"gochat.v1.AuthService": {
 		"GetSignupInfo", "SignUp", "Login", "VerifyMFA", "Logout", "Me",
 		"ChangePassword", "BeginTOTPSetup", "ConfirmTOTPSetup", "DisableTOTP", "DeleteAccount",
 		"ListSessions", "RevokeSession", "RevokeSessions",
-		"ListSSOProviders", "RedeemSSO", "ListSSOIdentities", "UnlinkSSO",
+		"ListSSOProviders", "RedeemSSO", "BeginSSOLink", "LinkSSO", "ListSSOIdentities", "UnlinkSSO",
 	},
 	"gochat.v1.UserService": {
 		"GetUser", "UpdateProfile", "GetPresence", "RemovePhoto", "SetStatus", "SetCustomStatus",
@@ -80,6 +81,7 @@ var apiCalls = map[string][]string{
 	},
 	"gochat.v1.VoiceService": {"JoinVoice", "LeaveVoice", "UpdateVoiceState", "DisconnectVoiceMember", "ListVoiceStates"},
 	"gochat.v1.PushService":  {"RegisterDevice", "UnregisterDevice"},
+	"gochat.v1.FileService":  {"GetStorageUsage"},
 	"gochat.v1.SafetyService": {
 		"BlockUser", "UnblockUser", "ListBlocked", "Report", "ListReports", "CountReports", "ResolveReport",
 	},
@@ -119,6 +121,7 @@ var apiLimited = map[string]bool{
 	"gochat.v1.AuthService/DisableTOTP":      true,
 	"gochat.v1.AuthService/DeleteAccount":    true,
 	"gochat.v1.AuthService/RedeemSSO":        true,
+	"gochat.v1.AuthService/LinkSSO":          true,
 	"gochat.v1.TeamService/GetInvite":        true,
 	"gochat.v1.TeamService/AcceptInvite":     true,
 }
