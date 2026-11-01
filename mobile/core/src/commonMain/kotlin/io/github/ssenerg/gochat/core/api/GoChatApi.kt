@@ -48,6 +48,34 @@ class GoChatApi(val client: ApiClient) {
     /** The accounts at providers the person signs in with. */
     suspend fun ssoIdentities() = auth("ListSSOIdentities", ListSSOIdentitiesRequest(), ListSSOIdentitiesResponse.ADAPTER).identities
 
+    /** Begins linking an account at [provider]: the ticket the page in the browser opens with, beside [challenge]. */
+    suspend fun beginSsoLink(provider: String, challenge: String) =
+        auth("BeginSSOLink", BeginSSOLinkRequest(provider_id = provider, app_challenge = challenge), BeginSSOLinkResponse.ADAPTER).ticket
+
+    /** Links the account the browser came back with, given the verifier the link began with. */
+    suspend fun linkSso(code: String, verifier: String) =
+        auth("LinkSSO", LinkSSORequest(link_token = code, verifier = verifier), LinkSSOResponse.ADAPTER)
+
+    suspend fun unlinkSso(issuer: String, subject: String) {
+        auth("UnlinkSSO", UnlinkSSORequest(issuer = issuer, subject = subject), UnlinkSSOResponse.ADAPTER)
+    }
+
+    // Sessions.
+
+    /** Where the person is signed in, the most recently seen first. */
+    suspend fun sessions() = auth("ListSessions", ListSessionsRequest(), ListSessionsResponse.ADAPTER).sessions
+
+    suspend fun revokeSession(id: String) {
+        auth("RevokeSession", RevokeSessionRequest(session_id = id), RevokeSessionResponse.ADAPTER)
+    }
+
+    /** Signs out every session but this one; answers how many. */
+    suspend fun revokeOtherSessions() = auth("RevokeSessions", RevokeSessionsRequest(), RevokeSessionsResponse.ADAPTER).revoked
+
+    /** The space the person's files take, and their quota. */
+    suspend fun storageUsage() =
+        client.call("gochat.v1.FileService/GetStorageUsage", GetStorageUsageRequest(), GetStorageUsageResponse.ADAPTER)
+
     /** Ties the device's push token to the session; false when the server pushes nowhere. */
     suspend fun registerDevice(platform: PushPlatform, token: String, sandbox: Boolean) =
         client.call(

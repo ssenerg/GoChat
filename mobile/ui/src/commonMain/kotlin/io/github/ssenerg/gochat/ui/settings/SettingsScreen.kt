@@ -21,12 +21,16 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Logout
 import androidx.compose.material.icons.filled.Block
 import androidx.compose.material.icons.filled.DeleteForever
+import androidx.compose.material.icons.filled.Devices
 import androidx.compose.material.icons.filled.Flag
 import androidx.compose.material.icons.filled.Key
+import androidx.compose.material.icons.filled.Link
 import androidx.compose.material.icons.filled.Security
+import androidx.compose.material.icons.filled.Storage
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.ListItem
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
@@ -53,12 +57,15 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import gochat.v1.GetStorageUsageResponse
 import gochat.v1.SSOIdentity
 import gochat.v1.Status
 import gochat.v1.SystemRole
 import io.github.ssenerg.gochat.core.api.userMessage
 import io.github.ssenerg.gochat.core.model.Emojis
+import io.github.ssenerg.gochat.core.model.describe
 import io.github.ssenerg.gochat.core.model.displayName
+import io.github.ssenerg.gochat.core.model.fraction
 import io.github.ssenerg.gochat.core.state.ChatSession
 import io.github.ssenerg.gochat.core.state.GoChatApp
 import io.github.ssenerg.gochat.core.state.Reauth
@@ -72,6 +79,7 @@ import io.github.ssenerg.gochat.ui.main.Route
 import io.github.ssenerg.gochat.ui.main.LocalToasts
 import io.github.ssenerg.gochat.ui.rememberFilePicker
 import io.github.ssenerg.gochat.ui.statusLabel
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
 
 private val dndChoices = listOf(30 to "30 minutes", 60 to "1 hour", 4 * 60 to "4 hours", 24 * 60 to "Until tomorrow", 0 to "Until I turn it off")
@@ -91,6 +99,18 @@ fun SettingsScreen(session: ChatSession, app: GoChatApp) {
     var changePassword by remember { mutableStateOf(false) }
     var confirmSignOut by remember { mutableStateOf(false) }
     var deleteAccount by remember { mutableStateOf(false) }
+    var ssoOffered by remember { mutableStateOf(false) }
+    var storage by remember { mutableStateOf<GetStorageUsageResponse?>(null) }
+    LaunchedEffect(Unit) {
+        ssoOffered = session.ssoProviders().isNotEmpty()
+        storage = try {
+            session.storageUsage()
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            null
+        }
+    }
     val pickPhoto = rememberFilePicker(
         onPicked = { file -> session.launch({ session.setPhoto(file.bytes) }) { err -> err?.let { toasts.show(it) } } },
         onError = { toasts.show(it) },
@@ -156,6 +176,32 @@ fun SettingsScreen(session: ChatSession, app: GoChatApp) {
                 leadingContent = { Icon(Icons.Filled.Security, contentDescription = null) },
                 modifier = Modifier.clickable { nav.open(Route.TwoFactor) },
             )
+            ListItem(
+                headlineContent = { Text("Sessions") },
+                supportingContent = { Text("Where you are signed in") },
+                leadingContent = { Icon(Icons.Filled.Devices, contentDescription = null) },
+                modifier = Modifier.clickable { nav.open(Route.Sessions) },
+            )
+            if (ssoOffered) {
+                ListItem(
+                    headlineContent = { Text("Single sign-on") },
+                    supportingContent = { Text("Accounts you sign in with") },
+                    leadingContent = { Icon(Icons.Filled.Link, contentDescription = null) },
+                    modifier = Modifier.clickable { nav.open(Route.SignIns) },
+                )
+            }
+            storage?.let { usage ->
+                ListItem(
+                    headlineContent = { Text("Storage") },
+                    supportingContent = {
+                        Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                            Text(usage.describe() + if (usage.custom) " (set by an admin)" else "")
+                            usage.fraction?.let { LinearProgressIndicator(progress = { it }, modifier = Modifier.fillMaxWidth()) }
+                        }
+                    },
+                    leadingContent = { Icon(Icons.Filled.Storage, contentDescription = null) },
+                )
+            }
             ListItem(
                 headlineContent = { Text("Blocked people") },
                 supportingContent = { Text(if (st.blocked.isEmpty()) "No one" else "${st.blocked.size} blocked") },

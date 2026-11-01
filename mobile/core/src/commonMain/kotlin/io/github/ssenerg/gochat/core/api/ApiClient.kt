@@ -42,6 +42,7 @@ class ApiException(val code: Int, message: String, val status: Int = 0) : Except
         const val PERMISSION_DENIED = 7
         const val RESOURCE_EXHAUSTED = 8
         const val FAILED_PRECONDITION = 9
+        const val UNIMPLEMENTED = 12
         const val UNAVAILABLE = 14
         const val UNAUTHENTICATED = 16
     }

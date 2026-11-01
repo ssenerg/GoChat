@@ -60,7 +60,6 @@ iosApp/      the Xcode project: a SwiftUI shell that shows the shared screens
   `ASWebAuthenticationSession` on iOS. It comes back to the app at
   `io.github.ssenerg.gochat:/sso`, which Android's activity claims, and the
   app trades the code for a session with the PKCE verifier it began with.
-  Linking a provider to an existing account is done on the web.
 - Teams, channels, voice channels, direct and group conversations, with
   presence, unread marks and mention counts, all live.
 - Voice channels: join, talk, mute, deafen and leave, see who is talking,
@@ -94,6 +93,25 @@ iosApp/      the Xcode project: a SwiftUI shell that shows the shared screens
   to the team they were opened in, as on the web.
 - Profile name and photo, status with do not disturb, custom status,
   password, sign-out.
+- Sessions in Settings, as on the web: each browser or device signed in,
+  named by its User-Agent ("GoChat app on Pixel 8", "Safari on macOS"),
+  with its address and when it was last seen, this one marked. Sign out
+  any other, or every other at once; a session signed out from elsewhere
+  ends with close code 4003, and the app signs out.
+- Single sign-on in Settings, where the server has providers: the
+  accounts linked to the person's, to unlink, and a provider to link
+  another at. The app asks the server for a ticket (`BeginSSOLink`),
+  bound to the person and to the PKCE challenge of a verifier it keeps,
+  and opens `/login/sso/<provider>?app=<challenge>&link=<ticket>` in the
+  system browser. What comes back to `io.github.ssenerg.gochat:/sso` links
+  only through `LinkSSO`, from the same person's session, with the
+  verifier; the ticket and the code each work once, for two minutes. An
+  account at the provider linked to someone else is refused. An account
+  without a password keeps its last linked account: the server refuses to
+  unlink it, and the app offers no Unlink for it. Servers from before
+  this ask people to link on the web.
+- Storage in Settings: the space the person's files take, against their
+  quota when there is one.
 - Two-factor authentication: set it up with the password, a QR code or its
   key, and a code, then keep the recovery codes; turn it off with the
   password and a code or a recovery code.
@@ -110,6 +128,11 @@ iosApp/      the Xcode project: a SwiftUI shell that shows the shared screens
 - Push notifications while the app is closed, from servers that push to
   this build (below): direct and group messages, replies in their threads
   and mentions. A tap opens the conversation or the thread, in its team.
+
+What stays on the web: managing bots (creating them, their tokens,
+webhooks and teams) and the Administration pages. The apps show bots'
+messages, buttons and commands, and system admins see every team's
+reports, but they create no bots and manage no one's account.
 
 ## Building
 
