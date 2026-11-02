@@ -183,6 +183,12 @@ type SSOResult struct {
 	ReauthToken string
 	// Provider is the provider's name.
 	Provider string
+	// Email is the account's at the provider.
+	Email string
+	// AppUse and AppUsername say what an AppCode does and whose account it
+	// is for: the browser asks the person before the app gets the code.
+	AppUse      pb.AppCodeUse
+	AppUsername string
 	// User, InviteTeamID and InviteHash are of a new account and its invite.
 	User         *models.User
 	InviteTeamID gocql.UUID

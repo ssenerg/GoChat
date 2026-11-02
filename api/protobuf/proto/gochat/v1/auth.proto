@@ -252,6 +252,23 @@ message FinishSSOResponse {
   string provider_name = 6;
   // The team an invite joined, for a new account.
   Team team = 7;
+  // With an app_code: what it does and the GoChat account it is for, which
+  // the browser asks the person to confirm before the app gets the code.
+  AppCodeUse app_code_use = 9;
+  string app_username = 10;
+  // The account's email at the provider, when it gives one.
+  string email = 11;
+}
+
+// What an app's code does.
+enum AppCodeUse {
+  APP_CODE_USE_UNSPECIFIED = 0;
+  // Signs the app in.
+  APP_CODE_USE_SIGN_IN = 1;
+  // Links the account at the provider to the app's.
+  APP_CODE_USE_LINK = 2;
+  // Proves to the app that its account's owner signed in again.
+  APP_CODE_USE_REAUTH = 3;
 }
 
 message RedeemSSORequest {

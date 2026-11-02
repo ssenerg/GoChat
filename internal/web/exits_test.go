@@ -224,7 +224,7 @@ func TestAnAppSignsInAgainToDelete(t *testing.T) {
 	if got := auth.begun[0]; got.AppChallenge != challenge || !got.Reauth {
 		t.Fatalf("begin: %+v", got)
 	}
-	b.expect(b.do(http.MethodGet, ssoCallback+"?code=app&state="+state, nil), http.StatusSeeOther, appRedirect+"?code=app-code")
+	b.appPage(b.do(http.MethodGet, ssoCallback+"?code=app-reauth&state="+state, nil), "Tell the GoChat app that you, <strong>@ann</strong>, signed in again with Corp ID")
 	b.toProvider("/login/sso/corp?app=" + challenge)
 	if auth.begun[1].Reauth {
 		t.Fatal("a sign-in asked to sign in again")

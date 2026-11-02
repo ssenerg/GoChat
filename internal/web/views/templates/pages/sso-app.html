@@ -1,0 +1,19 @@
+{{define "content"}}
+<main class="auth">
+  <div class="auth-card">
+    <div class="brand"><img src="{{static "icon.svg"}}" alt="" width="40" height="40"><span>GoChat</span></div>
+    {{if eq .Use "link"}}
+    <h1>Link your account</h1>
+    <p>Sign in to <strong>@{{.Username}}</strong> with your {{.Provider}} account{{with .Email}} <strong>{{.}}</strong>{{end}} from now on, as the GoChat app asked?</p>
+    {{else if eq .Use "reauth"}}
+    <h1>Confirm it is you</h1>
+    <p>Tell the GoChat app that you, <strong>@{{.Username}}</strong>, signed in again with {{.Provider}}, so it can delete your account?</p>
+    {{else}}
+    <h1>Sign in to the app</h1>
+    <p>Sign in to the GoChat app{{with .Username}} as <strong>@{{.}}</strong>{{end}} with your {{.Provider}} account{{with .Email}} <strong>{{.}}</strong>{{end}}?</p>
+    {{end}}
+    <p class="notice">Continue only if you began this in the GoChat app on this device a moment ago. If someone sent you a link, close this page: continuing could hand them your account.</p>
+    <a class="btn primary block" href="{{.Href}}">Continue in the app</a>
+  </div>
+</main>
+{{end}}

@@ -57,9 +57,12 @@ iosApp/      the Xcode project: a SwiftUI shell that shows the shared screens
 - Sign in to any GoChat server, with two-factor codes, or sign up with an
   invite link. Where the server has identity providers, sign in (or up)
   with one in the system browser: a Custom Tab on Android, an
-  `ASWebAuthenticationSession` on iOS. It comes back to the app at
+  `ASWebAuthenticationSession` on iOS. Once the person confirms the
+  account on the server's page, it comes back to the app at
   `io.github.ssenerg.gochat:/sso`, which Android's activity claims, and the
   app trades the code for a session with the PKCE verifier it began with.
+  The server always asks first: anyone can send a link that begins a
+  flow, and another app may claim the scheme.
 - Teams, channels, voice channels, direct and group conversations, with
   presence, unread marks and mention counts, all live.
 - Voice channels: join, talk, mute, deafen and leave, see who is talking,

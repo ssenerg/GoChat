@@ -176,8 +176,9 @@ it does for the web:
 Apps sign in with `AuthService/Login` (and `VerifyMFA` for two-factor
 accounts) and send the session token as `Authorization: Bearer <token>`.
 With single sign-on they list the providers with `ListSSOProviders`, open
-`/login/sso/<provider>?app=<S256 challenge>` in the system browser, which
-comes back to `io.github.ssenerg.gochat:/sso?code=` (or `?error=`), and
+`/login/sso/<provider>?app=<S256 challenge>` in the system browser, which,
+once the person confirms on the server's page, comes back to
+`io.github.ssenerg.gochat:/sso?code=` (or straight to `?error=`), and
 trade the code and their PKCE verifier for a session with `RedeemSSO`.
 Signed in, they link another provider account the same way: `BeginSSOLink`
 gives a ticket for `&link=`, and `LinkSSO` takes the code with the
@@ -415,7 +416,15 @@ that carry what people post.
     `ASWebAuthenticationSession`). The browser comes back to the app's
     scheme with a code that lasts two minutes, works once, and only with
     the PKCE verifier the app began with, so another app claiming the
-    scheme gets nothing of use.
+    scheme gets nothing of use from a flow the app began.
+  - Anyone can send a link that begins an app's flow with their own
+    challenge, and another app on the person's device may claim the
+    scheme, so the server never hands a code over by itself. Its page
+    names the GoChat account and what the code does (sign in, link, or
+    sign in again to delete) and warns against links someone sent; the
+    code goes to the app only when the person taps Continue. Claimed
+    HTTPS redirects would close this for good, but each server's domain
+    would have to be built into the apps.
   - An app links an account at a provider from that browser too, though
     the browser has no session. `BeginSSOLink`, called with the app's
     session, gives a ticket naming the person and the app's PKCE

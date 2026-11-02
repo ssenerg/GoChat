@@ -59,6 +59,7 @@ func (s *authService) FinishSSO(ctx context.Context, req *pb.FinishSSORequest) (
 		out.Result = &pb.FinishSSOResponse_ReauthToken{ReauthToken: res.ReauthToken}
 	case res.AppCode != "":
 		out.Result = &pb.FinishSSOResponse_AppCode{AppCode: res.AppCode}
+		out.AppCodeUse, out.AppUsername, out.Email = res.AppUse, res.AppUsername, res.Email
 	case res.Login != nil && res.Login.MFAToken != "":
 		out.Result = &pb.FinishSSOResponse_MfaToken{MfaToken: res.Login.MFAToken}
 	case res.Login != nil:

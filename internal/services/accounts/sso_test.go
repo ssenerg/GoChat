@@ -511,7 +511,7 @@ func TestSSOLinksForAnApp(t *testing.T) {
 	link := func(p *models.Principal, who person) string {
 		t.Helper()
 		res, err := f.sso(idp, who, BeginSSO{AppChallenge: challenge, LinkTicket: start(p)}, FinishSSO{})
-		if err != nil || res.AppCode == "" || res.Linked || res.Login != nil {
+		if err != nil || res.AppCode == "" || res.Linked || res.Login != nil || res.AppUse != pb.AppCodeUse_APP_CODE_USE_LINK {
 			t.Fatalf("app link: %v %+v", err, res)
 		}
 		return res.AppCode
@@ -580,7 +580,8 @@ func TestSSOLinksForAnApp(t *testing.T) {
 	}
 	// The browser's own session has no say in an app's link.
 	res, err := f.sso(idp, person{claims: map[string]any{"sub": "carol-2"}}, BeginSSO{AppChallenge: challenge, LinkTicket: start(cp)}, FinishSSO{P: dp})
-	if err != nil || res.AppCode == "" || res.Linked {
+	// The page that asks before the app gets the code names whose it is.
+	if err != nil || res.AppCode == "" || res.Linked || res.AppUsername != "carol" {
 		t.Fatalf("a browser signed in as dave changed carol's link: %v %+v", err, res)
 	}
 	if _, err := ask[*SSOLinkInfo](f, LinkSSO{P: dp, Token: res.AppCode, Verifier: verifier}); !ierrors.Is(err, ierrors.CodePermissionDenied) {
@@ -719,7 +720,7 @@ func TestSSOHandsOffToApps(t *testing.T) {
 	verifier := secure.Token() + secure.Token()
 	appSignIn := func() string {
 		res, err := f.sso(idp, person{}, BeginSSO{AppChallenge: s256(verifier)}, FinishSSO{})
-		if err != nil || res.Login != nil || res.AppCode == "" {
+		if err != nil || res.Login != nil || res.AppCode == "" || res.AppUse != pb.AppCodeUse_APP_CODE_USE_SIGN_IN || res.AppUsername != "ann" || res.Email != "ann@example.test" {
 			t.Fatalf("app sign-in: %v %+v", err, res)
 		}
 		return res.AppCode
