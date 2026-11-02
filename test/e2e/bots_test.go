@@ -3,6 +3,7 @@ package e2e
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/url"
 	"regexp"
@@ -94,7 +95,7 @@ func testBots(t *testing.T, admin *client, adminWS *socket, teamID, town string,
 	}
 
 	adminAPI := newApp(t)
-	adminAPI.login(adminName, adminPass)
+	adminUser := adminAPI.login(adminName, adminPass)
 	adminAPI.must("gochat.v1.ChannelService/AddChannelMember", &pb.AddChannelMemberRequest{ChannelId: town, UserId: botID}, &pb.AddChannelMemberResponse{})
 	botNext(t, c, "its joining", func(ev *pb.Event) bool { return ev.GetChannelJoined().GetChannel().GetId() == town })
 
@@ -160,6 +161,61 @@ func testBots(t *testing.T, admin *client, adminWS *socket, teamID, town string,
 		ev := botNext(t, c, "a message", postedBy(botID, func(s string) bool { return strings.HasSuffix(s, tag) }))
 		if got := ev.GetMessagePosted().GetMessage().Content; got != "/ping "+tag {
 			t.Fatalf("the bot got %q", got)
+		}
+	})
+
+	step("the bot writes to a person first", func(t *testing.T) {
+		dm, err := c.OpenDirect(ctx, teamID, adminUser.Id)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if dm.Type != pb.ChannelType_CHANNEL_TYPE_DIRECT {
+			t.Fatalf("the bot opened %v", dm)
+		}
+		if err := c.Call(ctx, "gochat.v1.MessageService/PostMessage", &pb.PostMessageRequest{ChannelId: dm.Id, Content: "reminder " + tag}, &pb.PostMessageResponse{}); err != nil {
+			t.Fatal(err)
+		}
+		// The person gets the conversation in their sidebar and a notice
+		// of its first message, in either order.
+		var listed, noticed bool
+		deadline := time.After(10 * time.Second)
+		for !listed || !noticed {
+			select {
+			case f, ok := <-adminWS.in:
+				if !ok {
+					t.Fatal("the socket closed")
+				}
+				listed = listed || (strings.Contains(f, `id="channel-lists"`) && strings.Contains(f, dm.Id))
+				noticed = noticed || (strings.Contains(f, `id="notify"`) && strings.Contains(f, "reminder "+tag))
+			case <-deadline:
+				t.Fatalf("listed %v, noticed %v", listed, noticed)
+			}
+		}
+		if again, err := c.OpenDirect(ctx, teamID, adminUser.Id); err != nil || again.Id != dm.Id {
+			t.Fatalf("opening it again: %v %v", again, err)
+		}
+		// The bot gets every message of it.
+		adminWS.send(map[string]string{"op": "post", "channel_id": dm.Id, "content": "thanks " + tag})
+		botNext(t, c, "the answer", postedBy(botID, func(s string) bool { return s == "thanks "+tag }))
+
+		var e *gochat.Error
+		err = c.Call(ctx, "gochat.v1.ChannelService/OpenGroupChannel", &pb.OpenGroupChannelRequest{TeamId: teamID, UserIds: []string{adminUser.Id}}, &pb.OpenGroupChannelResponse{})
+		if !errors.As(err, &e) || e.Code != 12 {
+			t.Fatalf("a bot opened a group: %v", err)
+		}
+		// Blocked, it neither opens the conversation nor writes in it.
+		adminAPI.must("gochat.v1.SafetyService/BlockUser", &pb.BlockUserRequest{UserId: botID}, &pb.BlockUserResponse{})
+		open := map[string]string{"team_id": teamID, "user_id": adminUser.Id}
+		if status, r := botHTTP(t, token, "openDirect", open); status != http.StatusForbidden || r.OK {
+			t.Fatalf("openDirect to someone who blocked the bot: %d %+v", status, r)
+		}
+		err = c.Call(ctx, "gochat.v1.MessageService/PostMessage", &pb.PostMessageRequest{ChannelId: dm.Id, Content: "blocked " + tag}, &pb.PostMessageResponse{})
+		if !errors.As(err, &e) || e.Code != 7 {
+			t.Fatalf("a blocked bot posted: %v", err)
+		}
+		adminAPI.must("gochat.v1.SafetyService/UnblockUser", &pb.UnblockUserRequest{UserId: botID}, &pb.UnblockUserResponse{})
+		if status, r := botHTTP(t, token, "openDirect", open); status != http.StatusOK || !r.OK || !strings.Contains(string(r.Result), dm.Id) {
+			t.Fatalf("openDirect: %d %+v", status, r)
 		}
 	})
 

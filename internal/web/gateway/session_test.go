@@ -107,6 +107,28 @@ func TestOtherTeamsConversationsStayThere(t *testing.T) {
 	}
 }
 
+func TestAConversationNotifiesBeforeTheSidebarShowsIt(t *testing.T) {
+	s := quietSession(t)
+	s.teamID = "acme"
+	for id, kind := range map[string]pb.ChannelType{"dm": pb.ChannelType_CHANNEL_TYPE_DIRECT, "group": pb.ChannelType_CHANNEL_TYPE_GROUP} {
+		s.joined(&pb.Channel{Id: id, Type: kind, TeamId: "acme"})
+	}
+	for channel, want := range map[string]bool{"dm": true, "group": false} {
+		e := posted("1", channel)
+		e.GetMessagePosted().TeamId, e.GetMessagePosted().Conversation = "acme", true
+		s.event(nil, e)
+		s.out.close(websocket.StatusNormalClosure)
+		notified := false
+		for _, f := range s.frames() {
+			notified = notified || strings.Contains(f, `id="notify"`)
+		}
+		if notified != want {
+			t.Errorf("%s: notified %v", channel, notified)
+		}
+		s.out = newOutbox(1 << 20)
+	}
+}
+
 func answer(id, text string) *pb.Event {
 	return &pb.Event{Payload: &pb.Event_CallbackAnswer{CallbackAnswer: &pb.CallbackAnswer{
 		QueryId: id, Text: text, Bot: &pb.User{Id: "bot", DisplayName: "Echo"},

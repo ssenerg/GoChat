@@ -281,3 +281,38 @@ func TestACallTheConnectionDropsUnderIsNotMadeAgain(t *testing.T) {
 	case <-time.After(time.Second):
 	}
 }
+
+func TestOpenDirect(t *testing.T) {
+	url := fakeServer(t, func(f *fakeConn) {
+		f.read()
+		f.send(welcome(1, false))
+		for _, fail := range []bool{false, true} {
+			call := f.read().GetCall()
+			var req pb.OpenDirectChannelRequest
+			_ = proto.Unmarshal(call.GetPayload(), &req)
+			if call.GetMethod() != "gochat.v1.ChannelService/OpenDirectChannel" || req.TeamId != "team" || req.UserId != "ann" {
+				t.Errorf("call %s %v", call.GetMethod(), &req)
+			}
+			res := &pb.Result{Id: call.GetId()}
+			if fail {
+				res.Outcome = &pb.Result_Error{Error: &pb.ApiError{Code: 8, Message: "too many"}}
+			} else {
+				b, _ := proto.Marshal(&pb.OpenDirectChannelResponse{Channel: &pb.Channel{Id: "dm"}})
+				res.Outcome = &pb.Result_Payload{Payload: b}
+			}
+			f.send(&pb.Down{Frame: &pb.Down_Result{Result: res}})
+		}
+	})
+	c, err := Dial(context.Background(), Options{URL: url, Token: "b_token"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = c.Close() }()
+	if ch, err := c.OpenDirect(context.Background(), "team", "ann"); err != nil || ch.GetId() != "dm" {
+		t.Fatalf("opened %v: %v", ch, err)
+	}
+	var e *Error
+	if _, err := c.OpenDirect(context.Background(), "team", "ann"); !errors.As(err, &e) || e.Code != 8 {
+		t.Fatalf("a refusal: %v", err)
+	}
+}

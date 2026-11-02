@@ -295,3 +295,72 @@ func TestPushLeavesBotsOut(t *testing.T) {
 		t.Fatalf("handed %+v", p)
 	}
 }
+
+func TestABotWritesInTheConversationItOpened(t *testing.T) {
+	person, bot := ids.New(), ids.New()
+	// opened is the conversation, its members as the directory writes
+	// those of one a bot opens.
+	opened := func(list blockList) *channel {
+		a, _ := blockChannel(t, models.ChannelDirect, list, person, bot)
+		members := []*models.ChannelMember{
+			{ChannelID: a.id, UserID: bot, TeamID: a.ch.TeamID, Bot: true, BotSeesAll: true},
+			{ChannelID: a.id, UserID: person, TeamID: a.ch.TeamID},
+		}
+		if err := a.loadBots(context.Background(), members); err != nil {
+			t.Fatal(err)
+		}
+		a.snapshot()
+		return a
+	}
+	a := opened(nil)
+	seen := &pushes{}
+	a.Updates = a.Engine.SpawnFunc(func(c *actor.Context) {
+		if p, ok := c.Message().(updates.Push); ok {
+			seen.mu.Lock()
+			seen.got = append(seen.got, p)
+			seen.mu.Unlock()
+		}
+	}, "updates")
+	pushed := make(chan push.Posted, 4)
+	a.Push = a.Engine.SpawnFunc(func(c *actor.Context) {
+		if p, ok := c.Message().(push.Posted); ok {
+			pushed <- p
+		}
+	}, "push")
+	post := func(p *models.Principal, text string) error {
+		_, err := a.post(Post{Target: Target{P: p, ChannelID: a.id}, Content: text})
+		return err
+	}
+	asBot := &models.Principal{UserID: bot, Role: models.SystemRoleUser, Bot: true}
+
+	// The bot's message is pushed to the person as any other.
+	if err := post(asBot, "stand up"); err != nil {
+		t.Fatal(err)
+	}
+	select {
+	case p := <-pushed:
+		if _, in := p.Members[person.String()]; !in || !p.Conversation {
+			t.Fatalf("pushed %+v", p)
+		}
+		if _, in := p.Members[bot.String()]; in {
+			t.Fatal("the bot was pushed its own message")
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("the bot's message was not pushed")
+	}
+	// It gets every message of it, and reads its history.
+	if err := post(&models.Principal{UserID: person, Role: models.SystemRoleUser}, "done"); err != nil {
+		t.Fatal(err)
+	}
+	if got := posts(t, seen.take(), bot); len(got) != 1 || got[0] != "done" {
+		t.Fatalf("the bot got %q", got)
+	}
+	if err := a.readsHistory(asBot); err != nil {
+		t.Fatalf("the bot reads its conversation: %v", err)
+	}
+	// Once the person blocks it, its posts stop.
+	a = opened(blockList{person: {bot}})
+	if err := post(asBot, "again"); ierrors.As(err).Message != ErrNotTaking.Message {
+		t.Fatalf("a bot the person blocked posted: %v", err)
+	}
+}
