@@ -199,6 +199,17 @@ func (c *Client) Call(ctx context.Context, method string, in, out proto.Message)
 	}
 }
 
+// OpenDirect opens the direct conversation with userID in teamID, such as
+// the team of a message the person posted. A conversation they have
+// already is found again.
+func (c *Client) OpenDirect(ctx context.Context, teamID, userID string) (*pb.Channel, error) {
+	res := &pb.OpenDirectChannelResponse{}
+	if err := c.Call(ctx, "gochat.v1.ChannelService/OpenDirectChannel", &pb.OpenDirectChannelRequest{TeamId: teamID, UserId: userID}, res); err != nil {
+		return nil, err
+	}
+	return res.Channel, nil
+}
+
 func (c *Client) call(ctx context.Context, method string, payload []byte) (*pb.Result, error) {
 	c.mu.Lock()
 	ready := c.ready

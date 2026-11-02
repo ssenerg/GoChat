@@ -116,6 +116,7 @@ services:
     invite_ttl: 168h
     max_invites: 100
     max_teams_per_day: 5
+    max_bot_conversations_per_hour: 30
   channels:
     idle_timeout: 10m
     op_timeout: 10s

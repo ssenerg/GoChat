@@ -41,6 +41,7 @@ var botMethods = map[string]string{
 	"listTeams":      "gochat.v1.TeamService/ListTeams",
 	"listChannels":   "gochat.v1.ChannelService/ListChannels",
 	"getChannel":     "gochat.v1.ChannelService/GetChannel",
+	"openDirect":     "gochat.v1.ChannelService/OpenDirectChannel",
 	"setWebhook":     "gochat.v1.BotService/SetWebhook",
 	"deleteWebhook":  "gochat.v1.BotService/DeleteWebhook",
 	"getWebhookInfo": "gochat.v1.BotService/GetWebhookInfo",

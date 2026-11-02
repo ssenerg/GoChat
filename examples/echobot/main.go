@@ -1,5 +1,6 @@
 // Command echobot is a small GoChat bot: /echo repeats what follows it under
-// a Thanks button, and /ping answers pong.
+// a Thanks button, /ping answers pong, and /remindme 10m stand up writes
+// "stand up" to whoever asked in a direct message ten minutes later.
 //
 //	GOCHAT_URL=https://chat.example.com GOCHAT_BOT_TOKEN=b_... go run ./examples/echobot
 //
@@ -17,6 +18,7 @@ import (
 	"strconv"
 	"strings"
 	"syscall"
+	"time"
 
 	pb "github.com/ssenerg/gochat/api/protobuf/gen/gochat/v1"
 	"github.com/ssenerg/gochat/pkg/gochat"
@@ -47,6 +49,7 @@ func run(ctx context.Context, url, token, state string) error {
 	err = c.Call(ctx, "gochat.v1.BotService/SetCommands", &pb.SetCommandsRequest{Commands: []*pb.BotCommand{
 		{Name: "echo", Description: "Repeat what follows"},
 		{Name: "ping", Description: "Answer pong"},
+		{Name: "remindme", Description: "Remind you in a direct message: /remindme 10m stand up"},
 	}}, &pb.SetCommandsResponse{})
 	if err != nil {
 		return err
@@ -75,7 +78,8 @@ func handle(ctx context.Context, c *gochat.Client, me *pb.User, u gochat.Update)
 		log.Print("updates were lost while the bot was away")
 		return nil
 	}
-	if m := u.Event.GetMessagePosted().GetMessage(); m != nil && m.GetAuthor().GetId() != me.GetId() {
+	posted := u.Event.GetMessagePosted()
+	if m := posted.GetMessage(); m != nil && m.GetAuthor().GetId() != me.GetId() {
 		name, args, ok := gochat.Command(m.Content, me.GetUsername())
 		if !ok {
 			return nil
@@ -92,6 +96,8 @@ func handle(ctx context.Context, c *gochat.Client, me *pb.User, u gochat.Update)
 			}}}}
 		case "ping":
 			reply.Content = "pong"
+		case "remindme":
+			reply.Content = remind(ctx, c, posted.GetTeamId(), m.GetAuthor().GetId(), args)
 		default:
 			return nil
 		}
@@ -102,6 +108,36 @@ func handle(ctx context.Context, c *gochat.Client, me *pb.User, u gochat.Update)
 		return c.Call(ctx, "gochat.v1.BotService/AnswerCallback", &pb.AnswerCallbackRequest{QueryId: q.Id, Text: text}, &pb.AnswerCallbackResponse{})
 	}
 	return nil
+}
+
+// maxRemind bounds how far off a reminder is: the bot keeps reminders in
+// memory, and a restart forgets them.
+const maxRemind = 24 * time.Hour
+
+// remind writes text to userID in their direct conversation in teamID once
+// the duration args start with is over, and answers what it set.
+func remind(ctx context.Context, c *gochat.Client, teamID, userID, args string) string {
+	when, text, _ := strings.Cut(args, " ")
+	d, err := time.ParseDuration(when)
+	text = strings.TrimSpace(text)
+	if err != nil || d <= 0 || d > maxRemind || text == "" {
+		return "Say when, up to 24h, and what: /remindme 10m stand up."
+	}
+	time.AfterFunc(d, func() {
+		if ctx.Err() != nil {
+			return
+		}
+		ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
+		defer cancel()
+		dm, err := c.OpenDirect(ctx, teamID, userID)
+		if err == nil {
+			err = c.Call(ctx, "gochat.v1.MessageService/PostMessage", &pb.PostMessageRequest{ChannelId: dm.GetId(), Content: text}, &pb.PostMessageResponse{})
+		}
+		if err != nil {
+			log.Printf("sending a reminder: %v", err)
+		}
+	})
+	return "I'll remind you in a direct message in " + d.String() + "."
 }
 
 func load(path string) int64 {

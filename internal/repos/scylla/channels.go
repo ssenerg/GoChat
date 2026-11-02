@@ -105,6 +105,15 @@ func (r *Repository) ClaimDirectKey(ctx context.Context, key string, id gocql.UU
 	return holder, nil
 }
 
+// DirectKeyHolder returns the conversation holding key, or NotFound.
+func (r *Repository) DirectKeyHolder(ctx context.Context, key string) (gocql.UUID, error) {
+	var id gocql.UUID
+	if err := r.query(ctx, "SELECT channel_id FROM direct_channels WHERE pair = ?", key).Scan(&id); err != nil {
+		return gocql.UUID{}, wrap(err)
+	}
+	return id, nil
+}
+
 // ConversationKey is the key of a team's conversation of the people a
 // conversation's name lists; those from before teams owned them have the
 // people alone.
