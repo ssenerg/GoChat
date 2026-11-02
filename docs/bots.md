@@ -10,6 +10,7 @@ the apps make. This guide takes a bot from nothing to production;
 - [Getting updates](#getting-updates)
 - [Commands](#commands)
 - [Buttons](#buttons)
+- [Writing to a person first](#writing-to-a-person-first)
 - [What a bot sees](#what-a-bot-sees)
 - [Errors](#errors)
 - [Limits](#limits)
@@ -30,8 +31,9 @@ the apps make. This guide takes a bot from nothing to production;
 4. The bot is in no channel yet. In each channel it should work in, open
    **Members → Add people** and find the bot. Anyone may add it to a public
    channel; a private channel's admins only. The bot may also join a public
-   channel of its teams itself, with `ChannelService/JoinChannel`, and
-   people in its teams may write to it directly.
+   channel of its teams itself, with `ChannelService/JoinChannel`. People in
+   its teams may write to it directly, and it may
+   [write to them first](#writing-to-a-person-first).
 
 Whoever holds the token acts as the bot. Keep it out of code and
 repositories; hand it to the program in its environment or a secret store,
@@ -282,6 +284,41 @@ its `callback_data`, the message and the person who pressed it, `from`:
 - `editMessage` replaces a message's buttons: send them again to keep them,
   and leave `markup` out to remove them. A reply's edit takes its `root_id`.
 
+## Writing to a person first
+
+For reminders, alerts and notices, `openDirect` opens the bot's direct
+conversation with a person of one of its teams, and the bot posts there as
+in any channel:
+
+```sh
+curl -sS -X POST "$GOCHAT_URL/api/v2/bot/openDirect" \
+  -H "Authorization: Bearer $GOCHAT_BOT_TOKEN" -H "Content-Type: application/json" \
+  -d '{"team_id": "e04f3c5f-...", "user_id": "8976d5b8-..."}'
+```
+
+```json
+{"ok":true,"result":{"channel":{"id":"f50011f8-...","type":"CHANNEL_TYPE_DIRECT",...}}}
+```
+
+Over the socket, `c.OpenDirect(ctx, teamID, userID)` does the same. The
+team is often that of a message the person posted, its `message_posted`'s
+`team_id`, and the person its author: echobot's `/remindme 10m stand up`
+writes back that way.
+
+- The person is an active member of the team, as the bot is, or the call
+  answers 404. A person who blocked the bot refuses it with 403, and the
+  bot's posts in a conversation they have with it fail the same way.
+- A bot opens no group conversation and none with another bot.
+- A bot opens up to 30 new conversations an hour; past that the call
+  answers 429. Opening one that exists already, whoever opened it, costs
+  nothing and returns it.
+- The person sees it as any direct conversation, with the bot's badge, and
+  may mute it, block the bot, or delete it for themselves. The bot receives
+  every message of it.
+
+Write to people who asked for it, or who expect it: a bot that writes
+uninvited gets blocked.
+
 ## What a bot sees
 
 A bot starts in **privacy mode**. From its channels it receives:
@@ -357,6 +394,7 @@ These are the defaults; a server's operator may change them.
 | `getUpdates` | waits at most 50 seconds; at most 100 updates |
 | A webhook | 10 seconds to answer (`services.bots.webhook_timeout`); retries up to 5 minutes apart (`webhook_retry_max`) |
 | Updates kept | a week (`services.updates.retention`) |
+| New direct conversations | 30 an hour per bot (`services.directory.max_bot_conversations_per_hour`) |
 | Bots | 20 per owner (`services.bots.max_per_owner`) |
 
 A bot that makes calls in bursts over the socket paces them itself:
@@ -367,12 +405,11 @@ A bot that makes calls in bursts over the socket paces them itself:
 Bots make only the calls of
 [the table in protocol.md](protocol.md#what-bots-may-call); any other
 answers 404, `bots cannot make this call`, over HTTP and code 12 over the
-socket. Among those it cannot make: creating channels or teams, adding
-people to them, inviting, pinning, saving, searching, pressing buttons,
-managing bots, and anything of `AdminService` or `SafetyService`. It deletes
-and removes link previews of its own messages only, and `ListMessages` and
-`ListThread` need `sees_all`. A bot cannot start a conversation with a
-person: people write to it first.
+socket. Among those it cannot make: creating channels, teams or group
+conversations, adding people to them, inviting, pinning, saving, searching,
+pressing buttons, managing bots, and anything of `AdminService` or
+`SafetyService`. It deletes and removes link previews of its own messages
+only, and `ListMessages` and `ListThread` need `sees_all`.
 
 ## Running a bot
 
@@ -444,6 +481,6 @@ before, it is lost: choose by what the bot does twice more safely.
 
 | | Updates | Language | Shows |
 | --- | --- | --- | --- |
-| [echobot](../examples/echobot) | the socket | Go, `pkg/gochat` | commands, a button and its answer, keeping `pts` |
+| [echobot](../examples/echobot) | the socket | Go, `pkg/gochat` | commands, a button and its answer, writing to a person first, keeping `pts` |
 | [dicebot](../examples/dicebot) | `getUpdates` | Python 3, standard library | commands and `@bot` addressing, a button that edits its message |
 | [webhookbot](../examples/webhookbot) | a webhook | Go | checking the secret, answering 2xx, calling the HTTP Bot API |
