@@ -17,6 +17,7 @@ import (
 	"github.com/ssenerg/gochat/internal/authz"
 	"github.com/ssenerg/gochat/internal/core/ids"
 	"github.com/ssenerg/gochat/internal/core/models"
+	"github.com/ssenerg/gochat/internal/core/window"
 	ierrors "github.com/ssenerg/gochat/internal/errors"
 	"github.com/ssenerg/gochat/internal/repos/scylla"
 	"github.com/ssenerg/gochat/internal/services/blocks"
@@ -47,6 +48,16 @@ func (f *teamsRepo) person(name string) gocql.UUID {
 	id := ids.New()
 	f.users[id] = &models.User{ID: id, Username: name, Role: models.SystemRoleUser}
 	return id
+}
+
+func (f *teamsRepo) bot(name string) gocql.UUID {
+	id := f.person(name)
+	f.users[id].Bot = true
+	return id
+}
+
+func botPrincipal(id gocql.UUID) *models.Principal {
+	return &models.Principal{UserID: id, Role: models.SystemRoleUser, Bot: true}
 }
 
 // join puts people in a team, as of when.
@@ -109,6 +120,15 @@ func (f *teamsRepo) ClaimDirectKey(_ context.Context, key string, id gocql.UUID)
 	}
 	f.keys[key] = id
 	return id, nil
+}
+
+func (f *teamsRepo) DirectKeyHolder(_ context.Context, key string) (gocql.UUID, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if holder, ok := f.keys[key]; ok {
+		return holder, nil
+	}
+	return gocql.UUID{}, ierrors.NotFound("not found")
 }
 
 func (f *teamsRepo) CreateDirectChannel(ctx context.Context, key string, ch *models.Channel, members []*models.ChannelMember) (gocql.UUID, error) {
@@ -218,6 +238,7 @@ func newTeamsWorker(t *testing.T, repo *teamsRepo) (*worker, *channelLog) {
 	return &worker{Deps: &Deps{
 		Logger: zap.NewNop(), Cfg: &Config{OpTimeout: time.Second}, Repo: repo, Authz: az,
 		Users: users.NewCache(repo, 100, time.Minute), Engine: engine, Hub: sink, Channels: chans,
+		botOpened: window.New(30, time.Hour),
 	}}, log
 }
 
@@ -552,5 +573,111 @@ func TestBlockedPeopleOpenNoConversation(t *testing.T) {
 	}
 	if err := other(carol, me, dan); !ierrors.Is(err, ierrors.CodePermissionDenied) {
 		t.Fatalf("carol put me, who blocked her, in a group: %v", err)
+	}
+}
+
+func TestABotOpensADirectConversation(t *testing.T) {
+	repo := newTeamsRepo()
+	bot, other := repo.bot("helper_bot"), repo.bot("other_bot")
+	me, bob, carol, gone, deleted := repo.person("me"), repo.person("bob"), repo.person("carol"), repo.person("gone"), repo.person("deleted")
+	repo.users[gone].Deactivated = true
+	repo.users[deleted].Deactivated, repo.users[deleted].DeletedAt = true, time.Now()
+	acme, beta := ids.New(), ids.New()
+	repo.join(acme, time.Now(), bot, other, me, bob, gone, deleted)
+	repo.join(beta, time.Now(), me, carol)
+	w, _ := newTeamsWorker(t, repo)
+	// Bob blocked the bot.
+	w.Blocks = blocks.NewCache(blockList{bob: {bot}}, 10, 10, time.Minute)
+	ctx := context.Background()
+	open := func(team gocql.UUID, people ...gocql.UUID) (*pb.Channel, error) {
+		raw := make([]string, len(people))
+		for i, id := range people {
+			raw[i] = id.String()
+		}
+		return w.openGroup(ctx, OpenGroup{P: botPrincipal(bot), TeamID: team.String(), UserIDs: raw})
+	}
+	ch, err := w.openDirect(ctx, OpenDirect{P: botPrincipal(bot), TeamID: acme.String(), UserID: me.String()})
+	if err != nil {
+		t.Fatal(err)
+	}
+	dm := repo.channels[idOf(ch.Id)]
+	if dm.Kind != models.ChannelDirect || dm.TeamID != acme || dm.CreatedBy != bot {
+		t.Fatalf("the bot opened %+v", dm)
+	}
+	// The bot gets every message of it; the person is a person.
+	for _, m := range repo.members[dm.ID] {
+		if want := m.UserID == bot; m.Bot != want || m.BotSeesAll != want {
+			t.Fatalf("member %s: bot %v, sees all %v", repo.users[m.UserID].Username, m.Bot, m.BotSeesAll)
+		}
+	}
+	if again, err := open(acme, me); err != nil || again.Id != ch.Id {
+		t.Fatalf("opening it again: %v, %v", again, err)
+	}
+
+	for name, tc := range map[string]struct {
+		team   gocql.UUID
+		people []gocql.UUID
+		code   ierrors.Code
+	}{
+		"a group":                     {acme, []gocql.UUID{me, bob}, ierrors.CodeInvalidArgument},
+		"another bot":                 {acme, []gocql.UUID{other}, ierrors.CodeInvalidArgument},
+		"someone outside the team":    {acme, []gocql.UUID{carol}, ierrors.CodeNotFound},
+		"a team the bot is not in":    {beta, []gocql.UUID{carol}, ierrors.CodeNotFound},
+		"a deactivated person":        {acme, []gocql.UUID{gone}, ierrors.CodeNotFound},
+		"a deleted person":            {acme, []gocql.UUID{deleted}, ierrors.CodeNotFound},
+		"someone who blocked the bot": {acme, []gocql.UUID{bob}, ierrors.CodePermissionDenied},
+	} {
+		if _, err := open(tc.team, tc.people...); !ierrors.Is(err, tc.code) {
+			t.Errorf("%s: %v, want code %d", name, err, tc.code)
+		}
+	}
+	if _, err := open(acme, bob); ierrors.As(err).Message != channels.ErrNotTaking.Message {
+		t.Fatalf("someone who blocked the bot: %v", err)
+	}
+	// People still open theirs with a bot.
+	if _, err := w.openDirect(ctx, OpenDirect{P: principal(me), TeamID: acme.String(), UserID: other.String()}); err != nil {
+		t.Fatalf("a person's conversation with a bot: %v", err)
+	}
+}
+
+func TestBotConversationsAreLimited(t *testing.T) {
+	repo := newTeamsRepo()
+	bot, other := repo.bot("helper_bot"), repo.bot("other_bot")
+	ann, bob, cat := repo.person("ann"), repo.person("bob"), repo.person("cat")
+	acme := ids.New()
+	repo.join(acme, time.Now(), bot, other, ann, bob, cat)
+	w, _ := newTeamsWorker(t, repo)
+	w.botOpened = window.New(2, time.Hour)
+	ctx := context.Background()
+	open := func(p *models.Principal, to gocql.UUID) error {
+		_, err := w.openDirect(ctx, OpenDirect{P: p, TeamID: acme.String(), UserID: to.String()})
+		return err
+	}
+	for _, to := range []gocql.UUID{ann, bob} {
+		if err := open(botPrincipal(bot), to); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := open(botPrincipal(bot), cat); !ierrors.Is(err, ierrors.CodeResourceExhausted) {
+		t.Fatalf("a new conversation past the limit: %v", err)
+	}
+	// One it has already is free, one the person opened too.
+	if err := open(botPrincipal(bot), ann); err != nil {
+		t.Fatalf("an existing conversation past the limit: %v", err)
+	}
+	if err := open(principal(cat), bot); err != nil {
+		t.Fatal(err)
+	}
+	if err := open(botPrincipal(bot), cat); err != nil {
+		t.Fatalf("a conversation the person opened: %v", err)
+	}
+	// Each bot has its own allowance, and people none.
+	if err := open(botPrincipal(other), ann); err != nil {
+		t.Fatalf("another bot: %v", err)
+	}
+	for _, to := range []gocql.UUID{bob, cat} {
+		if err := open(principal(ann), to); err != nil {
+			t.Fatalf("a person: %v", err)
+		}
 	}
 }

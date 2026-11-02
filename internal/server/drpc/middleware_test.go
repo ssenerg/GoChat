@@ -87,13 +87,16 @@ func TestBotsMakeOnlyTheirCalls(t *testing.T) {
 		ctx := drpcmetadata.AddPairs(context.Background(), map[string]string{MetaGatewayKey: key, MetaSession: token})
 		return guard.HandleRPC(&metaStream{ctx: ctx}, rpc)
 	}
-	for _, rpc := range []string{"/gochat.v1.MessageService/PostMessage", "/gochat.v1.UpdatesService/GetDifference", "/gochat.v1.BotService/AnswerCallback"} {
+	for _, rpc := range []string{
+		"/gochat.v1.MessageService/PostMessage", "/gochat.v1.UpdatesService/GetDifference", "/gochat.v1.BotService/AnswerCallback",
+		"/gochat.v1.ChannelService/OpenDirectChannel",
+	} {
 		if err := call("bot", rpc); err != nil || !reached {
 			t.Errorf("a bot's %s: %v", rpc, err)
 		}
 	}
 	for _, rpc := range []string{
-		"/gochat.v1.MessageService/SearchMessages", "/gochat.v1.ChannelService/OpenDirectChannel", "/gochat.v1.TeamService/CreateInvite",
+		"/gochat.v1.MessageService/SearchMessages", "/gochat.v1.ChannelService/OpenGroupChannel", "/gochat.v1.TeamService/CreateInvite",
 		"/gochat.v1.AuthService/ChangePassword", "/gochat.v1.UpdatesService/GetChannelDifference", "/gochat.v1.BotService/CreateBot",
 		"/gochat.v1.MessageService/PressButton", "/gochat.v1.SafetyService/BlockUser", "/gochat.v1.SafetyService/Report",
 		"/gochat.v1.SafetyService/ListReports", "/gochat.v1.SafetyService/CountReports",
