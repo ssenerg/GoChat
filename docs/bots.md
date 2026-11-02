@@ -58,10 +58,10 @@ curl -sS -X POST "$GOCHAT_URL/api/v2/bot/getMe" \
 {"ok":true,"result":{"user":{"id":"bc3bd805-...","username":"weather_bot","display_name":"Weather","bot":true,"bot_owner_id":"8976d5b8-...",...},"session_id":"9703494b..."}}
 ```
 
-To post, the bot needs a channel's id. It comes in the bot's `channel_joined`
-update when someone adds it, from `listChannels {"team_id": "..."}`, which
-lists the channels the bot is in, and in the channel's address on the web,
-`/t/<team>/ch/<id>`.
+To post, the bot needs a channel's id. The bot's `channel_joined` update
+carries it when someone adds the bot, `listChannels {"team_id": "..."}`
+lists the channels the bot is in, and the channel's address on the web ends
+in it: `/t/<team>/ch/<id>`.
 
 ```sh
 curl -sS -X POST "$GOCHAT_URL/api/v2/bot/sendMessage" \
@@ -423,12 +423,13 @@ way until it has the new token.
 
 **Reconnect with backoff and jitter.** `pkg/gochat` does it: it waits up
 to half a second at first, twice as long after each failure up to 30
-seconds, and starts over after a connection that lasted a minute. The server also closes a bot's socket every day, when
-its session renews, and the client reconnects. A client of the protocol of
-your own follows the close codes of [protocol.md](protocol.md#connecting). A
-polling bot backs off on network failures, 5xx and 409, waits out
-`Retry-After` on 429, and stops on 401. A webhook's retries are the
-server's: the receiver needs only to come back.
+seconds, and starts over after a connection that lasted a minute. The
+server also closes a bot's socket every day, when its session renews, and
+the client reconnects. A client of the protocol of your own follows the
+close codes of [protocol.md](protocol.md#connecting). A polling bot backs
+off on network failures, 5xx and 409, waits out `Retry-After` on 429, and
+stops on 401. A webhook's retries are the server's: the receiver needs only
+to come back.
 
 **Keep the last `pts`.** With `getUpdates` or a webhook the server keeps it.
 Over the socket the bot does: after handling each update with a number,
