@@ -10,6 +10,7 @@ import (
 	"github.com/ssenerg/gochat/internal/core/ids"
 	"github.com/ssenerg/gochat/internal/core/models"
 	"github.com/ssenerg/gochat/internal/core/secure"
+	ierrors "github.com/ssenerg/gochat/internal/errors"
 )
 
 func TestBotsLive(t *testing.T) {
@@ -86,5 +87,21 @@ func TestBotsLive(t *testing.T) {
 	}
 	if got, _ := r.GetMessage(ctx, ch, m.ID); len(got.Markup) != 0 {
 		t.Fatal("the buttons stayed")
+	}
+}
+
+func TestDirectKeyHolderLive(t *testing.T) {
+	r := liveRepository(t)
+	ctx := context.Background()
+	key := ConversationKey(ids.New(), ids.New().String()+":"+ids.New().String())
+	if _, err := r.DirectKeyHolder(ctx, key); !ierrors.Is(err, ierrors.CodeNotFound) {
+		t.Fatalf("an unclaimed key: %v", err)
+	}
+	id := ids.New()
+	if got, err := r.ClaimDirectKey(ctx, key, id); err != nil || got != id {
+		t.Fatalf("claimed %v, %v", got, err)
+	}
+	if got, err := r.DirectKeyHolder(ctx, key); err != nil || got != id {
+		t.Fatalf("the key's holder %v, %v", got, err)
 	}
 }

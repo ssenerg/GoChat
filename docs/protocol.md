@@ -249,7 +249,8 @@ A bot connects as a person does, with its token in the hello, and receives
 **everything in its account's sequence**: a bot keeps one number and asks
 for nothing else. Its owner adds it to teams they may invite people to;
 then people add it to channels as they add anyone (a private channel's
-admins only), and anyone in its teams may write to it directly.
+admins only), and anyone in its teams may write to it directly. A bot may
+also [write to a person first](#writing-to-a-person-first).
 
 ### What a bot receives
 
@@ -279,13 +280,34 @@ leaves a team's `town-square`, so a bot keeps its mode there for good.
 | `AuthService` | `Me` |
 | `UserService` | `GetUser`, `UpdateProfile` |
 | `TeamService` | `ListTeams`, `GetTeam`, `ListTeamMembers` |
-| `ChannelService` | `ListChannels`, `GetChannel`, `ListChannelMembers`, `JoinChannel`, `LeaveChannel` |
+| `ChannelService` | `ListChannels`, `GetChannel`, `ListChannelMembers`, `JoinChannel`, `LeaveChannel`, `OpenDirectChannel` |
 | `MessageService` | `PostMessage`, `EditMessage`, `DeleteMessage` (its own), `GetMessage`, `ListMessages` and `ListThread` (with `sees_all`), `SendTyping`, `React`, `RemoveLinkPreview` (its own) |
 | `UpdatesService` | `GetState`, `GetDifference` |
 | `BotService` | `SetCommands`, `GetCommands`, `AnswerCallback`, `SetWebhook`, `DeleteWebhook`, `GetWebhookInfo`, `ConfirmUpdates` |
 | `FileService` | uploads and downloads, at `/api/v2/files` |
 
 Any other call answers code 12.
+
+### Writing to a person first
+
+`ChannelService.OpenDirectChannel` with `team_id` and `user_id` opens the
+bot's direct conversation with a person, for reminders, alerts and
+notices; the bot then posts in it as in any channel. The person is an
+active member of the team, as the bot is, or the call answers code 5,
+which is also the answer for a deactivated or deleted account. A person
+who blocked the bot refuses it with code 7, in the words of a refused
+post. A bot opens no group conversation, and none with another bot
+(code 3).
+
+A bot opens up to 30 new conversations an hour, as the server's
+`services.directory.max_bot_conversations_per_hour` sets; past that the
+call answers code 8. Opening a conversation that exists already, one the
+bot opened or the person did, costs nothing and returns it.
+
+The person sees the conversation as any other direct one, with the bot's
+Bot badge. They may mute it, block the bot, which stops its posts there,
+or delete it for themselves. The bot receives every message of it, as of
+all its direct conversations.
 
 ### Commands
 
@@ -347,6 +369,7 @@ refused before they reach the Bot API: 429 with `Retry-After` and an
 | `setCommands` / `getCommands` | `BotService/SetCommands` / `GetCommands` |
 | `listTeams` | `TeamService/ListTeams` |
 | `listChannels` / `getChannel` | `ChannelService/ListChannels` / `GetChannel` |
+| `openDirect` | `ChannelService/OpenDirectChannel` |
 | `setWebhook` / `deleteWebhook` / `getWebhookInfo` | `BotService/...` |
 
 Any call of the [table above](#what-bots-may-call) may also be made by its

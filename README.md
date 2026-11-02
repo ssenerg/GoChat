@@ -132,7 +132,8 @@ specifies it.
   that only the owner sees, once. The owner adds it to a team, and channel
   members add it to channels. Unless it is set to see every message, a bot
   gets commands (`/echo hi`), mentions of it, replies in its threads and its
-  direct messages.
+  direct messages. A bot may write to a person in its teams first, in a
+  direct conversation, for reminders and alerts.
 - A bot's commands show in the composer as people type `/`, and its messages
   may carry buttons: a press reaches the bot as a `CallbackQuery`, and its
   answer shows to the person who pressed.
@@ -725,7 +726,9 @@ Secrets that should come from the environment:
 `services.updates` sets how long the update logs keep updates (`retention`,
 a week by default), and `services.bots` how many bots a person may own and
 how webhooks are delivered. Webhooks go only to public addresses unless
-`services.bots.allow_private_webhooks` is set, for development.
+`services.bots.allow_private_webhooks` is set, for development. A bot opens
+up to `services.directory.max_bot_conversations_per_hour` new direct
+conversations an hour, 30 by default.
 
 `services.previews` sets link previews: `enabled` (on by default), the
 fetch limits, and `allow_hosts` and `deny_hosts`, host names that cover
@@ -817,10 +820,11 @@ The end-to-end suite in [test/e2e](test/e2e) drives a running stack through the
 web gateway: invites, real-time delivery, typing, attachments, voice messages
 and their channel setting, voice channels (with Pion peers that talk through
 the voice server), the client API the apps use, bots (commands, buttons,
-catching up after a restart, the HTTP Bot API and token resets through
-[pkg/gochat](pkg/gochat)), link previews (none for a private address; with
-`GOCHAT_E2E_PREVIEW_URL` set to a public page, its card and picture),
-private channel isolation, CSRF, TOTP with recovery codes, session
+writing to a person first, catching up after a restart, the HTTP Bot API
+and token resets through [pkg/gochat](pkg/gochat)), link previews (none for
+a private address; with `GOCHAT_E2E_PREVIEW_URL` set to a public page, its
+card and picture), private channel isolation, CSRF, TOTP with recovery
+codes, session
 revocation, deactivation and storage quotas. It needs an existing admin account and team, or with
 `GOCHAT_E2E_BOOTSTRAP=1` and the server's token in `GOCHAT_E2E_SETUP_TOKEN`
 creates them on a fresh server:

@@ -36,8 +36,8 @@ var streaming = map[string]bool{
 }
 
 // botCalls are the calls open to bots: reading and writing in the
-// channels they are in, about themselves, and their updates. Any other is
-// refused, whatever its own checks.
+// channels they are in, opening direct conversations, about themselves,
+// and their updates. Any other is refused, whatever its own checks.
 var botCalls = map[string]bool{
 	"/gochat.v1.AuthService/Me":                    true,
 	"/gochat.v1.UserService/GetUser":               true,
@@ -50,6 +50,7 @@ var botCalls = map[string]bool{
 	"/gochat.v1.ChannelService/ListChannelMembers": true,
 	"/gochat.v1.ChannelService/JoinChannel":        true,
 	"/gochat.v1.ChannelService/LeaveChannel":       true,
+	"/gochat.v1.ChannelService/OpenDirectChannel":  true,
 	"/gochat.v1.MessageService/PostMessage":        true,
 	"/gochat.v1.MessageService/EditMessage":        true,
 	"/gochat.v1.MessageService/DeleteMessage":      true,

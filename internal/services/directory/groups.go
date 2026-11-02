@@ -40,7 +40,8 @@ func (w *worker) openDirect(ctx context.Context, msg OpenDirect) (*pb.Channel, e
 // openGroup opens the conversation of the caller and the people they chose
 // in a team they all belong to: a direct one with one person, a group one
 // with more. The same people find the same conversation in a team, and
-// another one in each other team.
+// another one in each other team. A bot opens direct conversations with
+// people alone, and only so many new ones an hour.
 func (w *worker) openGroup(ctx context.Context, msg OpenGroup) (*pb.Channel, error) {
 	if !w.Authz.Can(authz.ObjDirect, authz.ActCreate, string(msg.P.Role)) {
 		return nil, ierrors.PermissionDenied()
@@ -64,15 +65,20 @@ func (w *worker) openGroup(ctx context.Context, msg OpenGroup) (*pb.Channel, err
 		return nil, ierrors.InvalidArgument("pick someone to talk to")
 	case len(members) > maxGroup:
 		return nil, ierrors.InvalidArgument("a group conversation holds at most 8 people")
+	case msg.P.Bot && len(members) > 2:
+		return nil, ierrors.InvalidArgument("bots are not part of group conversations")
 	}
 	if _, err := w.membership(ctx, teamID, msg.P.UserID); err != nil {
 		return nil, err
 	}
-	bots := map[gocql.UUID]bool{}
+	bots := map[gocql.UUID]bool{msg.P.UserID: msg.P.Bot}
 	for _, id := range members[1:] {
 		bot, err := w.reachable(ctx, teamID, id)
 		if err != nil {
 			return nil, err
+		}
+		if bot && msg.P.Bot {
+			return nil, ierrors.InvalidArgument("bots do not open conversations with bots")
 		}
 		bots[id] = bot
 		if err := w.mayReach(ctx, msg.P.UserID, id, kindOf(len(members))); err != nil {
@@ -97,9 +103,18 @@ func (w *worker) openGroup(ctx context.Context, msg OpenGroup) (*pb.Channel, err
 		// A bot sees everything of a conversation it is in.
 		cms[i] = &models.ChannelMember{ChannelID: ch.ID, UserID: id, TeamID: teamID, Role: models.ChannelRoleMember, JoinedAt: now, Bot: bots[id], BotSeesAll: bots[id]}
 	}
-	chID, err := w.Repo.CreateDirectChannel(ctx, scylla.ConversationKey(teamID, ch.Name), ch, cms)
+	key := scylla.ConversationKey(teamID, ch.Name)
+	if msg.P.Bot {
+		if err := w.botMayOpen(ctx, msg.P.UserID, key); err != nil {
+			return nil, err
+		}
+	}
+	chID, err := w.Repo.CreateDirectChannel(ctx, key, ch, cms)
 	if err != nil {
 		return nil, err
+	}
+	if msg.P.Bot && chID == ch.ID {
+		w.botOpened.Add(msg.P.UserID.String())
 	}
 	target := channels.Target{P: msg.P, ChannelID: chID}
 	if chID != ch.ID {
@@ -122,6 +137,20 @@ func (w *worker) openGroup(ctx context.Context, msg OpenGroup) (*pb.Channel, err
 		}
 	}
 	return view, nil
+}
+
+// botMayOpen refuses bot the conversation of key once it opened its new
+// ones for the hour; one it has already is free.
+func (w *worker) botMayOpen(ctx context.Context, bot gocql.UUID, key string) error {
+	if !w.botOpened.Blocked(bot.String()) {
+		return nil
+	}
+	if _, err := w.Repo.DirectKeyHolder(ctx, key); err == nil {
+		return nil
+	} else if !ierrors.Is(err, ierrors.CodeNotFound) {
+		return err
+	}
+	return ierrors.ResourceExhausted("the bot opened too many conversations this hour, try again later")
 }
 
 // kindOf is the kind of a conversation of n people.

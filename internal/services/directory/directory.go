@@ -74,6 +74,7 @@ type Repo interface {
 	CreateChannel(ctx context.Context, ch *models.Channel, creator *models.ChannelMember) error
 	CreateDirectChannel(ctx context.Context, key string, ch *models.Channel, members []*models.ChannelMember) (gocql.UUID, error)
 	ClaimDirectKey(ctx context.Context, key string, id gocql.UUID) (gocql.UUID, error)
+	DirectKeyHolder(ctx context.Context, key string) (gocql.UUID, error)
 	ChannelsAfter(ctx context.Context, after gocql.UUID, limit int) ([]*models.Channel, error)
 	ListChannelMembers(ctx context.Context, channelID gocql.UUID) ([]*models.ChannelMember, error)
 	GetState(ctx context.Context, key string) (string, error)
@@ -110,6 +111,8 @@ type Deps struct {
 	Blocks  *blocks.Cache
 	invited *window.Counter
 	created *window.Counter
+	// botOpened counts the new conversations each bot opens.
+	botOpened *window.Counter
 	// teamLocks serializes the changes that could leave a team without an
 	// admin.
 	teamLocks *keylock.Locks
@@ -124,6 +127,7 @@ var defaultChannels = []struct{ name, display, purpose string }{
 func Pool(d *Deps) actor.Producer {
 	d.invited = window.New(d.Cfg.MaxInvites, d.Cfg.InviteTTL)
 	d.created = window.New(d.Cfg.MaxTeamsPerDay, 24*time.Hour)
+	d.botOpened = window.New(d.Cfg.MaxBotConversationsPerHour, time.Hour)
 	d.teamLocks = keylock.New()
 	return actors.NewPool(d.Cfg.Workers, func() actor.Receiver { return &worker{Deps: d} },
 		actor.WithMiddleware(actors.Recover(d.Logger)))

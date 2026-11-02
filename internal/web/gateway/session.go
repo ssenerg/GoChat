@@ -788,6 +788,15 @@ func (s *session) mentioned(channelID string) {
 	s.fragment("badge", map[string]any{"ID": channelID, "Count": s.mentions[channelID], "OOB": true})
 }
 
+// joined notes a direct conversation of the team the user was brought
+// into, such as one a bot opens to write at once, so that its first
+// message notifies before the sidebar shows it.
+func (s *session) joined(ch *pb.Channel) {
+	if ch.GetType() == pb.ChannelType_CHANNEL_TYPE_DIRECT && ch.GetTeamId() == s.teamID && s.directs != nil {
+		s.directs[ch.GetId()] = true
+	}
+}
+
 // direct reports whether a sidebar channel is a direct conversation.
 func (s *session) direct(channelID string) bool {
 	return s.directs[channelID]
@@ -975,6 +984,7 @@ func (s *session) event(c *actor.Context, ev *pb.Event) {
 		time.AfterFunc(typingLinger, func() { engine.Send(self, clearTyping{channelID: ch, seq: seq}) })
 	case *pb.Event_ChannelJoined:
 		if s.teamID != "" {
+			s.joined(p.ChannelJoined.Channel)
 			s.loadSidebar(c, true)
 		}
 	case *pb.Event_ChannelLeft:

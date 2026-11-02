@@ -764,3 +764,23 @@ func testBlockedPeoplePushNothing(t *testing.T, copied bool) {
 		t.Fatalf("cat's mention pushed to %v", got)
 	}
 }
+
+func TestABotsDirectMessagePushesAsAPersons(t *testing.T) {
+	f := newFixture(t)
+	bot, ann := f.person("helper_bot"), f.person("ann")
+	f.user(bot).Bot = true
+	f.register(ann, pb.PushPlatform_PUSH_PLATFORM_FCM, fcmToken("ann"))
+	m := message(f.user(bot), ids.New(), "stand up")
+	m.Author.Bot = true
+	// A channel's members leave its bots out.
+	dm := Posted{Message: m, TeamID: ids.New(), Conversation: true, Members: members(ann)}
+	f.post(dm)
+	if got := f.fcm.take(); len(got) != 1 || got[0].token != fcmToken("ann") || got[0].n.Body != "stand up" {
+		t.Fatalf("a bot's direct message pushed %+v", got)
+	}
+	f.deps.Blocks = blocks.NewCache(blockList{ann.UserID: {bot.UserID}}, 10, 10, time.Minute)
+	f.post(dm)
+	if got := tokens(f.fcm.take()); len(got) != 0 {
+		t.Fatalf("a bot ann blocked pushed to %v", got)
+	}
+}
