@@ -1,11 +1,14 @@
 package e2e
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
 	"net/http"
 	"net/url"
+	"os"
+	"os/exec"
 	"regexp"
 	"strings"
 	"testing"
@@ -293,6 +296,36 @@ func testBots(t *testing.T, admin *client, adminWS *socket, teamID, town string,
 		if !found {
 			t.Fatal("getUpdates never had the message")
 		}
+	})
+
+	step("the Python example bot", func(t *testing.T) {
+		python, err := exec.LookPath("python3")
+		if err != nil {
+			t.Skip("no python3")
+		}
+		pctx, stop := context.WithCancel(ctx)
+		var out bytes.Buffer
+		cmd := exec.CommandContext(pctx, python, "-u", "../../examples/dicebot/dicebot.py")
+		cmd.Env = append(os.Environ(), "GOCHAT_URL="+baseURL, "GOCHAT_BOT_TOKEN="+token)
+		cmd.Stdout, cmd.Stderr = &out, &out
+		if err := cmd.Start(); err != nil {
+			t.Fatal(err)
+		}
+		defer func() {
+			stop()
+			_ = cmd.Wait()
+			if t.Failed() {
+				t.Logf("the bot's output:\n%s", out.String())
+			}
+		}()
+		adminWS.send(map[string]string{"op": "post", "channel_id": town, "content": "/roll@" + name + " 20"})
+		f := adminWS.expect(20*time.Second, "d20: ", `data-press="roll:20"`, `badge bot`)
+		m := msgIDRe.FindStringSubmatch(f)
+		if m == nil {
+			t.Fatalf("no message id in %s", f)
+		}
+		adminWS.send(map[string]string{"op": "press", "channel_id": town, "message_id": m[1], "data": "roll:20"})
+		adminWS.expect(10*time.Second, "toast", "Rolled again.")
 	})
 
 	step("resetting the token stops the bot", func(t *testing.T) {

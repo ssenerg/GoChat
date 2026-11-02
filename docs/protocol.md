@@ -101,8 +101,11 @@ or an `ApiError`:
 | 16 | Unauthenticated |
 
 Ids are the client's to choose, unique among its calls in flight. Results
-come in any order. A socket has at most 32 calls in flight; more wait
-their turn. Calls spend the session's request budget, as the HTTP API's do.
+come in any order. A socket has at most 32 calls in flight, and up to 256
+more wait their turn; past that the server closes it with 4009. A client
+sends at most 10 frames a second, in bursts of 40: faster, and the server
+closes the socket with 1008. Calls spend the session's request budget, as
+the HTTP API's do.
 
 People may make the unary calls the apps make over `/api/v1` (see
 [`internal/web/api.go`](../internal/web/api.go)), plus `UpdatesService` and
@@ -229,6 +232,8 @@ message. A bot opts its own messages out with `no_link_preview`.
 
 ## Bots
 
+[bots.md](bots.md) walks through building one, with examples.
+
 A bot is an account a person owns. People make bots in the web's settings,
 or with `BotService.CreateBot`, which answers the bot and its token once:
 
@@ -259,9 +264,14 @@ By default a bot is in **privacy mode** and receives, from its channels:
 - `CallbackQuery` when someone presses a button of its messages;
 - `ChannelJoined` and `ChannelLeft` as it is added to channels and removed.
 
+It also receives `TeamJoined` and `TeamLeft` as it joins and leaves teams.
+In privacy mode it reads only what it was sent: `GetMessage` of another
+message answers code 5, and `ListMessages` and `ListThread` code 7.
+
 With `sees_all` on (`UpdateBot`), a bot added to a channel from then on
 receives every message there and may read its history. A channel keeps
-what the bot had when it was added; add it again to change it.
+what the bot had when it was added; add it again to change it. No one
+leaves a team's `town-square`, so a bot keeps its mode there for good.
 
 ### What bots may call
 
@@ -271,7 +281,7 @@ what the bot had when it was added; add it again to change it.
 | `UserService` | `GetUser`, `UpdateProfile` |
 | `TeamService` | `ListTeams`, `GetTeam`, `ListTeamMembers` |
 | `ChannelService` | `ListChannels`, `GetChannel`, `ListChannelMembers`, `JoinChannel`, `LeaveChannel`, `OpenDirectChannel` |
-| `MessageService` | `PostMessage`, `EditMessage`, `DeleteMessage` (its own), `GetMessage`, `ListMessages`, `ListThread` (with `sees_all`), `SendTyping`, `React`, `RemoveLinkPreview` (its own) |
+| `MessageService` | `PostMessage`, `EditMessage`, `DeleteMessage` (its own), `GetMessage`, `ListMessages` and `ListThread` (with `sees_all`), `SendTyping`, `React`, `RemoveLinkPreview` (its own) |
 | `UpdatesService` | `GetState`, `GetDifference` |
 | `BotService` | `SetCommands`, `GetCommands`, `AnswerCallback`, `SetWebhook`, `DeleteWebhook`, `GetWebhookInfo`, `ConfirmUpdates` |
 | `FileService` | uploads and downloads, at `/api/v2/files` |
@@ -338,8 +348,12 @@ proto field names), and the answer is always JSON:
 
 ```json
 {"ok": true, "result": { ... }}
-{"ok": false, "error_code": 7, "description": "permission denied"}
+{"ok": false, "error_code": 403, "description": "permission denied"}
 ```
+
+`error_code` is the answer's HTTP status. Calls over the request budget are
+refused before they reach the Bot API: 429 with `Retry-After` and an
+`ApiError`, `{"code": 8, "message": "too many requests, slow down"}`.
 
 | Method | Call |
 | --- | --- |
