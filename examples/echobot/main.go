@@ -120,7 +120,13 @@ func save(path string, pts int64) {
 	if path == "" {
 		return
 	}
-	if err := os.WriteFile(path, []byte(strconv.FormatInt(pts, 10)), 0o600); err != nil {
+	// Renamed over the old, the file never holds half a number.
+	tmp := path + ".tmp"
+	if err := os.WriteFile(tmp, []byte(strconv.FormatInt(pts, 10)), 0o600); err != nil {
+		log.Printf("saving the state: %v", err)
+		return
+	}
+	if err := os.Rename(tmp, path); err != nil {
 		log.Printf("saving the state: %v", err)
 	}
 }

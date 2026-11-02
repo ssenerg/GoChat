@@ -149,6 +149,11 @@ it:
 GOCHAT_URL=http://localhost:8080 GOCHAT_BOT_TOKEN=b_... go run ./examples/echobot -state echobot.pts
 ```
 
+[docs/bots.md](docs/bots.md) is the guide to building bots: making one,
+the three ways to get updates, commands and buttons, limits, and running
+one in production. Its examples include a Python bot that long-polls with
+nothing but the standard library, and a webhook bot.
+
 ### Client API for native apps
 
 The [mobile apps](mobile) speak [the GoChat protocol](docs/protocol.md)
@@ -831,8 +836,8 @@ api/protobuf/      protobuf sources and generated protobuf + DRPC code
 cmd/               cobra commands and embedded default configs
 config/            configs for host runs and for the Docker stack
 deployments/       Dockerfile and compose files
-docs/              the GoChat protocol's specification
-examples/          bots built on pkg/gochat
+docs/              the GoChat protocol's specification and the bots guide
+examples/          bots: over the socket, long polling and a webhook
 internal/actors    ask, pools and middleware on top of hollywood
 internal/app       wiring of the server and web processes
 internal/authz     casbin model and enforcer
