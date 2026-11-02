@@ -6,16 +6,22 @@ import gochat.v1.CallbackAnswer
 import gochat.v1.Channel
 import gochat.v1.ChannelCommand
 import gochat.v1.Event
+import gochat.v1.GetStorageUsageResponse
 import gochat.v1.Message
 import gochat.v1.Reaction
 import gochat.v1.ReportAction
 import gochat.v1.ReportReason
+import gochat.v1.SSOIdentity
+import gochat.v1.SSOProvider
+import gochat.v1.SessionInfo
 import gochat.v1.Status
 import gochat.v1.Team
 import gochat.v1.User
 import gochat.v1.VoiceChannelState
 import io.github.ssenerg.gochat.core.api.ApiException
 import io.github.ssenerg.gochat.core.api.GoChatApi
+import io.github.ssenerg.gochat.core.api.Pkce
+import io.github.ssenerg.gochat.core.api.normalizeServerUrl
 import io.github.ssenerg.gochat.core.api.userMessage
 import io.github.ssenerg.gochat.core.model.Format
 import io.github.ssenerg.gochat.core.model.displayName
@@ -34,6 +40,7 @@ import io.github.ssenerg.gochat.core.socket.Socket
 import io.github.ssenerg.gochat.core.socket.SocketEvent
 import io.github.ssenerg.gochat.core.voice.RtcEngine
 import io.github.ssenerg.gochat.core.voice.VoiceCall
+import io.ktor.http.encodeURLParameter
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.CoroutineStart
@@ -106,6 +113,9 @@ data class Notice(val title: String, val body: String, val channelId: String, va
 
 /** A bot's answer to a button the person pressed: a passing notice, or an [alert] to dismiss. */
 data class BotAnswer(val bot: String, val text: String, val alert: Boolean)
+
+/** The accounts at providers the person signs in with, and whether a password signs them in too. */
+data class SignIns(val linked: List<SSOIdentity>, val hasPassword: Boolean)
 
 /**
  * A signed-in person's session: it loads their teams and channels, keeps
@@ -666,6 +676,67 @@ class ChatSession internal constructor(
             if (socket.connection.value is Connection.SignedOut) onSignedOut("Your session ended. Sign in again.")
             e.userMessage()
         }
+    }
+
+    // Sessions, sign-ins and storage, for Settings.
+
+    /** Where the person is signed in, the most recently seen first. */
+    suspend fun sessions(): List<SessionInfo> = api.sessions()
+
+    /** Signs one of the person's other sessions out. Returns why not, or null. */
+    suspend fun revokeSession(id: String): String? = act { api.revokeSession(id) }
+
+    /** Signs out every session but this one. Returns why not, or null. */
+    suspend fun revokeOtherSessions(): String? = act { api.revokeOtherSessions() }
+
+    /** The accounts at providers linked to the person's, and whether it has a password too. */
+    suspend fun signIns(): SignIns {
+        val me = api.me()
+        return SignIns(api.ssoIdentities(), me.has_password)
+    }
+
+    /** The providers the server signs in with; none when it has none or cannot say. */
+    suspend fun ssoProviders(): List<SSOProvider> = try {
+        api.ssoProviders()
+    } catch (e: CancellationException) {
+        throw e
+    } catch (e: Exception) {
+        emptyList()
+    }
+
+    /** Unlinks an account at a provider. Returns why not, or null. */
+    suspend fun unlinkSso(id: SSOIdentity): String? = act { api.unlinkSso(id.issuer, id.subject) }
+
+    /** The page that links an account at [provider] in the browser, for the app holding [pkce]'s verifier. */
+    internal suspend fun linkPage(provider: String, pkce: Pkce): String {
+        val ticket = try {
+            api.beginSsoLink(provider, pkce.challenge)
+        } catch (e: ApiException) {
+            // A server from before apps could link.
+            if (e.code == ApiException.UNIMPLEMENTED) throw ApiException(e.code, "This server links accounts in Settings on the web.")
+            throw e
+        }
+        return "${normalizeServerUrl(api.client.baseUrl)}/login/sso/${provider.encodeURLParameter()}" +
+            "?app=${pkce.challenge}&link=${ticket.encodeURLParameter()}"
+    }
+
+    /** Links the account a link in the browser came back with, given the verifier it began with. */
+    internal suspend fun linkSso(code: String, verifier: String): SsoLink = try {
+        val res = api.linkSso(code, verifier)
+        SsoLink.Linked(res.provider_name, res.email)
+    } catch (e: CancellationException) {
+        throw e
+    } catch (e: Exception) {
+        if (e is ApiException && e.isUnauthenticated) onSignedOut("Your session ended. Sign in again.")
+        SsoLink.Failed(e.userMessage())
+    }
+
+    /** The space the person's files take, or null from a server that does not tell apps. */
+    suspend fun storageUsage(): GetStorageUsageResponse? = try {
+        api.storageUsage()
+    } catch (e: ApiException) {
+        if (e.code != ApiException.UNIMPLEMENTED) throw e
+        null
     }
 
     /** Takes the person out of a team, its channels and conversations; returns why not, or null. */

@@ -9,7 +9,6 @@ import (
 
 	pb "github.com/ssenerg/gochat/api/protobuf/gen/gochat/v1"
 	"github.com/ssenerg/gochat/internal/core/models"
-	"github.com/ssenerg/gochat/internal/core/secure"
 	ierrors "github.com/ssenerg/gochat/internal/errors"
 	"github.com/ssenerg/gochat/internal/services/convert"
 	"github.com/ssenerg/gochat/internal/services/hub"
@@ -127,8 +126,7 @@ func (w *worker) reauthenticate(ctx context.Context, msg DeleteAccount) (*models
 		return nil, err
 	}
 	// A ticket is spent either way, so a stolen one is no use to guess with.
-	v := msg.SSOVerifier
-	if t.UserID != user.ID || (t.Challenge != "" && (len(v) < 43 || len(v) > 128 || !secure.Equal(s256(v), t.Challenge))) {
+	if t.UserID != user.ID || (t.Challenge != "" && !verifies(msg.SSOVerifier, t.Challenge)) {
 		w.Logger.Warn("sso reauth refused", zap.String("user", user.ID.String()))
 		return nil, errSSOExpired
 	}

@@ -20,6 +20,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlin.io.encoding.Base64
 import kotlin.io.encoding.ExperimentalEncodingApi
@@ -61,6 +62,13 @@ sealed interface Reauth {
     data class Proof(val code: String, val verifier: String) : Reauth
 
     data class Failed(val reason: String) : Reauth
+}
+
+/** What linking an account at a provider in the browser came to. */
+sealed interface SsoLink {
+    data class Linked(val provider: String, val email: String) : SsoLink
+
+    data class Failed(val reason: String) : SsoLink
 }
 
 /**
@@ -116,6 +124,11 @@ class GoChatApp(
 
     /** What the last sign-in again came back with, until [reauthUsed]. */
     val reauth: StateFlow<Reauth?> = _reauth.asStateFlow()
+
+    private val _link = MutableStateFlow<SsoLink?>(null)
+
+    /** What the last link in the browser came to, until [linkSeen]. */
+    val link: StateFlow<SsoLink?> = _link.asStateFlow()
 
     private val signOuts = SignOuts(store, scope) { server, token ->
         val api = api(server, token)
@@ -278,6 +291,9 @@ class GoChatApp(
         val url = normalizeServerUrl(server)
         val pkce = Pkce.create()
         store.put(KEY_SSO, url + "\n" + pkce.verifier)
+        // Whatever the last session left waiting is no more.
+        store.put(KEY_REAUTH, null)
+        store.put(KEY_LINK, null)
         val token = inviteToken(invite)
         return "$url/login/sso/${provider.encodeURLParameter()}?app=${pkce.challenge}" +
             if (token.isEmpty()) "" else "&invite=${token.encodeURLParameter()}"
@@ -291,6 +307,7 @@ class GoChatApp(
      */
     fun reauthUrl(provider: String, server: String = session?.api?.client?.baseUrl.orEmpty()): String {
         val pkce = Pkce.create()
+        store.put(KEY_LINK, null)
         store.put(KEY_REAUTH, pkce.verifier)
         _reauth.value = null
         return "${normalizeServerUrl(server)}/login/sso/${provider.encodeURLParameter()}?app=${pkce.challenge}&reauth=1"
@@ -313,9 +330,50 @@ class GoChatApp(
         }
     }
 
-    /** Finishes a sign-in the browser came back from at [callback]; signed in, it was a sign-in again. */
+    /**
+     * The page that links an account at [provider] to the signed-in
+     * person's, in the system browser. It comes back to [SSO_REDIRECT], for
+     * [ssoReturned], which links it from this session and says so in
+     * [link]. Throws when the server does not begin it.
+     */
+    suspend fun linkUrl(provider: String): String {
+        val s = session ?: throw ApiException(ApiException.UNAUTHENTICATED, "Sign in again.")
+        val pkce = Pkce.create()
+        val url = s.linkPage(provider, pkce)
+        store.put(KEY_REAUTH, null)
+        store.put(KEY_LINK, pkce.verifier)
+        _link.value = null
+        return url
+    }
+
+    /** The screen showed what [link] held. */
+    fun linkSeen() {
+        _link.value = null
+    }
+
+    /** Links what a link in the browser came back with, from the session that began it. */
+    internal fun linkReturned(ret: SsoReturn) {
+        val verifier = store.get(KEY_LINK) ?: return
+        store.put(KEY_LINK, null)
+        val code = ret.code
+        if (ret.error != null || code == null) {
+            _link.value = SsoLink.Failed(ret.error.orEmpty().replaceFirstChar { it.uppercase() }.ifEmpty { "The sign-in failed." })
+            return
+        }
+        scope.launch {
+            // An app that restarted meanwhile links once its session is back.
+            val s = (state.first { it !is AppState.Starting } as? AppState.SignedIn)?.session ?: return@launch
+            _link.value = s.linkSso(code, verifier)
+        }
+    }
+
+    /** Finishes a sign-in the browser came back from at [callback]; signed in, it was a sign-in again or a link. */
     fun ssoReturned(callback: String) {
         val ret = parseSsoReturn(callback, SSO_REDIRECT) ?: return
+        if (store.get(KEY_LINK) != null) {
+            linkReturned(ret)
+            return
+        }
         // A sign-in again, though the app may have restarted since it began.
         if (_state.value is AppState.SignedIn || store.get(KEY_REAUTH) != null) {
             reauthReturned(ret)
@@ -414,7 +472,9 @@ class GoChatApp(
         session = null
         s.stop()
         store.put(KEY_REAUTH, null)
+        store.put(KEY_LINK, null)
         _reauth.value = null
+        _link.value = null
         if (!keepToken) {
             store.put(KEY_TOKEN, null)
             store.put(KEY_ME, null)
@@ -434,6 +494,7 @@ class GoChatApp(
         private const val KEY_PTS = ChatSession.KEY_PTS
         private const val KEY_SSO = "sso"
         private const val KEY_REAUTH = "sso_reauth"
+        private const val KEY_LINK = "sso_link"
 
         /** The scheme the apps claim, where a sign-in in the browser comes back. */
         const val SSO_SCHEME = "io.github.ssenerg.gochat"

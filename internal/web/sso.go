@@ -110,7 +110,8 @@ func (h *Handler) ssoFailed(w http.ResponseWriter, r *http.Request, f ssoFlow, s
 }
 
 // ssoStart sends the browser to the provider. With ?app=, the S256
-// challenge of an app's verifier, it comes back to the app.
+// challenge of an app's verifier, it comes back to the app; with ?link=
+// too, BeginSSOLink's ticket, to link an account to the app's.
 func (h *Handler) ssoStart(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("provider")
 	if !providerIDRe.MatchString(id) {
@@ -125,7 +126,9 @@ func (h *Handler) ssoStart(w http.ResponseWriter, r *http.Request) {
 	ctx, cancel := h.client.Context(r.Context(), h.anonymousCtx(r))
 	defer cancel()
 	// An app signing in again, to delete its account, asks with reauth.
-	res, err := h.client.Auth.BeginSSO(ctx, &pb.BeginSSORequest{ProviderId: id, RedirectUri: h.cfg.PublicURL + ssoCallback, AppChallenge: q.Get("app"), Reauth: q.Has("reauth")})
+	res, err := h.client.Auth.BeginSSO(ctx, &pb.BeginSSORequest{
+		ProviderId: id, RedirectUri: h.cfg.PublicURL + ssoCallback, AppChallenge: q.Get("app"), Reauth: q.Has("reauth"), LinkTicket: q.Get("link"),
+	})
 	if err != nil {
 		e := drpc.Err(err)
 		if e.Code == ierrors.CodeNotFound && !f.App {

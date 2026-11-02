@@ -169,6 +169,11 @@ func s256(verifier string) string {
 	return base64.RawURLEncoding.EncodeToString(sum[:])
 }
 
+// verifies reports whether verifier is a PKCE verifier of challenge.
+func verifies(verifier, challenge string) bool {
+	return len(verifier) >= 43 && len(verifier) <= 128 && secure.Equal(s256(verifier), challenge)
+}
+
 func (w *worker) beginSSO(ctx context.Context, msg BeginSSO) (*SSOStart, error) {
 	p, err := w.sso.get(msg.Provider)
 	if err != nil {
@@ -187,9 +192,27 @@ func (w *worker) beginSSO(ctx context.Context, msg BeginSSO) (*SSOStart, error) 
 	if msg.Reauth && msg.P == nil && msg.AppChallenge == "" {
 		return nil, ierrors.InvalidArgument("signing in again needs a session or an app")
 	}
+	if msg.LinkTicket != "" && (msg.AppChallenge == "" || msg.Reauth) {
+		return nil, ierrors.InvalidArgument("invalid link ticket")
+	}
 	op, err := p.discover(ctx)
 	if err != nil {
 		return nil, err
+	}
+	var linkUser gocql.UUID
+	if msg.P != nil {
+		linkUser = msg.P.UserID
+	}
+	if msg.LinkTicket != "" {
+		t, err := w.takeTicket(ctx, msg.LinkTicket, models.SSOTicketLinkStart)
+		if err != nil {
+			return nil, err
+		}
+		// Spent either way, so it is no use to guess a challenge with.
+		if t.Provider != p.cfg.ID || !secure.Equal(t.Challenge, msg.AppChallenge) {
+			return nil, errSSOExpired
+		}
+		linkUser = t.UserID
 	}
 	state, nonce, verifier := secure.Token(), secure.Token(), oauth2.GenerateVerifier()
 	now := time.Now().UTC()
@@ -201,11 +224,9 @@ func (w *worker) beginSSO(ctx context.Context, msg BeginSSO) (*SSOStart, error) 
 		AppChallenge: msg.AppChallenge,
 		ExpiresAt:    now.Add(w.Cfg.SSO.FlowTTL),
 		Reauth:       msg.Reauth,
+		LinkUser:     linkUser,
 	}
 	f.Verifier = w.sealer.Seal([]byte(verifier), f.StateHash)
-	if msg.P != nil {
-		f.LinkUser = msg.P.UserID
-	}
 	if err := w.Repo.CreateSSOFlow(ctx, f, now); err != nil {
 		return nil, err
 	}
@@ -322,6 +343,18 @@ func (w *worker) finishSSO(ctx context.Context, msg FinishSSO) (*SSOResult, erro
 		return w.reauthed(ctx, p, f, id, msg.P, out)
 	}
 	if !ids.IsZero(f.LinkUser) {
+		// An app's link waits for the app, which makes it from its session;
+		// the browser's own session, if any, has no say.
+		if f.AppChallenge != "" {
+			if known && userID != f.LinkUser {
+				return nil, errLinkedElsewhere(p.cfg.Name)
+			}
+			out.AppCode, err = w.ticket(ctx, &models.SSOTicket{
+				Kind: models.SSOTicketAppLink, UserID: f.LinkUser, Challenge: f.AppChallenge,
+				Provider: p.cfg.ID, Issuer: id.Issuer, Subject: id.Subject, Email: id.Email,
+			}, ssoTicketTTL)
+			return out, err
+		}
 		if msg.P == nil || msg.P.UserID != f.LinkUser {
 			return nil, ierrors.New(ierrors.CodePermissionDenied, "sign in to the account you were linking, then link it again")
 		}
@@ -350,7 +383,7 @@ func (w *worker) finishSSO(ctx context.Context, msg FinishSSO) (*SSOResult, erro
 		// An account with the email links only once its owner signs in.
 		if taken {
 			if f.AppChallenge != "" {
-				return nil, ierrors.FailedPrecondition("an account has this email: sign in with its password once, then link " + p.cfg.Name + " in Settings on the web")
+				return nil, ierrors.FailedPrecondition("an account has this email: sign in with its password once, then link " + p.cfg.Name + " in Settings")
 			}
 			out.LinkToken, err = w.ticket(ctx, &models.SSOTicket{Kind: models.SSOTicketLink, Provider: p.cfg.ID, Issuer: id.Issuer, Subject: id.Subject, Email: c.Email}, w.Cfg.SSO.FlowTTL)
 			return out, err
@@ -622,7 +655,7 @@ func (w *worker) redeemSSO(ctx context.Context, msg RedeemSSO) (*LoginResult, er
 		return nil, err
 	}
 	// The code is spent either way, so a stolen one is no use to guess with.
-	if len(msg.Verifier) < 43 || len(msg.Verifier) > 128 || !secure.Equal(s256(msg.Verifier), t.Challenge) {
+	if !verifies(msg.Verifier, t.Challenge) {
 		w.Logger.Warn("sso code redeemed without its verifier", zap.String("user", t.UserID.String()), zap.String("ip", msg.IP))
 		return nil, errSSOExpired
 	}
@@ -653,13 +686,44 @@ func (w *worker) getSSOLink(ctx context.Context, msg GetSSOLink) (*SSOLinkInfo, 
 	return &SSOLinkInfo{Provider: w.sso.name(t.Issuer, t.Provider), Email: t.Email}, nil
 }
 
+// beginSSOLink lets an app link an identity to P's account in a browser,
+// which has no session: the ticket names P and the app's challenge, so
+// only that app, signed in as P, links what the browser comes back with.
+func (w *worker) beginSSOLink(ctx context.Context, msg BeginSSOLink) (string, error) {
+	if msg.P.Bot {
+		return "", ierrors.PermissionDenied()
+	}
+	p, err := w.sso.get(msg.Provider)
+	if err != nil {
+		return "", err
+	}
+	if !validChallenge(msg.AppChallenge) {
+		return "", ierrors.InvalidArgument("invalid app challenge")
+	}
+	return w.ticket(ctx, &models.SSOTicket{Kind: models.SSOTicketLinkStart, UserID: msg.P.UserID, Challenge: msg.AppChallenge, Provider: p.cfg.ID}, ssoTicketTTL)
+}
+
 func (w *worker) linkSSO(ctx context.Context, msg LinkSSO) (*SSOLinkInfo, error) {
 	if msg.P.Bot {
 		return nil, ierrors.PermissionDenied()
 	}
-	t, err := w.takeTicket(ctx, msg.Token, models.SSOTicketLink)
+	kind := models.SSOTicketLink
+	if msg.Verifier != "" {
+		kind = models.SSOTicketAppLink
+	}
+	t, err := w.takeTicket(ctx, msg.Token, kind)
 	if err != nil {
 		return nil, err
+	}
+	if kind == models.SSOTicketAppLink {
+		// The code is spent either way, so a stolen one is no use to guess with.
+		if !verifies(msg.Verifier, t.Challenge) {
+			w.Logger.Warn("sso link redeemed without its verifier", zap.String("user", msg.P.UserID.String()))
+			return nil, errSSOExpired
+		}
+		if t.UserID != msg.P.UserID {
+			return nil, ierrors.New(ierrors.CodePermissionDenied, "sign in to the account you were linking, then link it again")
+		}
 	}
 	id := &models.SSOIdentity{Issuer: t.Issuer, Subject: t.Subject, Provider: t.Provider, Email: t.Email}
 	if owner, err := w.Repo.GetSSOIdentity(ctx, id.Issuer, id.Subject); err == nil {
@@ -724,6 +788,11 @@ func (w *worker) unlinkSSO(ctx context.Context, msg UnlinkSSO) (Done, error) {
 	if err != nil {
 		return Done{}, err
 	}
+	unlock, err := w.unlinks.Lock(ctx, userID.String())
+	if err != nil {
+		return Done{}, ierrors.Unavailable("busy, try again")
+	}
+	defer unlock()
 	list, err := w.Repo.ListUserSSOIdentities(ctx, userID)
 	if err != nil {
 		return Done{}, err

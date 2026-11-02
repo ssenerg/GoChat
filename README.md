@@ -179,6 +179,10 @@ With single sign-on they list the providers with `ListSSOProviders`, open
 `/login/sso/<provider>?app=<S256 challenge>` in the system browser, which
 comes back to `io.github.ssenerg.gochat:/sso?code=` (or `?error=`), and
 trade the code and their PKCE verifier for a session with `RedeemSSO`.
+Signed in, they link another provider account the same way: `BeginSSOLink`
+gives a ticket for `&link=`, and `LinkSSO` takes the code with the
+verifier. They list and revoke their sessions, and read their storage use
+with `FileService/GetStorageUsage`.
 Their sessions show in the web's session list by the device the app names
 in its User-Agent, such as "GoChat app on Pixel 8", and are revoked there
 like any other; each session has its own request budget.
@@ -412,6 +416,17 @@ that carry what people post.
     scheme with a code that lasts two minutes, works once, and only with
     the PKCE verifier the app began with, so another app claiming the
     scheme gets nothing of use.
+  - An app links an account at a provider from that browser too, though
+    the browser has no session. `BeginSSOLink`, called with the app's
+    session, gives a ticket naming the person and the app's PKCE
+    challenge; the browser starts the flow with both, and the flow
+    remembers the person. The code it comes back with links nothing on
+    its own: `LinkSSO` links it from that person's session with the
+    verifier. The ticket and the code each work once, for two minutes; an
+    account at the provider linked to someone else is refused before any
+    code is made, whoever is signed in in the browser.
+  - Unlinks of an account are serialized, so two at once cannot take an
+    account without a password past its last provider account.
 - Invites: one-time, expiring links; only the token hash is stored and it is
   consumed with a lightweight transaction. Team admins see the open invites
   and can revoke them; an invite is suspended while its creator may not

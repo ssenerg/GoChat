@@ -32,7 +32,8 @@ func (s *authService) ListSSOProviders(ctx context.Context, _ *pb.ListSSOProvide
 
 func (s *authService) BeginSSO(ctx context.Context, req *pb.BeginSSORequest) (*pb.BeginSSOResponse, error) {
 	start, err := actors.Ask[*accounts.SSOStart](ctx, s.sys.Engine, s.sys.Accounts, accounts.BeginSSO{
-		Provider: req.ProviderId, RedirectURI: req.RedirectUri, AppChallenge: req.AppChallenge, Reauth: req.Reauth, P: optionalPrincipal(ctx),
+		Provider: req.ProviderId, RedirectURI: req.RedirectUri, AppChallenge: req.AppChallenge, LinkTicket: req.LinkTicket,
+		Reauth: req.Reauth, P: optionalPrincipal(ctx),
 	})
 	if err != nil {
 		return nil, err
@@ -87,6 +88,18 @@ func (s *authService) RedeemSSO(ctx context.Context, req *pb.RedeemSSORequest) (
 	return &pb.RedeemSSOResponse{Result: &pb.RedeemSSOResponse_Session{Session: res.Session}}, nil
 }
 
+func (s *authService) BeginSSOLink(ctx context.Context, req *pb.BeginSSOLinkRequest) (*pb.BeginSSOLinkResponse, error) {
+	p, err := Principal(ctx)
+	if err != nil {
+		return nil, err
+	}
+	ticket, err := actors.Ask[string](ctx, s.sys.Engine, s.sys.Accounts, accounts.BeginSSOLink{P: p, Provider: req.ProviderId, AppChallenge: req.AppChallenge})
+	if err != nil {
+		return nil, err
+	}
+	return &pb.BeginSSOLinkResponse{Ticket: ticket}, nil
+}
+
 func (s *authService) GetSSOLink(ctx context.Context, req *pb.GetSSOLinkRequest) (*pb.GetSSOLinkResponse, error) {
 	info, err := actors.Ask[*accounts.SSOLinkInfo](ctx, s.sys.Engine, s.sys.Accounts, accounts.GetSSOLink{Token: req.LinkToken})
 	if err != nil {
@@ -100,7 +113,7 @@ func (s *authService) LinkSSO(ctx context.Context, req *pb.LinkSSORequest) (*pb.
 	if err != nil {
 		return nil, err
 	}
-	info, err := actors.Ask[*accounts.SSOLinkInfo](ctx, s.sys.Engine, s.sys.Accounts, accounts.LinkSSO{P: p, Token: req.LinkToken})
+	info, err := actors.Ask[*accounts.SSOLinkInfo](ctx, s.sys.Engine, s.sys.Accounts, accounts.LinkSSO{P: p, Token: req.LinkToken, Verifier: req.Verifier})
 	if err != nil {
 		return nil, err
 	}

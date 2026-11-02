@@ -11,7 +11,8 @@ import (
 )
 
 func TestSSOGatewayCallsAreClosedToApps(t *testing.T) {
-	for _, m := range []string{"BeginSSO", "FinishSSO", "GetSSOLink", "LinkSSO"} {
+	// Apps link with BeginSSOLink and then LinkSSO, from their session.
+	for _, m := range []string{"BeginSSO", "FinishSSO", "GetSSOLink"} {
 		if _, ok := apiMethods["gochat.v1.AuthService/"+m]; ok {
 			t.Errorf("%s is open to apps", m)
 		}
@@ -21,7 +22,7 @@ func TestSSOGatewayCallsAreClosedToApps(t *testing.T) {
 			t.Errorf("anonymous call %s is not a call", full)
 		}
 	}
-	if !apiLimited["gochat.v1.AuthService/RedeemSSO"] {
+	if !apiLimited["gochat.v1.AuthService/RedeemSSO"] || !apiLimited["gochat.v1.AuthService/LinkSSO"] {
 		t.Error("redeeming a code is not on the sign-in budget")
 	}
 }

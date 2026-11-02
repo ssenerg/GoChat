@@ -142,12 +142,20 @@ type SSOProviderInfo struct{ ID, Name string }
 
 // BeginSSO starts a sign-in at a provider, which comes back to RedirectURI.
 // P, when set, links the identity to P's account instead; AppChallenge
-// hands the sign-in to the app holding its PKCE verifier. Reauth only
-// proves who signs in, for DeleteAccount.
+// hands the sign-in to the app holding its PKCE verifier, and LinkTicket
+// makes it that app's link. Reauth only proves who signs in, for
+// DeleteAccount.
 type BeginSSO struct {
-	Provider, RedirectURI, AppChallenge string
-	Reauth                              bool
-	P                                   *models.Principal
+	Provider, RedirectURI, AppChallenge, LinkTicket string
+	Reauth                                          bool
+	P                                               *models.Principal
+}
+
+// BeginSSOLink replies with the ticket an app begins linking an identity
+// to P's account with, in a browser that has no session.
+type BeginSSOLink struct {
+	P                      *models.Principal
+	Provider, AppChallenge string
 }
 
 type SSOStart struct{ URL, State string }
@@ -192,11 +200,11 @@ type GetSSOLink struct{ Token string }
 
 type SSOLinkInfo struct{ Provider, Email string }
 
-// LinkSSO links the identity of a link token to the caller's account and
-// replies with the *SSOLinkInfo.
+// LinkSSO links the identity of a link token, or of an app's code with its
+// Verifier, to the caller's account and replies with the *SSOLinkInfo.
 type LinkSSO struct {
-	P     *models.Principal
-	Token string
+	P               *models.Principal
+	Token, Verifier string
 }
 
 // ListSSOIdentities replies with the []*pb.SSOIdentity of the caller, or

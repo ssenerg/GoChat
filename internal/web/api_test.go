@@ -24,7 +24,8 @@ func TestAPICallsAreUnaryCallsOfPeopleServices(t *testing.T) {
 	}
 	for full := range apiMethods {
 		svc := strings.SplitN(full, "/", 2)[0]
-		if svc == "gochat.v1.GatewayService" || svc == "gochat.v1.VoiceServerService" || svc == "gochat.v1.FileService" {
+		if svc == "gochat.v1.GatewayService" || svc == "gochat.v1.VoiceServerService" ||
+			(svc == "gochat.v1.FileService" && full != "gochat.v1.FileService/GetStorageUsage") {
 			t.Errorf("%s belongs to gateways or the file endpoints", full)
 		}
 	}
