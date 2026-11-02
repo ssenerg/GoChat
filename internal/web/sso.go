@@ -1,6 +1,7 @@
 package web
 
 import (
+	"html/template"
 	"net/http"
 	"net/url"
 	"regexp"
@@ -22,7 +23,8 @@ const (
 	// reauthTTL is how long the server takes a sign-in again.
 	reauthTTL = 5 * time.Minute
 	// appRedirect is where an app's sign-in comes back: a scheme the apps
-	// claim, which then redeem the code with their PKCE verifier.
+	// claim, which then redeem the code with their PKCE verifier. Any app
+	// may claim it, so a code goes only once the person says so.
 	appRedirect = "io.github.ssenerg.gochat:/sso"
 	ssoCallback = "/login/sso/callback"
 )
@@ -95,15 +97,30 @@ func (h *Handler) ssoFlow(r *http.Request) (ssoFlow, bool) {
 	return f, true
 }
 
-// toApp sends an app's browser back to it, with the code or why not.
-func toApp(w http.ResponseWriter, r *http.Request, key, value string) {
-	http.Redirect(w, r, appRedirect+"?"+url.Values{key: {value}}.Encode(), http.StatusSeeOther)
+func appURL(key, value string) string {
+	return appRedirect + "?" + url.Values{key: {value}}.Encode()
+}
+
+// ssoAppData asks the person before an app gets its code: a link anyone
+// sends can begin an app's flow, and another app may claim the scheme.
+type ssoAppData struct {
+	Page
+	Use, Provider, Username, Email string
+	Href                           template.URL
+}
+
+func (h *Handler) ssoAppPage(w http.ResponseWriter, r *http.Request, res *pb.FinishSSOResponse, code string) {
+	use := map[pb.AppCodeUse]string{pb.AppCodeUse_APP_CODE_USE_LINK: "link", pb.AppCodeUse_APP_CODE_USE_REAUTH: "reauth"}[res.AppCodeUse]
+	h.page(w, r, http.StatusOK, "sso-app", ssoAppData{
+		Page: Page{Title: "Continue in the app"}, Use: use, Provider: res.ProviderName, Username: res.AppUsername, Email: res.Email,
+		Href: template.URL(appURL("code", code)), //nolint:gosec // the apps' scheme, with an escaped query
+	})
 }
 
 // ssoFailed shows why a sign-in failed, on the sign-in page or in the app.
 func (h *Handler) ssoFailed(w http.ResponseWriter, r *http.Request, f ssoFlow, status int, msg string) {
 	if f.App {
-		toApp(w, r, "error", msg)
+		http.Redirect(w, r, appURL("error", msg), http.StatusSeeOther)
 		return
 	}
 	h.page(w, r, status, "login", h.loginData(w, r, f.Next, msg))
@@ -198,7 +215,7 @@ func (h *Handler) ssoCallbackPage(w http.ResponseWriter, r *http.Request) {
 	}
 	switch out := res.Result.(type) {
 	case *pb.FinishSSOResponse_AppCode:
-		toApp(w, r, "code", out.AppCode)
+		h.ssoAppPage(w, r, res, out.AppCode)
 	case *pb.FinishSSOResponse_Session:
 		h.startSession(w, out.Session)
 		http.Redirect(w, r, h.afterSignIn(r, next), http.StatusSeeOther)

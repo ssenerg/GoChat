@@ -63,8 +63,10 @@ func (f *fakeAuth) FinishSSO(_ context.Context, req *pb.FinishSSORequest) (*pb.F
 		out.Result = &pb.FinishSSOResponse_Session{Session: f.newSession()}
 	case "link":
 		out.Result = &pb.FinishSSOResponse_LinkToken{LinkToken: strings.Repeat("L", 43)}
-	case "app":
+	case "app", "app-link", "app-reauth":
+		use := map[string]pb.AppCodeUse{"app": pb.AppCodeUse_APP_CODE_USE_SIGN_IN, "app-link": pb.AppCodeUse_APP_CODE_USE_LINK, "app-reauth": pb.AppCodeUse_APP_CODE_USE_REAUTH}[req.Code]
 		out.Result = &pb.FinishSSOResponse_AppCode{AppCode: "app-code"}
+		out.AppCodeUse, out.AppUsername, out.Email = use, "ann", "ann@corp.test"
 	default:
 		return nil, rpcErr(ierrors.CodePermissionDenied, "no account is linked")
 	}
@@ -158,6 +160,15 @@ func (b *browser) expect(w *httptest.ResponseRecorder, status int, location stri
 	b.t.Helper()
 	if w.Code != status || w.Header().Get("Location") != location {
 		b.t.Fatalf("got %d to %q, want %d to %q: %s", w.Code, w.Header().Get("Location"), status, location, w.Body.String())
+	}
+}
+
+// appPage checks the page that asks before an app gets its code.
+func (b *browser) appPage(w *httptest.ResponseRecorder, says string) {
+	b.t.Helper()
+	body := w.Body.String()
+	if w.Code != http.StatusOK || w.Header().Get("Location") != "" || !strings.Contains(body, `href="`+appRedirect+`?code=app-code"`) || !strings.Contains(body, says) {
+		b.t.Fatalf("got %d to %q, want the page saying %q: %s", w.Code, w.Header().Get("Location"), says, body)
 	}
 }
 
@@ -285,7 +296,9 @@ func TestSSOHandsTheCodeToTheApp(t *testing.T) {
 	if auth.begun[0].AppChallenge != challenge {
 		t.Fatalf("begin: %+v", auth.begun[0])
 	}
-	b.expect(b.do(http.MethodGet, ssoCallback+"?code=app&state="+state, nil), http.StatusSeeOther, appRedirect+"?code=app-code")
+	// A link anyone sends can begin an app's sign-in, so the code waits
+	// for the person to say it is theirs.
+	b.appPage(b.do(http.MethodGet, ssoCallback+"?code=app&state="+state, nil), "Sign in to the GoChat app as <strong>@ann</strong> with your Corp ID account <strong>ann@corp.test</strong>?")
 	state = b.toProvider("/login/sso/corp?app=" + challenge)
 	b.expect(b.do(http.MethodGet, ssoCallback+"?code=nobody&state="+state, nil), http.StatusSeeOther, appRedirect+"?error=no+account+is+linked")
 	if b.cookies["gochat_session"] != nil {
@@ -297,5 +310,5 @@ func TestSSOHandsTheCodeToTheApp(t *testing.T) {
 	if got := auth.begun[len(auth.begun)-1]; got.AppChallenge != challenge || got.LinkTicket != ticket || got.Reauth {
 		t.Fatalf("begin: %+v", got)
 	}
-	b.expect(b.do(http.MethodGet, ssoCallback+"?code=app&state="+state, nil), http.StatusSeeOther, appRedirect+"?code=app-code")
+	b.appPage(b.do(http.MethodGet, ssoCallback+"?code=app-link&state="+state, nil), "Sign in to <strong>@ann</strong> with your Corp ID account <strong>ann@corp.test</strong> from now on")
 }

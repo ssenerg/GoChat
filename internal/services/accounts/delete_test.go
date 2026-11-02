@@ -12,6 +12,7 @@ import (
 	"github.com/gocql/gocql"
 	potp "github.com/pquerna/otp/totp"
 
+	pb "github.com/ssenerg/gochat/api/protobuf/gen/gochat/v1"
 	"github.com/ssenerg/gochat/internal/core/ids"
 	"github.com/ssenerg/gochat/internal/core/models"
 	"github.com/ssenerg/gochat/internal/core/secure"
@@ -311,7 +312,7 @@ func TestAppsSignInAgainToDelete(t *testing.T) {
 	verifier := secure.Token() + secure.Token()
 	appReauth := func() string {
 		res, err := f.sso(idp, person{}, BeginSSO{AppChallenge: s256(verifier), Reauth: true}, FinishSSO{})
-		if err != nil || res.AppCode == "" || res.Login != nil {
+		if err != nil || res.AppCode == "" || res.Login != nil || res.AppUse != pb.AppCodeUse_APP_CODE_USE_REAUTH || res.AppUsername != "ann" {
 			t.Fatalf("app reauth: %v %+v", err, res)
 		}
 		return res.AppCode

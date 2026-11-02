@@ -21,6 +21,62 @@ const (
 	_ = protoimpl.EnforceVersion(protoimpl.MaxVersion - 20)
 )
 
+// What an app's code does.
+type AppCodeUse int32
+
+const (
+	AppCodeUse_APP_CODE_USE_UNSPECIFIED AppCodeUse = 0
+	// Signs the app in.
+	AppCodeUse_APP_CODE_USE_SIGN_IN AppCodeUse = 1
+	// Links the account at the provider to the app's.
+	AppCodeUse_APP_CODE_USE_LINK AppCodeUse = 2
+	// Proves to the app that its account's owner signed in again.
+	AppCodeUse_APP_CODE_USE_REAUTH AppCodeUse = 3
+)
+
+// Enum value maps for AppCodeUse.
+var (
+	AppCodeUse_name = map[int32]string{
+		0: "APP_CODE_USE_UNSPECIFIED",
+		1: "APP_CODE_USE_SIGN_IN",
+		2: "APP_CODE_USE_LINK",
+		3: "APP_CODE_USE_REAUTH",
+	}
+	AppCodeUse_value = map[string]int32{
+		"APP_CODE_USE_UNSPECIFIED": 0,
+		"APP_CODE_USE_SIGN_IN":     1,
+		"APP_CODE_USE_LINK":        2,
+		"APP_CODE_USE_REAUTH":      3,
+	}
+)
+
+func (x AppCodeUse) Enum() *AppCodeUse {
+	p := new(AppCodeUse)
+	*p = x
+	return p
+}
+
+func (x AppCodeUse) String() string {
+	return protoimpl.X.EnumStringOf(x.Descriptor(), protoreflect.EnumNumber(x))
+}
+
+func (AppCodeUse) Descriptor() protoreflect.EnumDescriptor {
+	return file_gochat_v1_auth_proto_enumTypes[0].Descriptor()
+}
+
+func (AppCodeUse) Type() protoreflect.EnumType {
+	return &file_gochat_v1_auth_proto_enumTypes[0]
+}
+
+func (x AppCodeUse) Number() protoreflect.EnumNumber {
+	return protoreflect.EnumNumber(x)
+}
+
+// Deprecated: Use AppCodeUse.Descriptor instead.
+func (AppCodeUse) EnumDescriptor() ([]byte, []int) {
+	return file_gochat_v1_auth_proto_rawDescGZIP(), []int{0}
+}
+
 type GetSignupInfoRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	InviteToken   string                 `protobuf:"bytes,1,opt,name=invite_token,json=inviteToken,proto3" json:"invite_token,omitempty"`
@@ -1720,7 +1776,13 @@ type FinishSSOResponse struct {
 	Result       isFinishSSOResponse_Result `protobuf_oneof:"result"`
 	ProviderName string                     `protobuf:"bytes,6,opt,name=provider_name,json=providerName,proto3" json:"provider_name,omitempty"`
 	// The team an invite joined, for a new account.
-	Team          *Team `protobuf:"bytes,7,opt,name=team,proto3" json:"team,omitempty"`
+	Team *Team `protobuf:"bytes,7,opt,name=team,proto3" json:"team,omitempty"`
+	// With an app_code: what it does and the GoChat account it is for, which
+	// the browser asks the person to confirm before the app gets the code.
+	AppCodeUse  AppCodeUse `protobuf:"varint,9,opt,name=app_code_use,json=appCodeUse,proto3,enum=gochat.v1.AppCodeUse" json:"app_code_use,omitempty"`
+	AppUsername string     `protobuf:"bytes,10,opt,name=app_username,json=appUsername,proto3" json:"app_username,omitempty"`
+	// The account's email at the provider, when it gives one.
+	Email         string `protobuf:"bytes,11,opt,name=email,proto3" json:"email,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -1828,6 +1890,27 @@ func (x *FinishSSOResponse) GetTeam() *Team {
 		return x.Team
 	}
 	return nil
+}
+
+func (x *FinishSSOResponse) GetAppCodeUse() AppCodeUse {
+	if x != nil {
+		return x.AppCodeUse
+	}
+	return AppCodeUse_APP_CODE_USE_UNSPECIFIED
+}
+
+func (x *FinishSSOResponse) GetAppUsername() string {
+	if x != nil {
+		return x.AppUsername
+	}
+	return ""
+}
+
+func (x *FinishSSOResponse) GetEmail() string {
+	if x != nil {
+		return x.Email
+	}
+	return ""
 }
 
 type isFinishSSOResponse_Result interface {
@@ -2602,7 +2685,7 @@ const file_gochat_v1_auth_proto_rawDesc = "" +
 	"\x10FinishSSORequest\x12\x14\n" +
 	"\x05state\x18\x01 \x01(\tR\x05state\x12\x12\n" +
 	"\x04code\x18\x02 \x01(\tR\x04code\x12!\n" +
-	"\finvite_token\x18\x03 \x01(\tR\vinviteToken\"\xb3\x02\n" +
+	"\finvite_token\x18\x03 \x01(\tR\vinviteToken\"\xa5\x03\n" +
 	"\x11FinishSSOResponse\x12.\n" +
 	"\asession\x18\x01 \x01(\v2\x12.gochat.v1.SessionH\x00R\asession\x12\x1d\n" +
 	"\tmfa_token\x18\x02 \x01(\tH\x00R\bmfaToken\x12\x1b\n" +
@@ -2612,7 +2695,12 @@ const file_gochat_v1_auth_proto_rawDesc = "" +
 	"\x06linked\x18\x05 \x01(\bH\x00R\x06linked\x12#\n" +
 	"\freauth_token\x18\b \x01(\tH\x00R\vreauthToken\x12#\n" +
 	"\rprovider_name\x18\x06 \x01(\tR\fproviderName\x12#\n" +
-	"\x04team\x18\a \x01(\v2\x0f.gochat.v1.TeamR\x04teamB\b\n" +
+	"\x04team\x18\a \x01(\v2\x0f.gochat.v1.TeamR\x04team\x127\n" +
+	"\fapp_code_use\x18\t \x01(\x0e2\x15.gochat.v1.AppCodeUseR\n" +
+	"appCodeUse\x12!\n" +
+	"\fapp_username\x18\n" +
+	" \x01(\tR\vappUsername\x12\x14\n" +
+	"\x05email\x18\v \x01(\tR\x05emailB\b\n" +
 	"\x06result\"B\n" +
 	"\x10RedeemSSORequest\x12\x12\n" +
 	"\x04code\x18\x01 \x01(\tR\x04code\x12\x1a\n" +
@@ -2650,7 +2738,13 @@ const file_gochat_v1_auth_proto_rawDesc = "" +
 	"\auser_id\x18\x01 \x01(\tR\x06userId\x12\x16\n" +
 	"\x06issuer\x18\x02 \x01(\tR\x06issuer\x12\x18\n" +
 	"\asubject\x18\x03 \x01(\tR\asubject\"\x13\n" +
-	"\x11UnlinkSSOResponse2\xf7\r\n" +
+	"\x11UnlinkSSOResponse*t\n" +
+	"\n" +
+	"AppCodeUse\x12\x1c\n" +
+	"\x18APP_CODE_USE_UNSPECIFIED\x10\x00\x12\x18\n" +
+	"\x14APP_CODE_USE_SIGN_IN\x10\x01\x12\x15\n" +
+	"\x11APP_CODE_USE_LINK\x10\x02\x12\x17\n" +
+	"\x13APP_CODE_USE_REAUTH\x10\x032\xf7\r\n" +
 	"\vAuthService\x12R\n" +
 	"\rGetSignupInfo\x12\x1f.gochat.v1.GetSignupInfoRequest\x1a .gochat.v1.GetSignupInfoResponse\x12=\n" +
 	"\x06SignUp\x12\x18.gochat.v1.SignUpRequest\x1a\x19.gochat.v1.SignUpResponse\x12:\n" +
@@ -2691,124 +2785,127 @@ func file_gochat_v1_auth_proto_rawDescGZIP() []byte {
 	return file_gochat_v1_auth_proto_rawDescData
 }
 
+var file_gochat_v1_auth_proto_enumTypes = make([]protoimpl.EnumInfo, 1)
 var file_gochat_v1_auth_proto_msgTypes = make([]protoimpl.MessageInfo, 46)
 var file_gochat_v1_auth_proto_goTypes = []any{
-	(*GetSignupInfoRequest)(nil),      // 0: gochat.v1.GetSignupInfoRequest
-	(*GetSignupInfoResponse)(nil),     // 1: gochat.v1.GetSignupInfoResponse
-	(*SignUpRequest)(nil),             // 2: gochat.v1.SignUpRequest
-	(*SignUpResponse)(nil),            // 3: gochat.v1.SignUpResponse
-	(*LoginRequest)(nil),              // 4: gochat.v1.LoginRequest
-	(*LoginResponse)(nil),             // 5: gochat.v1.LoginResponse
-	(*VerifyMFARequest)(nil),          // 6: gochat.v1.VerifyMFARequest
-	(*VerifyMFAResponse)(nil),         // 7: gochat.v1.VerifyMFAResponse
-	(*LogoutRequest)(nil),             // 8: gochat.v1.LogoutRequest
-	(*LogoutResponse)(nil),            // 9: gochat.v1.LogoutResponse
-	(*MeRequest)(nil),                 // 10: gochat.v1.MeRequest
-	(*MeResponse)(nil),                // 11: gochat.v1.MeResponse
-	(*ChangePasswordRequest)(nil),     // 12: gochat.v1.ChangePasswordRequest
-	(*ChangePasswordResponse)(nil),    // 13: gochat.v1.ChangePasswordResponse
-	(*BeginTOTPSetupRequest)(nil),     // 14: gochat.v1.BeginTOTPSetupRequest
-	(*BeginTOTPSetupResponse)(nil),    // 15: gochat.v1.BeginTOTPSetupResponse
-	(*ConfirmTOTPSetupRequest)(nil),   // 16: gochat.v1.ConfirmTOTPSetupRequest
-	(*ConfirmTOTPSetupResponse)(nil),  // 17: gochat.v1.ConfirmTOTPSetupResponse
-	(*DisableTOTPRequest)(nil),        // 18: gochat.v1.DisableTOTPRequest
-	(*DisableTOTPResponse)(nil),       // 19: gochat.v1.DisableTOTPResponse
-	(*DeleteAccountRequest)(nil),      // 20: gochat.v1.DeleteAccountRequest
-	(*DeleteAccountResponse)(nil),     // 21: gochat.v1.DeleteAccountResponse
-	(*ListSessionsRequest)(nil),       // 22: gochat.v1.ListSessionsRequest
-	(*ListSessionsResponse)(nil),      // 23: gochat.v1.ListSessionsResponse
-	(*RevokeSessionRequest)(nil),      // 24: gochat.v1.RevokeSessionRequest
-	(*RevokeSessionResponse)(nil),     // 25: gochat.v1.RevokeSessionResponse
-	(*RevokeSessionsRequest)(nil),     // 26: gochat.v1.RevokeSessionsRequest
-	(*RevokeSessionsResponse)(nil),    // 27: gochat.v1.RevokeSessionsResponse
-	(*ListSSOProvidersRequest)(nil),   // 28: gochat.v1.ListSSOProvidersRequest
-	(*ListSSOProvidersResponse)(nil),  // 29: gochat.v1.ListSSOProvidersResponse
-	(*BeginSSORequest)(nil),           // 30: gochat.v1.BeginSSORequest
-	(*BeginSSOResponse)(nil),          // 31: gochat.v1.BeginSSOResponse
-	(*FinishSSORequest)(nil),          // 32: gochat.v1.FinishSSORequest
-	(*FinishSSOResponse)(nil),         // 33: gochat.v1.FinishSSOResponse
-	(*RedeemSSORequest)(nil),          // 34: gochat.v1.RedeemSSORequest
-	(*RedeemSSOResponse)(nil),         // 35: gochat.v1.RedeemSSOResponse
-	(*BeginSSOLinkRequest)(nil),       // 36: gochat.v1.BeginSSOLinkRequest
-	(*BeginSSOLinkResponse)(nil),      // 37: gochat.v1.BeginSSOLinkResponse
-	(*GetSSOLinkRequest)(nil),         // 38: gochat.v1.GetSSOLinkRequest
-	(*GetSSOLinkResponse)(nil),        // 39: gochat.v1.GetSSOLinkResponse
-	(*LinkSSORequest)(nil),            // 40: gochat.v1.LinkSSORequest
-	(*LinkSSOResponse)(nil),           // 41: gochat.v1.LinkSSOResponse
-	(*ListSSOIdentitiesRequest)(nil),  // 42: gochat.v1.ListSSOIdentitiesRequest
-	(*ListSSOIdentitiesResponse)(nil), // 43: gochat.v1.ListSSOIdentitiesResponse
-	(*UnlinkSSORequest)(nil),          // 44: gochat.v1.UnlinkSSORequest
-	(*UnlinkSSOResponse)(nil),         // 45: gochat.v1.UnlinkSSOResponse
-	(*Session)(nil),                   // 46: gochat.v1.Session
-	(*Team)(nil),                      // 47: gochat.v1.Team
-	(*User)(nil),                      // 48: gochat.v1.User
-	(*SessionInfo)(nil),               // 49: gochat.v1.SessionInfo
-	(*SSOProvider)(nil),               // 50: gochat.v1.SSOProvider
-	(*SSOIdentity)(nil),               // 51: gochat.v1.SSOIdentity
+	(AppCodeUse)(0),                   // 0: gochat.v1.AppCodeUse
+	(*GetSignupInfoRequest)(nil),      // 1: gochat.v1.GetSignupInfoRequest
+	(*GetSignupInfoResponse)(nil),     // 2: gochat.v1.GetSignupInfoResponse
+	(*SignUpRequest)(nil),             // 3: gochat.v1.SignUpRequest
+	(*SignUpResponse)(nil),            // 4: gochat.v1.SignUpResponse
+	(*LoginRequest)(nil),              // 5: gochat.v1.LoginRequest
+	(*LoginResponse)(nil),             // 6: gochat.v1.LoginResponse
+	(*VerifyMFARequest)(nil),          // 7: gochat.v1.VerifyMFARequest
+	(*VerifyMFAResponse)(nil),         // 8: gochat.v1.VerifyMFAResponse
+	(*LogoutRequest)(nil),             // 9: gochat.v1.LogoutRequest
+	(*LogoutResponse)(nil),            // 10: gochat.v1.LogoutResponse
+	(*MeRequest)(nil),                 // 11: gochat.v1.MeRequest
+	(*MeResponse)(nil),                // 12: gochat.v1.MeResponse
+	(*ChangePasswordRequest)(nil),     // 13: gochat.v1.ChangePasswordRequest
+	(*ChangePasswordResponse)(nil),    // 14: gochat.v1.ChangePasswordResponse
+	(*BeginTOTPSetupRequest)(nil),     // 15: gochat.v1.BeginTOTPSetupRequest
+	(*BeginTOTPSetupResponse)(nil),    // 16: gochat.v1.BeginTOTPSetupResponse
+	(*ConfirmTOTPSetupRequest)(nil),   // 17: gochat.v1.ConfirmTOTPSetupRequest
+	(*ConfirmTOTPSetupResponse)(nil),  // 18: gochat.v1.ConfirmTOTPSetupResponse
+	(*DisableTOTPRequest)(nil),        // 19: gochat.v1.DisableTOTPRequest
+	(*DisableTOTPResponse)(nil),       // 20: gochat.v1.DisableTOTPResponse
+	(*DeleteAccountRequest)(nil),      // 21: gochat.v1.DeleteAccountRequest
+	(*DeleteAccountResponse)(nil),     // 22: gochat.v1.DeleteAccountResponse
+	(*ListSessionsRequest)(nil),       // 23: gochat.v1.ListSessionsRequest
+	(*ListSessionsResponse)(nil),      // 24: gochat.v1.ListSessionsResponse
+	(*RevokeSessionRequest)(nil),      // 25: gochat.v1.RevokeSessionRequest
+	(*RevokeSessionResponse)(nil),     // 26: gochat.v1.RevokeSessionResponse
+	(*RevokeSessionsRequest)(nil),     // 27: gochat.v1.RevokeSessionsRequest
+	(*RevokeSessionsResponse)(nil),    // 28: gochat.v1.RevokeSessionsResponse
+	(*ListSSOProvidersRequest)(nil),   // 29: gochat.v1.ListSSOProvidersRequest
+	(*ListSSOProvidersResponse)(nil),  // 30: gochat.v1.ListSSOProvidersResponse
+	(*BeginSSORequest)(nil),           // 31: gochat.v1.BeginSSORequest
+	(*BeginSSOResponse)(nil),          // 32: gochat.v1.BeginSSOResponse
+	(*FinishSSORequest)(nil),          // 33: gochat.v1.FinishSSORequest
+	(*FinishSSOResponse)(nil),         // 34: gochat.v1.FinishSSOResponse
+	(*RedeemSSORequest)(nil),          // 35: gochat.v1.RedeemSSORequest
+	(*RedeemSSOResponse)(nil),         // 36: gochat.v1.RedeemSSOResponse
+	(*BeginSSOLinkRequest)(nil),       // 37: gochat.v1.BeginSSOLinkRequest
+	(*BeginSSOLinkResponse)(nil),      // 38: gochat.v1.BeginSSOLinkResponse
+	(*GetSSOLinkRequest)(nil),         // 39: gochat.v1.GetSSOLinkRequest
+	(*GetSSOLinkResponse)(nil),        // 40: gochat.v1.GetSSOLinkResponse
+	(*LinkSSORequest)(nil),            // 41: gochat.v1.LinkSSORequest
+	(*LinkSSOResponse)(nil),           // 42: gochat.v1.LinkSSOResponse
+	(*ListSSOIdentitiesRequest)(nil),  // 43: gochat.v1.ListSSOIdentitiesRequest
+	(*ListSSOIdentitiesResponse)(nil), // 44: gochat.v1.ListSSOIdentitiesResponse
+	(*UnlinkSSORequest)(nil),          // 45: gochat.v1.UnlinkSSORequest
+	(*UnlinkSSOResponse)(nil),         // 46: gochat.v1.UnlinkSSOResponse
+	(*Session)(nil),                   // 47: gochat.v1.Session
+	(*Team)(nil),                      // 48: gochat.v1.Team
+	(*User)(nil),                      // 49: gochat.v1.User
+	(*SessionInfo)(nil),               // 50: gochat.v1.SessionInfo
+	(*SSOProvider)(nil),               // 51: gochat.v1.SSOProvider
+	(*SSOIdentity)(nil),               // 52: gochat.v1.SSOIdentity
 }
 var file_gochat_v1_auth_proto_depIdxs = []int32{
-	46, // 0: gochat.v1.SignUpResponse.session:type_name -> gochat.v1.Session
-	47, // 1: gochat.v1.SignUpResponse.team:type_name -> gochat.v1.Team
-	46, // 2: gochat.v1.LoginResponse.session:type_name -> gochat.v1.Session
-	46, // 3: gochat.v1.VerifyMFAResponse.session:type_name -> gochat.v1.Session
-	48, // 4: gochat.v1.MeResponse.user:type_name -> gochat.v1.User
-	49, // 5: gochat.v1.ListSessionsResponse.sessions:type_name -> gochat.v1.SessionInfo
-	50, // 6: gochat.v1.ListSSOProvidersResponse.providers:type_name -> gochat.v1.SSOProvider
-	46, // 7: gochat.v1.FinishSSOResponse.session:type_name -> gochat.v1.Session
-	47, // 8: gochat.v1.FinishSSOResponse.team:type_name -> gochat.v1.Team
-	46, // 9: gochat.v1.RedeemSSOResponse.session:type_name -> gochat.v1.Session
-	51, // 10: gochat.v1.ListSSOIdentitiesResponse.identities:type_name -> gochat.v1.SSOIdentity
-	0,  // 11: gochat.v1.AuthService.GetSignupInfo:input_type -> gochat.v1.GetSignupInfoRequest
-	2,  // 12: gochat.v1.AuthService.SignUp:input_type -> gochat.v1.SignUpRequest
-	4,  // 13: gochat.v1.AuthService.Login:input_type -> gochat.v1.LoginRequest
-	6,  // 14: gochat.v1.AuthService.VerifyMFA:input_type -> gochat.v1.VerifyMFARequest
-	8,  // 15: gochat.v1.AuthService.Logout:input_type -> gochat.v1.LogoutRequest
-	10, // 16: gochat.v1.AuthService.Me:input_type -> gochat.v1.MeRequest
-	12, // 17: gochat.v1.AuthService.ChangePassword:input_type -> gochat.v1.ChangePasswordRequest
-	14, // 18: gochat.v1.AuthService.BeginTOTPSetup:input_type -> gochat.v1.BeginTOTPSetupRequest
-	16, // 19: gochat.v1.AuthService.ConfirmTOTPSetup:input_type -> gochat.v1.ConfirmTOTPSetupRequest
-	18, // 20: gochat.v1.AuthService.DisableTOTP:input_type -> gochat.v1.DisableTOTPRequest
-	20, // 21: gochat.v1.AuthService.DeleteAccount:input_type -> gochat.v1.DeleteAccountRequest
-	22, // 22: gochat.v1.AuthService.ListSessions:input_type -> gochat.v1.ListSessionsRequest
-	24, // 23: gochat.v1.AuthService.RevokeSession:input_type -> gochat.v1.RevokeSessionRequest
-	26, // 24: gochat.v1.AuthService.RevokeSessions:input_type -> gochat.v1.RevokeSessionsRequest
-	28, // 25: gochat.v1.AuthService.ListSSOProviders:input_type -> gochat.v1.ListSSOProvidersRequest
-	30, // 26: gochat.v1.AuthService.BeginSSO:input_type -> gochat.v1.BeginSSORequest
-	32, // 27: gochat.v1.AuthService.FinishSSO:input_type -> gochat.v1.FinishSSORequest
-	34, // 28: gochat.v1.AuthService.RedeemSSO:input_type -> gochat.v1.RedeemSSORequest
-	36, // 29: gochat.v1.AuthService.BeginSSOLink:input_type -> gochat.v1.BeginSSOLinkRequest
-	38, // 30: gochat.v1.AuthService.GetSSOLink:input_type -> gochat.v1.GetSSOLinkRequest
-	40, // 31: gochat.v1.AuthService.LinkSSO:input_type -> gochat.v1.LinkSSORequest
-	42, // 32: gochat.v1.AuthService.ListSSOIdentities:input_type -> gochat.v1.ListSSOIdentitiesRequest
-	44, // 33: gochat.v1.AuthService.UnlinkSSO:input_type -> gochat.v1.UnlinkSSORequest
-	1,  // 34: gochat.v1.AuthService.GetSignupInfo:output_type -> gochat.v1.GetSignupInfoResponse
-	3,  // 35: gochat.v1.AuthService.SignUp:output_type -> gochat.v1.SignUpResponse
-	5,  // 36: gochat.v1.AuthService.Login:output_type -> gochat.v1.LoginResponse
-	7,  // 37: gochat.v1.AuthService.VerifyMFA:output_type -> gochat.v1.VerifyMFAResponse
-	9,  // 38: gochat.v1.AuthService.Logout:output_type -> gochat.v1.LogoutResponse
-	11, // 39: gochat.v1.AuthService.Me:output_type -> gochat.v1.MeResponse
-	13, // 40: gochat.v1.AuthService.ChangePassword:output_type -> gochat.v1.ChangePasswordResponse
-	15, // 41: gochat.v1.AuthService.BeginTOTPSetup:output_type -> gochat.v1.BeginTOTPSetupResponse
-	17, // 42: gochat.v1.AuthService.ConfirmTOTPSetup:output_type -> gochat.v1.ConfirmTOTPSetupResponse
-	19, // 43: gochat.v1.AuthService.DisableTOTP:output_type -> gochat.v1.DisableTOTPResponse
-	21, // 44: gochat.v1.AuthService.DeleteAccount:output_type -> gochat.v1.DeleteAccountResponse
-	23, // 45: gochat.v1.AuthService.ListSessions:output_type -> gochat.v1.ListSessionsResponse
-	25, // 46: gochat.v1.AuthService.RevokeSession:output_type -> gochat.v1.RevokeSessionResponse
-	27, // 47: gochat.v1.AuthService.RevokeSessions:output_type -> gochat.v1.RevokeSessionsResponse
-	29, // 48: gochat.v1.AuthService.ListSSOProviders:output_type -> gochat.v1.ListSSOProvidersResponse
-	31, // 49: gochat.v1.AuthService.BeginSSO:output_type -> gochat.v1.BeginSSOResponse
-	33, // 50: gochat.v1.AuthService.FinishSSO:output_type -> gochat.v1.FinishSSOResponse
-	35, // 51: gochat.v1.AuthService.RedeemSSO:output_type -> gochat.v1.RedeemSSOResponse
-	37, // 52: gochat.v1.AuthService.BeginSSOLink:output_type -> gochat.v1.BeginSSOLinkResponse
-	39, // 53: gochat.v1.AuthService.GetSSOLink:output_type -> gochat.v1.GetSSOLinkResponse
-	41, // 54: gochat.v1.AuthService.LinkSSO:output_type -> gochat.v1.LinkSSOResponse
-	43, // 55: gochat.v1.AuthService.ListSSOIdentities:output_type -> gochat.v1.ListSSOIdentitiesResponse
-	45, // 56: gochat.v1.AuthService.UnlinkSSO:output_type -> gochat.v1.UnlinkSSOResponse
-	34, // [34:57] is the sub-list for method output_type
-	11, // [11:34] is the sub-list for method input_type
-	11, // [11:11] is the sub-list for extension type_name
-	11, // [11:11] is the sub-list for extension extendee
-	0,  // [0:11] is the sub-list for field type_name
+	47, // 0: gochat.v1.SignUpResponse.session:type_name -> gochat.v1.Session
+	48, // 1: gochat.v1.SignUpResponse.team:type_name -> gochat.v1.Team
+	47, // 2: gochat.v1.LoginResponse.session:type_name -> gochat.v1.Session
+	47, // 3: gochat.v1.VerifyMFAResponse.session:type_name -> gochat.v1.Session
+	49, // 4: gochat.v1.MeResponse.user:type_name -> gochat.v1.User
+	50, // 5: gochat.v1.ListSessionsResponse.sessions:type_name -> gochat.v1.SessionInfo
+	51, // 6: gochat.v1.ListSSOProvidersResponse.providers:type_name -> gochat.v1.SSOProvider
+	47, // 7: gochat.v1.FinishSSOResponse.session:type_name -> gochat.v1.Session
+	48, // 8: gochat.v1.FinishSSOResponse.team:type_name -> gochat.v1.Team
+	0,  // 9: gochat.v1.FinishSSOResponse.app_code_use:type_name -> gochat.v1.AppCodeUse
+	47, // 10: gochat.v1.RedeemSSOResponse.session:type_name -> gochat.v1.Session
+	52, // 11: gochat.v1.ListSSOIdentitiesResponse.identities:type_name -> gochat.v1.SSOIdentity
+	1,  // 12: gochat.v1.AuthService.GetSignupInfo:input_type -> gochat.v1.GetSignupInfoRequest
+	3,  // 13: gochat.v1.AuthService.SignUp:input_type -> gochat.v1.SignUpRequest
+	5,  // 14: gochat.v1.AuthService.Login:input_type -> gochat.v1.LoginRequest
+	7,  // 15: gochat.v1.AuthService.VerifyMFA:input_type -> gochat.v1.VerifyMFARequest
+	9,  // 16: gochat.v1.AuthService.Logout:input_type -> gochat.v1.LogoutRequest
+	11, // 17: gochat.v1.AuthService.Me:input_type -> gochat.v1.MeRequest
+	13, // 18: gochat.v1.AuthService.ChangePassword:input_type -> gochat.v1.ChangePasswordRequest
+	15, // 19: gochat.v1.AuthService.BeginTOTPSetup:input_type -> gochat.v1.BeginTOTPSetupRequest
+	17, // 20: gochat.v1.AuthService.ConfirmTOTPSetup:input_type -> gochat.v1.ConfirmTOTPSetupRequest
+	19, // 21: gochat.v1.AuthService.DisableTOTP:input_type -> gochat.v1.DisableTOTPRequest
+	21, // 22: gochat.v1.AuthService.DeleteAccount:input_type -> gochat.v1.DeleteAccountRequest
+	23, // 23: gochat.v1.AuthService.ListSessions:input_type -> gochat.v1.ListSessionsRequest
+	25, // 24: gochat.v1.AuthService.RevokeSession:input_type -> gochat.v1.RevokeSessionRequest
+	27, // 25: gochat.v1.AuthService.RevokeSessions:input_type -> gochat.v1.RevokeSessionsRequest
+	29, // 26: gochat.v1.AuthService.ListSSOProviders:input_type -> gochat.v1.ListSSOProvidersRequest
+	31, // 27: gochat.v1.AuthService.BeginSSO:input_type -> gochat.v1.BeginSSORequest
+	33, // 28: gochat.v1.AuthService.FinishSSO:input_type -> gochat.v1.FinishSSORequest
+	35, // 29: gochat.v1.AuthService.RedeemSSO:input_type -> gochat.v1.RedeemSSORequest
+	37, // 30: gochat.v1.AuthService.BeginSSOLink:input_type -> gochat.v1.BeginSSOLinkRequest
+	39, // 31: gochat.v1.AuthService.GetSSOLink:input_type -> gochat.v1.GetSSOLinkRequest
+	41, // 32: gochat.v1.AuthService.LinkSSO:input_type -> gochat.v1.LinkSSORequest
+	43, // 33: gochat.v1.AuthService.ListSSOIdentities:input_type -> gochat.v1.ListSSOIdentitiesRequest
+	45, // 34: gochat.v1.AuthService.UnlinkSSO:input_type -> gochat.v1.UnlinkSSORequest
+	2,  // 35: gochat.v1.AuthService.GetSignupInfo:output_type -> gochat.v1.GetSignupInfoResponse
+	4,  // 36: gochat.v1.AuthService.SignUp:output_type -> gochat.v1.SignUpResponse
+	6,  // 37: gochat.v1.AuthService.Login:output_type -> gochat.v1.LoginResponse
+	8,  // 38: gochat.v1.AuthService.VerifyMFA:output_type -> gochat.v1.VerifyMFAResponse
+	10, // 39: gochat.v1.AuthService.Logout:output_type -> gochat.v1.LogoutResponse
+	12, // 40: gochat.v1.AuthService.Me:output_type -> gochat.v1.MeResponse
+	14, // 41: gochat.v1.AuthService.ChangePassword:output_type -> gochat.v1.ChangePasswordResponse
+	16, // 42: gochat.v1.AuthService.BeginTOTPSetup:output_type -> gochat.v1.BeginTOTPSetupResponse
+	18, // 43: gochat.v1.AuthService.ConfirmTOTPSetup:output_type -> gochat.v1.ConfirmTOTPSetupResponse
+	20, // 44: gochat.v1.AuthService.DisableTOTP:output_type -> gochat.v1.DisableTOTPResponse
+	22, // 45: gochat.v1.AuthService.DeleteAccount:output_type -> gochat.v1.DeleteAccountResponse
+	24, // 46: gochat.v1.AuthService.ListSessions:output_type -> gochat.v1.ListSessionsResponse
+	26, // 47: gochat.v1.AuthService.RevokeSession:output_type -> gochat.v1.RevokeSessionResponse
+	28, // 48: gochat.v1.AuthService.RevokeSessions:output_type -> gochat.v1.RevokeSessionsResponse
+	30, // 49: gochat.v1.AuthService.ListSSOProviders:output_type -> gochat.v1.ListSSOProvidersResponse
+	32, // 50: gochat.v1.AuthService.BeginSSO:output_type -> gochat.v1.BeginSSOResponse
+	34, // 51: gochat.v1.AuthService.FinishSSO:output_type -> gochat.v1.FinishSSOResponse
+	36, // 52: gochat.v1.AuthService.RedeemSSO:output_type -> gochat.v1.RedeemSSOResponse
+	38, // 53: gochat.v1.AuthService.BeginSSOLink:output_type -> gochat.v1.BeginSSOLinkResponse
+	40, // 54: gochat.v1.AuthService.GetSSOLink:output_type -> gochat.v1.GetSSOLinkResponse
+	42, // 55: gochat.v1.AuthService.LinkSSO:output_type -> gochat.v1.LinkSSOResponse
+	44, // 56: gochat.v1.AuthService.ListSSOIdentities:output_type -> gochat.v1.ListSSOIdentitiesResponse
+	46, // 57: gochat.v1.AuthService.UnlinkSSO:output_type -> gochat.v1.UnlinkSSOResponse
+	35, // [35:58] is the sub-list for method output_type
+	12, // [12:35] is the sub-list for method input_type
+	12, // [12:12] is the sub-list for extension type_name
+	12, // [12:12] is the sub-list for extension extendee
+	0,  // [0:12] is the sub-list for field type_name
 }
 
 func init() { file_gochat_v1_auth_proto_init() }
@@ -2838,13 +2935,14 @@ func file_gochat_v1_auth_proto_init() {
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_gochat_v1_auth_proto_rawDesc), len(file_gochat_v1_auth_proto_rawDesc)),
-			NumEnums:      0,
+			NumEnums:      1,
 			NumMessages:   46,
 			NumExtensions: 0,
 			NumServices:   1,
 		},
 		GoTypes:           file_gochat_v1_auth_proto_goTypes,
 		DependencyIndexes: file_gochat_v1_auth_proto_depIdxs,
+		EnumInfos:         file_gochat_v1_auth_proto_enumTypes,
 		MessageInfos:      file_gochat_v1_auth_proto_msgTypes,
 	}.Build()
 	File_gochat_v1_auth_proto = out.File

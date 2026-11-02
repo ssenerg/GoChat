@@ -333,7 +333,7 @@ func (w *worker) finishSSO(ctx context.Context, msg FinishSSO) (*SSOResult, erro
 			return nil, err
 		}
 	}
-	out := &SSOResult{Provider: p.cfg.Name}
+	out := &SSOResult{Provider: p.cfg.Name, Email: id.Email}
 
 	if f.Reauth {
 		if !w.signedInSince(c, f) {
@@ -349,11 +349,10 @@ func (w *worker) finishSSO(ctx context.Context, msg FinishSSO) (*SSOResult, erro
 			if known && userID != f.LinkUser {
 				return nil, errLinkedElsewhere(p.cfg.Name)
 			}
-			out.AppCode, err = w.ticket(ctx, &models.SSOTicket{
+			return w.forApp(ctx, out, pb.AppCodeUse_APP_CODE_USE_LINK, nil, &models.SSOTicket{
 				Kind: models.SSOTicketAppLink, UserID: f.LinkUser, Challenge: f.AppChallenge,
 				Provider: p.cfg.ID, Issuer: id.Issuer, Subject: id.Subject, Email: id.Email,
 			}, ssoTicketTTL)
-			return out, err
 		}
 		if msg.P == nil || msg.P.UserID != f.LinkUser {
 			return nil, ierrors.New(ierrors.CodePermissionDenied, "sign in to the account you were linking, then link it again")
@@ -397,8 +396,7 @@ func (w *worker) finishSSO(ctx context.Context, msg FinishSSO) (*SSOResult, erro
 	}
 	w.Logger.Info("sso sign-in", zap.String("user", user.ID.String()), zap.String("provider", p.cfg.ID))
 	if f.AppChallenge != "" {
-		out.AppCode, err = w.ticket(ctx, &models.SSOTicket{Kind: models.SSOTicketApp, UserID: user.ID, Challenge: f.AppChallenge, Provider: p.cfg.ID}, ssoTicketTTL)
-		return out, err
+		return w.forApp(ctx, out, pb.AppCodeUse_APP_CODE_USE_SIGN_IN, user, &models.SSOTicket{Kind: models.SSOTicketApp, UserID: user.ID, Challenge: f.AppChallenge, Provider: p.cfg.ID}, ssoTicketTTL)
 	}
 	out.Login, err = w.signIn(ctx, user, msg.IP, msg.UserAgent)
 	return out, err
@@ -449,15 +447,30 @@ func (w *worker) reauthed(ctx context.Context, p *ssoProvider, f *models.SSOFlow
 	if !ids.IsZero(f.LinkUser) && (caller == nil || caller.UserID != f.LinkUser) {
 		return nil, ierrors.New(ierrors.CodePermissionDenied, "sign in to the account you were deleting, then try again")
 	}
-	token, err := w.ticket(ctx, &models.SSOTicket{Kind: models.SSOTicketReauth, UserID: userID, Challenge: f.AppChallenge, Provider: p.cfg.ID}, reauthTTL)
+	t := &models.SSOTicket{Kind: models.SSOTicketReauth, UserID: userID, Challenge: f.AppChallenge, Provider: p.cfg.ID}
+	if f.AppChallenge != "" {
+		return w.forApp(ctx, out, pb.AppCodeUse_APP_CODE_USE_REAUTH, nil, t, reauthTTL)
+	}
+	out.ReauthToken, err = w.ticket(ctx, t, reauthTTL)
+	return out, err
+}
+
+// forApp gives an app's code, with what it does and the account it is for
+// (user, or else read): a link anyone sends can begin an app's flow, so
+// the browser asks the person before the app gets it.
+func (w *worker) forApp(ctx context.Context, out *SSOResult, use pb.AppCodeUse, user *models.User, t *models.SSOTicket, ttl time.Duration) (*SSOResult, error) {
+	if user == nil {
+		u, err := w.Repo.GetUser(ctx, t.UserID)
+		if err != nil {
+			return nil, err
+		}
+		user = u
+	}
+	code, err := w.ticket(ctx, t, ttl)
 	if err != nil {
 		return nil, err
 	}
-	if f.AppChallenge != "" {
-		out.AppCode = token
-	} else {
-		out.ReauthToken = token
-	}
+	out.AppCode, out.AppUse, out.AppUsername = code, use, user.Username
 	return out, nil
 }
 
