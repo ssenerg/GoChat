@@ -495,7 +495,7 @@ that carry what people post.
 
 ## Requirements
 
-- Go 1.27.3, [just](https://github.com/casey/just), [buf](https://buf.build)
+- Go 1.27.4, [just](https://github.com/casey/just), [buf](https://buf.build)
 - Docker with Compose v2
 
 ## Getting started
