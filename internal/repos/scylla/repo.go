@@ -21,8 +21,9 @@ type Repository struct {
 	serial gocql.Consistency
 }
 
-func NewRepository(logger *zap.Logger, cfg *Config) (*Repository, error) {
-	session, err := Open(logger, cfg)
+// NewRepository connects to Scylla, waiting for it until ctx ends.
+func NewRepository(ctx context.Context, logger *zap.Logger, cfg *Config) (*Repository, error) {
+	session, err := Open(ctx, logger, cfg)
 	if err != nil {
 		return nil, err
 	}

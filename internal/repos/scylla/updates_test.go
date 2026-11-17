@@ -20,7 +20,9 @@ func liveRepository(t *testing.T) *Repository {
 	if host == "" {
 		t.Skip("GOCHAT_TEST_SCYLLA is not set")
 	}
-	r, err := NewRepository(zap.NewNop(), &Config{
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	r, err := NewRepository(ctx, zap.NewNop(), &Config{
 		Hosts: []string{host}, Keyspace: "gochat", Consistency: "local_quorum", SerialConsistency: "local_serial",
 		Timeout: 10 * time.Second, ConnectTimeout: 10 * time.Second, NumConns: 1, DisableHostLookup: true, TLS: &TLSConfig{},
 	})

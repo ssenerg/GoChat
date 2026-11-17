@@ -1,8 +1,10 @@
 package scylla
 
 import (
+	"context"
 	"errors"
 	"fmt"
+	"time"
 
 	"github.com/gocql/gocql"
 	"github.com/scylladb/gocqlx/v3"
@@ -68,9 +70,44 @@ func casUnknown(err error) bool {
 	return errors.As(err, &cu)
 }
 
-// Open connects to the configured keyspace.
-func Open(logger *zap.Logger, cfg *Config) (gocqlx.Session, error) {
-	session, err := gocqlx.WrapSession(newCluster(cfg, cfg.Keyspace).CreateSession())
+// The pauses between attempts to connect while Scylla is not reachable yet:
+// the first, doubling up to the last. Variables, so tests can shorten them.
+var (
+	firstRetryPause = 500 * time.Millisecond
+	maxRetryPause   = 5 * time.Second
+)
+
+// connect creates a session, trying again while Scylla is not reachable yet,
+// until ctx ends: when a machine boots, the server and Scylla start together,
+// and Scylla takes a while to accept connections. Each attempt gets a cluster
+// of its own from cluster: gocql's host policies serve one session only.
+func connect(ctx context.Context, logger *zap.Logger, cluster func() *gocql.ClusterConfig) (gocqlx.Session, error) {
+	pause := firstRetryPause
+	for attempt := 1; ; attempt++ {
+		session, err := gocqlx.WrapSession(cluster().CreateSession())
+		if err == nil {
+			return session, nil
+		}
+		if ctx.Err() != nil {
+			return gocqlx.Session{}, err
+		}
+		logger.Warn("scylla is not reachable yet, trying again",
+			zap.Int("attempt", attempt), zap.Duration("in", pause), zap.Error(err))
+		timer := time.NewTimer(pause)
+		select {
+		case <-ctx.Done():
+			timer.Stop()
+			return gocqlx.Session{}, err
+		case <-timer.C:
+		}
+		pause = min(pause*2, maxRetryPause)
+	}
+}
+
+// Open connects to the configured keyspace, waiting for Scylla until ctx
+// ends.
+func Open(ctx context.Context, logger *zap.Logger, cfg *Config) (gocqlx.Session, error) {
+	session, err := connect(ctx, logger, func() *gocql.ClusterConfig { return newCluster(cfg, cfg.Keyspace) })
 	if err != nil {
 		logger.Error("failed to connect to scylla", zap.Error(err))
 		return gocqlx.Session{}, fmt.Errorf("failed to connect to scylla: %w", err)
@@ -82,9 +119,10 @@ func Open(logger *zap.Logger, cfg *Config) (gocqlx.Session, error) {
 	return session, nil
 }
 
-// EnsureKeyspace creates the keyspace when it is missing.
-func EnsureKeyspace(logger *zap.Logger, cfg *Config) error {
-	session, err := gocqlx.WrapSession(newCluster(cfg, "").CreateSession())
+// EnsureKeyspace creates the keyspace when it is missing, waiting for Scylla
+// until ctx ends.
+func EnsureKeyspace(ctx context.Context, logger *zap.Logger, cfg *Config) error {
+	session, err := connect(ctx, logger, func() *gocql.ClusterConfig { return newCluster(cfg, "") })
 	if err != nil {
 		return fmt.Errorf("failed to connect to scylla: %w", err)
 	}

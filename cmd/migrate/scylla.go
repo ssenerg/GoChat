@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"time"
 
 	"github.com/scylladb/gocqlx/v3/migrate"
 	"github.com/spf13/cobra"
@@ -40,6 +41,19 @@ func requirements(args []string) (*zap.Logger, *Config, error) {
 	return logger, &cfg, nil
 }
 
+// How long migrate waits for Scylla to accept connections, as it may still be
+// starting.
+const scyllaWait = time.Minute
+
+// commandContext is the command's context, which is nil when the command runs
+// outside Execute.
+func commandContext(cmd *cobra.Command) context.Context {
+	if ctx := cmd.Context(); ctx != nil {
+		return ctx
+	}
+	return context.Background()
+}
+
 func scyllaUp(cmd *cobra.Command, args []string) error {
 	logger, cfg, err := requirements(args)
 	if err != nil {
@@ -47,11 +61,14 @@ func scyllaUp(cmd *cobra.Command, args []string) error {
 	}
 	defer func() { _ = logger.Sync() }()
 
-	if err := scylla.EnsureKeyspace(logger, cfg.Database.Scylla); err != nil {
+	ctx := commandContext(cmd)
+	connectCtx, cancel := context.WithTimeout(ctx, scyllaWait)
+	defer cancel()
+	if err := scylla.EnsureKeyspace(connectCtx, logger, cfg.Database.Scylla); err != nil {
 		logger.Error("failed to prepare keyspace", zap.Error(err))
 		return err
 	}
-	session, err := scylla.Open(logger, cfg.Database.Scylla)
+	session, err := scylla.Open(connectCtx, logger, cfg.Database.Scylla)
 	if err != nil {
 		return err
 	}
@@ -59,7 +76,7 @@ func scyllaUp(cmd *cobra.Command, args []string) error {
 
 	logger.Info("applying migrations", zap.String("migration-dir", args[0]))
 	migrate.DefaultAwaitSchemaAgreement = migrate.AwaitSchemaAgreementBeforeEachFile
-	if err := migrate.FromFS(cmd.Context(), session, os.DirFS(args[0])); err != nil {
+	if err := migrate.FromFS(ctx, session, os.DirFS(args[0])); err != nil {
 		logger.Error("failed to apply migrations", zap.Error(err))
 		return fmt.Errorf("failed to apply migrations: %w", err)
 	}
@@ -74,16 +91,15 @@ func scyllaStatus(cmd *cobra.Command, args []string) error {
 	}
 	defer func() { _ = logger.Sync() }()
 
-	session, err := scylla.Open(logger, cfg.Database.Scylla)
+	ctx := commandContext(cmd)
+	connectCtx, cancel := context.WithTimeout(ctx, scyllaWait)
+	defer cancel()
+	session, err := scylla.Open(connectCtx, logger, cfg.Database.Scylla)
 	if err != nil {
 		return err
 	}
 	defer session.Close()
 
-	ctx := cmd.Context()
-	if ctx == nil {
-		ctx = context.Background()
-	}
 	applied, err := migrate.List(ctx, session)
 	if err != nil {
 		return fmt.Errorf("failed to list migrations: %w", err)
