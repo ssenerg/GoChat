@@ -25,6 +25,10 @@ import (
 const (
 	actorsStopTimeout = 15 * time.Second
 	shutdownGrace     = 15 * time.Second
+	// How long the server waits for Scylla to accept connections. When the
+	// machine boots, they start together, and exiting at once would only have
+	// Docker restart the server again and again until Scylla is up.
+	scyllaStartTimeout = 2 * time.Minute
 )
 
 func Run(parent context.Context, cfg *Config) error {
@@ -38,7 +42,9 @@ func Run(parent context.Context, cfg *Config) error {
 	defer func() { _ = logger.Sync() }()
 	mainLogger := logger.Named("main")
 
-	repo, err := scylla.NewRepository(logger.Named("scylla"), cfg.Database.Scylla)
+	scyllaCtx, scyllaCancel := context.WithTimeout(ctx, scyllaStartTimeout)
+	repo, err := scylla.NewRepository(scyllaCtx, logger.Named("scylla"), cfg.Database.Scylla)
+	scyllaCancel()
 	if err != nil {
 		return err
 	}
